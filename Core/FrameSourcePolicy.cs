@@ -7,9 +7,9 @@ namespace NINA.Plugin.QualitySessionMeter.Core;
 /// whether a LIGHT is eligible once its sequencer provenance/control-arm state is known.
 /// </summary>
 public static class FrameSourcePolicy {
-    public static FrameSourceInfo Resolve(MonitoringScope scope, bool controlled, string sequenceTitle) {
+    public static FrameSourceInfo Resolve(MonitoringScope scope, bool controlled, string sequenceTitle, bool advancedSequenceEvidence = false) {
         bool hasSequenceMetadata = !string.IsNullOrWhiteSpace(sequenceTitle);
-        bool sequencerKnown = controlled || hasSequenceMetadata;
+        bool sequencerKnown = controlled || hasSequenceMetadata || advancedSequenceEvidence;
 
         var kind = controlled
             ? FrameSourceKind.QsmControlledBlock
@@ -24,8 +24,9 @@ public static class FrameSourcePolicy {
             _ => false
         };
 
-        bool fileActionEligible = monitoringEligible &&
-            kind is FrameSourceKind.QsmControlledBlock or FrameSourceKind.AdvancedSequencer;
+        // Monitoring may use transient evidence that Advanced Sequencer is currently running,
+        // but file mutation requires durable provenance: explicit QSM control or sequence metadata.
+        bool fileActionEligible = monitoringEligible && (controlled || hasSequenceMetadata);
 
         return new FrameSourceInfo {
             Kind = kind,
