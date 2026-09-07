@@ -15,6 +15,7 @@ namespace NINA.Plugin.QualitySessionMeter.Core;
 public sealed class SessionStore {
     private readonly object sync = new();
     private readonly List<FrameQualityResult> results = new();
+    private readonly EventGroupingEngine eventGrouping = new();
     private readonly SemaphoreSlim ioLock = new(1, 1);
     private readonly string baseDirectoryOverride;
     private string sessionFolder;
@@ -32,22 +33,27 @@ public sealed class SessionStore {
         get { lock (sync) return results.ToArray(); }
     }
 
+    public IReadOnlyList<SessionEvent> Events => eventGrouping.Events;
+
     public void Reset() {
         lock (sync) {
             results.Clear();
             sessionFolder = null;
             sessionCreatedUtc = default;
         }
+        eventGrouping.Reset();
     }
 
     public async Task AppendAsync(FrameQualityResult result) {
         EnsureSession();
         lock (sync) results.Add(result);
+        eventGrouping.Add(result);
 
         await ioLock.WaitAsync();
         try {
             await AppendCsvAsync(result);
             await WriteSummaryAsync();
+            await WriteEventsCsvAsync();
             await WriteSvgAsync();
         } finally {
             ioLock.Release();
@@ -140,6 +146,7 @@ public sealed class SessionStore {
             created = sessionCreatedUtc;
         }
 
+        var eventCopy = eventGrouping.Events;
         int usable = copy.Count(x => x.IsUsable);
         int rejected = copy.Count(x => x.Status == FrameStatus.Rejected);
         int learning = copy.Count(x => x.Status == FrameStatus.Learning);
@@ -163,6 +170,8 @@ public sealed class SessionStore {
             acceptanceRate,
             acceptedQuality,
             acceptedConfidence,
+            eventCount = eventCopy.Count,
+            events = eventCopy,
             frames = copy
         };
 
@@ -173,6 +182,36 @@ public sealed class SessionStore {
             Path.Combine(SessionFolder, "session.json"),
             JsonSerializer.Serialize(summary, options),
             new UTF8Encoding(false));
+    }
+
+    private async Task WriteEventsCsvAsync() {
+        var path = Path.Combine(SessionFolder, "events.csv");
+        var events = eventGrouping.Events;
+        await using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+        await writer.WriteLineAsync("Event,Type,StartUtc,EndUtc,FirstFrame,LastFrame,AffectedFrames,Rejected,Warning,Errors,MeanConfidence,PeakConfidence,Severity,PrimaryCause,Open,FrameIndices");
+
+        foreach (var e in events) {
+            string[] fields = {
+                Csv(e.Id),
+                e.Type.ToString(),
+                e.StartUtc.ToString("O", CultureInfo.InvariantCulture),
+                e.EndUtc.ToString("O", CultureInfo.InvariantCulture),
+                e.FirstFrameIndex.ToString(CultureInfo.InvariantCulture),
+                e.LastFrameIndex.ToString(CultureInfo.InvariantCulture),
+                e.AffectedFrames.ToString(CultureInfo.InvariantCulture),
+                e.RejectedFrames.ToString(CultureInfo.InvariantCulture),
+                e.WarningFrames.ToString(CultureInfo.InvariantCulture),
+                e.ErrorFrames.ToString(CultureInfo.InvariantCulture),
+                Num(e.MeanConfidence),
+                Num(e.PeakConfidence),
+                Csv(e.SeverityText),
+                Csv(e.PrimaryCause),
+                e.IsOpen ? "true" : "false",
+                Csv(string.Join(";", e.FrameIndices))
+            };
+            await writer.WriteLineAsync(string.Join(",", fields));
+        }
     }
 
     private async Task WriteSvgAsync() {
