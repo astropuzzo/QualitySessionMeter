@@ -66,8 +66,8 @@ foreach (var scenario in scenarios) {
 
         Console.WriteLine(
             $"{i + 1,2}. {d.Name,-42} expected={d.ExpectedStatus,-8} actual={result.Status,-8} " +
-            $"Q={result.OverallQuality,5:0.0} RMS={Fmt(result.GuideRmsArcsec),6} Peak={Fmt(result.MaxGuideExcursionArcsec),6} " +
-            $"Sustain={Fmt(result.SustainedGuideExcursionSeconds),5} reasons={result.ReasonText}");
+            $"Q={result.OverallQuality,5:0.0} C={result.ConfidenceScore,5:0.0} RMS={Fmt(result.GuideRmsArcsec),6} " +
+            $"Peak={Fmt(result.MaxGuideExcursionArcsec),6} Sustain={Fmt(result.SustainedGuideExcursionSeconds),5} reasons={result.ReasonText}");
     }
 
     ValidateArtifacts(scenario, store, scenario.Frames.Count, failures);
@@ -146,6 +146,11 @@ static void Validate(
         actual.SustainedGuideExcursionSeconds != 0) {
         failures.Add($"{prefix}: single spike must have sustained duration 0, got {actual.SustainedGuideExcursionSeconds:0.###}");
     }
+
+    var confidenceProblem = SyntheticConfidenceOracle.Validate(expected, actual);
+    if (!string.IsNullOrWhiteSpace(confidenceProblem)) {
+        failures.Add($"{prefix}: confidence oracle: {confidenceProblem}");
+    }
 }
 
 static void ValidateArtifacts(
@@ -165,9 +170,12 @@ static void ValidateArtifacts(
     }
 
     if (File.Exists(csv)) {
-        var lines = File.ReadLines(csv).Count();
-        if (lines != expectedFrames + 1) {
-            failures.Add($"{scenario.DisplayName}: frames.csv expected {expectedFrames + 1} lines including header, got {lines}");
+        var lines = File.ReadLines(csv).ToArray();
+        if (lines.Length != expectedFrames + 1) {
+            failures.Add($"{scenario.DisplayName}: frames.csv expected {expectedFrames + 1} lines including header, got {lines.Length}");
+        }
+        if (lines.Length > 0 && !lines[0].Contains("Confidence", StringComparison.Ordinal)) {
+            failures.Add($"{scenario.DisplayName}: frames.csv does not persist V2 confidence fields");
         }
     }
 
@@ -175,9 +183,13 @@ static void ValidateArtifacts(
         try {
             using var document = JsonDocument.Parse(File.ReadAllText(json));
             var captured = document.RootElement.GetProperty("captured").GetInt32();
-            var frameCount = document.RootElement.GetProperty("frames").GetArrayLength();
+            var frames = document.RootElement.GetProperty("frames");
+            var frameCount = frames.GetArrayLength();
             if (captured != expectedFrames || frameCount != expectedFrames) {
                 failures.Add($"{scenario.DisplayName}: session.json expected {expectedFrames} frames, got captured={captured}, frames={frameCount}");
+            }
+            if (frameCount > 0 && !frames[0].TryGetProperty("ConfidenceScore", out _)) {
+                failures.Add($"{scenario.DisplayName}: session.json does not persist ConfidenceScore");
             }
         } catch (Exception ex) {
             failures.Add($"{scenario.DisplayName}: session.json parse failed: {ex.Message}");
