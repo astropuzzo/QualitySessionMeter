@@ -1,3 +1,5 @@
+using NINA.Equipment.Model;
+using NINA.WPF.Base.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,6 +9,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
@@ -18,17 +22,25 @@ public sealed class QualitySessionHttpBridge : IDisposable {
     private const int DefaultPort = 18973;
     private const int MaxRequestLine = 4096;
     private const int MaxHeaderLines = 64;
+    private const int PreviewMaxWidth = 1280;
+    private const int PreviewJpegQuality = 82;
 
     private readonly string token;
     private readonly TcpListener listener;
+    private readonly IImageSaveMediator imageSaveMediator;
     private readonly CancellationTokenSource cancellation = new();
     private readonly Task acceptLoop;
+    private readonly object previewSync = new();
+    private byte[] previewJpeg = Array.Empty<byte>();
+    private DateTimeOffset previewUtc;
+    private string previewImageId = "";
     private bool disposed;
 
     public bool Enabled { get; }
     public int Port { get; }
 
-    public QualitySessionHttpBridge() {
+    public QualitySessionHttpBridge(IImageSaveMediator imageSaveMediator) {
+        this.imageSaveMediator = imageSaveMediator;
         token = (Environment.GetEnvironmentVariable("QSM_REMOTE_TOKEN") ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(token)) {
             Enabled = false;
@@ -39,6 +51,7 @@ public sealed class QualitySessionHttpBridge : IDisposable {
         var bindAddress = ParseBindAddress(Environment.GetEnvironmentVariable("QSM_REMOTE_BIND"));
         listener = new TcpListener(bindAddress, Port);
         listener.Start();
+        imageSaveMediator.ImageSaved += ImageSaved;
         Enabled = true;
         acceptLoop = Task.Run(() => AcceptLoop(cancellation.Token));
     }
@@ -50,6 +63,39 @@ public sealed class QualitySessionHttpBridge : IDisposable {
     private static IPAddress ParseBindAddress(string raw) {
         if (string.IsNullOrWhiteSpace(raw) || raw.Trim() == "*") return IPAddress.Any;
         return IPAddress.TryParse(raw.Trim(), out var parsed) ? parsed : IPAddress.Any;
+    }
+
+    private void ImageSaved(object sender, ImageSavedEventArgs e) {
+        if (disposed || e?.Image == null || e.MetaData?.Image == null) return;
+        if (e.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
+
+        try {
+            BitmapSource rendered = e.Image;
+            if (rendered.PixelWidth <= 0 || rendered.PixelHeight <= 0) return;
+
+            double scale = Math.Min(1.0, PreviewMaxWidth / (double)rendered.PixelWidth);
+            if (scale < 1.0) {
+                rendered = new TransformedBitmap(rendered, new ScaleTransform(scale, scale));
+            }
+            if (rendered.Format != PixelFormats.Bgr24) {
+                rendered = new FormatConvertedBitmap(rendered, PixelFormats.Bgr24, null, 0);
+            }
+
+            var encoder = new JpegBitmapEncoder { QualityLevel = PreviewJpegQuality };
+            encoder.Frames.Add(BitmapFrame.Create(rendered));
+            using var memory = new MemoryStream();
+            encoder.Save(memory);
+            var bytes = memory.ToArray();
+            if (bytes.Length == 0) return;
+
+            lock (previewSync) {
+                previewJpeg = bytes;
+                previewUtc = DateTimeOffset.UtcNow;
+                previewImageId = e.MetaData.Image.Id?.ToString() ?? previewUtc.ToUnixTimeMilliseconds().ToString();
+            }
+        } catch {
+            // Preview generation is best-effort and must never affect image saving or QSM classification.
+        }
     }
 
     private async Task AcceptLoop(CancellationToken cancellationToken) {
@@ -108,11 +154,16 @@ public sealed class QualitySessionHttpBridge : IDisposable {
 
             var path = parts[1].Split('?', 2)[0];
             if (path == "/healthz") {
+                byte[] preview;
+                DateTimeOffset previewTime;
+                lock (previewSync) { preview = previewJpeg; previewTime = previewUtc; }
                 await WriteJson(stream, 200, new {
                     ok = true,
                     service = "QualitySessionMeter",
                     contract = "quality-session-meter/http-v1",
-                    readOnly = true
+                    readOnly = true,
+                    previewAvailable = preview.Length > 0,
+                    previewUtc = previewTime == default ? null : previewTime.ToString("O")
                 }, cancellationToken);
                 return;
             }
@@ -124,6 +175,26 @@ public sealed class QualitySessionHttpBridge : IDisposable {
 
             if (path == "/api/v1/snapshot") {
                 await WriteJson(stream, 200, QualitySessionMobileBridge.BuildSnapshot(), cancellationToken);
+                return;
+            }
+
+            if (path == "/api/v1/preview.jpg") {
+                byte[] preview;
+                DateTimeOffset previewTime;
+                string imageId;
+                lock (previewSync) {
+                    preview = previewJpeg;
+                    previewTime = previewUtc;
+                    imageId = previewImageId;
+                }
+                if (preview.Length == 0) {
+                    await WriteJson(stream, 404, new { ok = false, error = "preview not available" }, cancellationToken);
+                    return;
+                }
+                await WriteBytes(stream, 200, "image/jpeg", preview, cancellationToken, new Dictionary<string, string> {
+                    ["X-QSM-Preview-Utc"] = previewTime.ToString("O"),
+                    ["X-QSM-Image-Id"] = imageId
+                });
                 return;
             }
 
@@ -148,7 +219,10 @@ public sealed class QualitySessionHttpBridge : IDisposable {
 
     private static async Task WriteJson(NetworkStream stream, int statusCode, object payload, CancellationToken cancellationToken) {
         var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
-        var body = Encoding.UTF8.GetBytes(json);
+        await WriteBytes(stream, statusCode, "application/json; charset=utf-8", Encoding.UTF8.GetBytes(json), cancellationToken);
+    }
+
+    private static async Task WriteBytes(NetworkStream stream, int statusCode, string contentType, byte[] body, CancellationToken cancellationToken, IDictionary<string, string> extraHeaders = null) {
         var reason = statusCode switch {
             200 => "OK",
             400 => "Bad Request",
@@ -157,21 +231,30 @@ public sealed class QualitySessionHttpBridge : IDisposable {
             405 => "Method Not Allowed",
             _ => "Error"
         };
-        var header = Encoding.ASCII.GetBytes(
-            $"HTTP/1.1 {statusCode} {reason}\r\n" +
-            "Content-Type: application/json; charset=utf-8\r\n" +
-            $"Content-Length: {body.Length}\r\n" +
-            "Cache-Control: no-store\r\n" +
-            "Connection: close\r\n" +
-            "X-Content-Type-Options: nosniff\r\n\r\n");
+        var builder = new StringBuilder()
+            .Append("HTTP/1.1 ").Append(statusCode).Append(' ').Append(reason).Append("\r\n")
+            .Append("Content-Type: ").Append(contentType).Append("\r\n")
+            .Append("Content-Length: ").Append(body?.Length ?? 0).Append("\r\n")
+            .Append("Cache-Control: no-store\r\n")
+            .Append("Connection: close\r\n")
+            .Append("X-Content-Type-Options: nosniff\r\n");
+        if (extraHeaders != null) {
+            foreach (var pair in extraHeaders) {
+                if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null || pair.Value.Contains('\r') || pair.Value.Contains('\n')) continue;
+                builder.Append(pair.Key).Append(": ").Append(pair.Value).Append("\r\n");
+            }
+        }
+        builder.Append("\r\n");
+        var header = Encoding.ASCII.GetBytes(builder.ToString());
         await stream.WriteAsync(header, cancellationToken);
-        await stream.WriteAsync(body, cancellationToken);
+        if (body?.Length > 0) await stream.WriteAsync(body, cancellationToken);
         await stream.FlushAsync(cancellationToken);
     }
 
     public void Dispose() {
         if (disposed) return;
         disposed = true;
+        if (Enabled && imageSaveMediator != null) imageSaveMediator.ImageSaved -= ImageSaved;
         cancellation.Cancel();
         try { listener?.Stop(); } catch { }
         try { acceptLoop?.Wait(TimeSpan.FromSeconds(1)); } catch { }
