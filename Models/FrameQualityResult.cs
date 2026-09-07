@@ -17,7 +17,6 @@ public sealed class FrameQualityResult {
     public int BinY { get; set; }
     public string Camera { get; set; }
 
-    // V3 provenance. Raw reject reasons remain independent from where the frame came from.
     public FrameSourceKind SourceKind { get; set; } = FrameSourceKind.Unknown;
     public string SequenceTitle { get; set; } = "";
     public bool QsmControlled { get; set; }
@@ -71,6 +70,24 @@ public sealed class FrameQualityResult {
     public double ConfidenceAgreement { get; set; } = double.NaN;
     public string ConfidenceReason { get; set; } = "";
 
+    // V3 predictive diagnostics. These never create a hard rejection by themselves.
+    public bool PredictiveWarning { get; set; }
+    public double PredictiveConfidence { get; set; } = double.NaN;
+    public string PredictiveChannel { get; set; } = "";
+    public string PredictiveMessage { get; set; } = "";
+    public double PredictiveFramesToThreshold { get; set; } = double.NaN;
+
+    // V3 optional weather/environmental correlation. Diagnostic only unless a future explicit control rule says otherwise.
+    public bool EnvironmentAvailable { get; set; }
+    public double CloudCover { get; set; } = double.NaN;
+    public double Humidity { get; set; } = double.NaN;
+    public double WindSpeed { get; set; } = double.NaN;
+    public double WindGust { get; set; } = double.NaN;
+    public double SkyQuality { get; set; } = double.NaN;
+    public double AmbientTemperature { get; set; } = double.NaN;
+    public double DewPoint { get; set; } = double.NaN;
+    public string EnvironmentalHint { get; set; } = "";
+
     public FrameStatus Status { get; set; }
     public List<string> RejectReasons { get; set; } = new();
     public string ProbableCause { get; set; } = "";
@@ -116,6 +133,10 @@ public sealed class FrameQualityResult {
         FrameSourceKind.ManualOrExternalLight => "MANUAL / EXTERNAL LIGHT",
         _ => "UNKNOWN"
     };
+
+    public string PredictionText => PredictiveWarning
+        ? $"{PredictiveChannel}: {PredictiveMessage} ({PredictiveConfidence:0}% conf.)"
+        : "—";
 
     public string ReasonText {
         get {
@@ -168,9 +189,6 @@ public sealed class FrameQualityResult {
     public string BackgroundDeltaText => FormatPercent(BackgroundDeviationPercent);
     public string BackgroundTrendResidualText => FormatPercent(BackgroundTrendResidualPercent);
 
-    private static string FormatArcsec(double value) =>
-        double.IsNaN(value) ? "N/A" : value.ToString("0.00", CultureInfo.InvariantCulture) + "\"";
-
-    private static string FormatPercent(double value) =>
-        double.IsNaN(value) ? "N/A" : value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "%";
+    private static string FormatArcsec(double value) => double.IsNaN(value) ? "N/A" : value.ToString("0.00", CultureInfo.InvariantCulture) + "\"";
+    private static string FormatPercent(double value) => double.IsNaN(value) ? "N/A" : value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "%";
 }
