@@ -4,15 +4,16 @@ using System.Collections.Generic;
 namespace NINA.Plugin.QualitySessionMeter.Models;
 
 /// <summary>
-/// Shared visual vocabulary for rejected-frame markers in the live and HTML timelines.
-/// This is presentation-only and never affects rejection decisions.
+/// Shared presentation vocabulary for rejected-frame markers in the live and HTML timelines.
+/// Deliberately uses short text codes instead of emoji so rendering is deterministic across
+/// Windows/N.I.N.A. font stacks. This is presentation-only and never affects rejection decisions.
 /// </summary>
 public static class RejectionVisual {
-    public const string GuideIcon = "💨";
-    public const string SkyIcon = "☁";
-    public const string BackgroundIcon = "🌫";
-    public const string UnknownIcon = "❌";
-    public const string ErrorIcon = "⚠";
+    public const string GuideIcon = "G";
+    public const string SkyIcon = "S";
+    public const string BackgroundIcon = "B";
+    public const string UnknownIcon = "?";
+    public const string ErrorIcon = "!";
 
     public static string GetIcons(FrameQualityResult frame) {
         if (frame == null) return string.Empty;
@@ -51,19 +52,34 @@ public static class RejectionVisual {
 
     public static string GetTooltip(FrameQualityResult frame) {
         if (frame == null) return string.Empty;
-        var icons = GetIcons(frame);
+        var codes = GetIcons(frame);
         var cause = string.IsNullOrWhiteSpace(frame.ProbableCause) ? "Unknown cause" : frame.ProbableCause;
         var reasons = frame.ReasonText == "—" ? string.Empty : $" · {frame.ReasonText}";
-        return $"Frame #{frame.FrameIndex} · {icons} {cause}{reasons}";
+        return $"Frame #{frame.FrameIndex} · {ExpandCodes(codes)} · {cause}{reasons}";
+    }
+
+    public static string ExpandCodes(string codes) {
+        if (string.IsNullOrWhiteSpace(codes)) return "No cause code";
+        var labels = new List<string>();
+        foreach (char code in codes) {
+            switch (code) {
+                case 'G': AddDistinct(labels, "G = guiding / tracking"); break;
+                case 'S': AddDistinct(labels, "S = stars / transparency / cloud"); break;
+                case 'B': AddDistinct(labels, "B = background / haze / sky brightness"); break;
+                case '!': AddDistinct(labels, "! = analysis error / unassessed"); break;
+                case '?': AddDistinct(labels, "? = unmapped rejection cause"); break;
+            }
+        }
+        return labels.Count == 0 ? "No cause code" : string.Join("; ", labels);
     }
 
     private static bool Contains(string value, string token) =>
         value?.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
 
-    private static void AddDistinct(List<string> icons, string icon) {
-        foreach (var existing in icons) {
-            if (string.Equals(existing, icon, StringComparison.Ordinal)) return;
+    private static void AddDistinct(List<string> values, string value) {
+        foreach (var existing in values) {
+            if (string.Equals(existing, value, StringComparison.Ordinal)) return;
         }
-        icons.Add(icon);
+        values.Add(value);
     }
 }
