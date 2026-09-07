@@ -16,9 +16,9 @@
     <Description>Real-time subframe quality control and session metering for N.I.N.A.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
-    <Version>0.1.0</Version>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
+    <Version>0.1.0.1</Version>
+    <AssemblyVersion>0.1.0.1</AssemblyVersion>
+    <FileVersion>0.1.0.1</FileVersion>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
