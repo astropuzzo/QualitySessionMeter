@@ -32,7 +32,16 @@ public sealed class QualityEngine {
         };
 
         var reasons = new List<string>();
+        var dataErrors = new List<string>();
+
+        bool guideRequired = settings.EnableGuideRms || settings.EnableSustainedExcursion || settings.EnableHardExcursion;
         bool guideAvailable = input.Guide?.HasData == true;
+        bool starDataAvailable = input.StarCount >= 0;
+        bool backgroundDataAvailable = !double.IsNaN(input.BackgroundMedian) && !double.IsInfinity(input.BackgroundMedian);
+
+        if (guideRequired && !guideAvailable) dataErrors.Add("GUIDE_DATA_UNAVAILABLE");
+        if (settings.EnableStarCount && !starDataAvailable) dataErrors.Add("STAR_COUNT_UNAVAILABLE");
+        if (settings.EnableBackground && !backgroundDataAvailable) dataErrors.Add("BACKGROUND_UNAVAILABLE");
 
         if (settings.EnableGuideRms && guideAvailable) {
             result.GuidingQuality = ScoreUpper(input.Guide.RmsArcsec, settings.MaxGuideRms);
@@ -58,17 +67,16 @@ public sealed class QualityEngine {
             }
         }
 
-        bool starsReady = !settings.EnableStarCount || (input.Baseline?.StarsReady == true);
-        if (settings.EnableStarCount && input.Baseline?.StarsReady == true && input.StarCount >= 0 && input.Baseline.StarMedian > 0) {
+        bool starsReady = !settings.EnableStarCount || input.Baseline?.StarsReady == true;
+        if (settings.EnableStarCount && starsReady && starDataAvailable && input.Baseline.StarMedian > 0) {
             result.StarDeviationPercent = ((input.StarCount - input.Baseline.StarMedian) / input.Baseline.StarMedian) * 100.0;
             var loss = Math.Max(0, -result.StarDeviationPercent);
             result.TransparencyQuality = ScoreUpper(loss, settings.MaxStarLossPercent);
             if (loss > settings.MaxStarLossPercent) reasons.Add("STAR_COUNT_DROP");
         }
 
-        bool backgroundReady = !settings.EnableBackground || (input.Baseline?.BackgroundReady == true);
-        if (settings.EnableBackground && input.Baseline?.BackgroundReady == true &&
-            input.Baseline.BackgroundMedian > 0 && !double.IsNaN(input.BackgroundMedian)) {
+        bool backgroundReady = !settings.EnableBackground || input.Baseline?.BackgroundReady == true;
+        if (settings.EnableBackground && backgroundReady && backgroundDataAvailable && input.Baseline.BackgroundMedian > 0) {
             result.BackgroundDeviationPercent =
                 ((input.BackgroundMedian - input.Baseline.BackgroundMedian) / input.Baseline.BackgroundMedian) * 100.0;
 
@@ -90,10 +98,17 @@ public sealed class QualityEngine {
         }.Where(x => x.HasValue).Select(x => x.Value).ToArray();
 
         result.OverallQuality = scores.Length == 0
-            ? 100.0
+            ? (dataErrors.Count > 0 ? 0.0 : 100.0)
             : Combine(scores, settings.WorstMetricWeight);
 
         result.RejectReasons = reasons.Distinct().ToList();
+
+        if (dataErrors.Count > 0) {
+            result.Status = FrameStatus.Error;
+            result.ErrorMessage = string.Join(", ", dataErrors);
+            result.ProbableCause = "ANALYSIS DATA UNAVAILABLE";
+            return result;
+        }
 
         bool learning = !starsReady || !backgroundReady;
         if (reasons.Count > 0) {

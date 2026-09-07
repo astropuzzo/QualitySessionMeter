@@ -9,8 +9,10 @@ namespace NINA.Plugin.QualitySessionMeter.Core;
 public sealed class RejectedFileService {
     public async Task<string> ApplyAsync(string path, QualitySettings settings) {
         if (settings.MonitorOnly || settings.RejectedFileAction == RejectedFileAction.KeepInPlace) return path;
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return path;
+        if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Rejected frame path is empty.", nameof(path));
+        if (!File.Exists(path)) throw new FileNotFoundException("Rejected frame file does not exist when file action was requested.", path);
 
+        IOException lastIo = null;
         for (int attempt = 0; attempt < 3; attempt++) {
             try {
                 return settings.RejectedFileAction switch {
@@ -18,12 +20,13 @@ public sealed class RejectedFileService {
                     RejectedFileAction.MoveToRejectedFolder => MoveRejected(path),
                     _ => path
                 };
-            } catch (IOException) when (attempt < 2) {
-                await Task.Delay(250 * (attempt + 1));
+            } catch (IOException ex) {
+                lastIo = ex;
+                if (attempt < 2) await Task.Delay(250 * (attempt + 1));
             }
         }
 
-        return path;
+        throw new IOException("Could not apply the configured rejected-file action after three attempts.", lastIo);
     }
 
     private static string PrefixBad(string path) {

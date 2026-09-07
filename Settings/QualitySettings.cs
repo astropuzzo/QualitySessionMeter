@@ -39,7 +39,15 @@ public sealed class QualitySettings : INotifyPropertyChanged {
 
     public double ExcursionThreshold {
         get => accessor.GetValueDouble(nameof(ExcursionThreshold), 2.00);
-        set { accessor.SetValueDouble(nameof(ExcursionThreshold), Clamp(value, 0.05, 50)); Raise(); }
+        set {
+            var clamped = Clamp(value, 0.05, 50);
+            accessor.SetValueDouble(nameof(ExcursionThreshold), clamped);
+            if (HardExcursionThreshold < clamped) {
+                accessor.SetValueDouble(nameof(HardExcursionThreshold), clamped);
+                Raise(nameof(HardExcursionThreshold));
+            }
+            Raise();
+        }
     }
 
     public double ExcursionMinimumDuration {
@@ -54,7 +62,7 @@ public sealed class QualitySettings : INotifyPropertyChanged {
 
     public double HardExcursionThreshold {
         get => accessor.GetValueDouble(nameof(HardExcursionThreshold), 5.0);
-        set { accessor.SetValueDouble(nameof(HardExcursionThreshold), Clamp(value, 0.1, 100)); Raise(); }
+        set { accessor.SetValueDouble(nameof(HardExcursionThreshold), Clamp(value, ExcursionThreshold, 100)); Raise(); }
     }
 
     public bool EnableStarCount {
@@ -84,12 +92,21 @@ public sealed class QualitySettings : INotifyPropertyChanged {
 
     public int BaselineWindow {
         get => Clamp(accessor.GetValueInt32(nameof(BaselineWindow), 8), 4, 50);
-        set { accessor.SetValueInt32(nameof(BaselineWindow), Clamp(value, 4, 50)); Raise(); }
+        set {
+            var clamped = Clamp(value, 4, 50);
+            accessor.SetValueInt32(nameof(BaselineWindow), clamped);
+            var minLearning = accessor.GetValueInt32(nameof(MinimumLearningFrames), 4);
+            if (minLearning > clamped) {
+                accessor.SetValueInt32(nameof(MinimumLearningFrames), clamped);
+                Raise(nameof(MinimumLearningFrames));
+            }
+            Raise();
+        }
     }
 
     public int MinimumLearningFrames {
-        get => Clamp(accessor.GetValueInt32(nameof(MinimumLearningFrames), 4), 2, 20);
-        set { accessor.SetValueInt32(nameof(MinimumLearningFrames), Clamp(value, 2, 20)); Raise(); }
+        get => Clamp(accessor.GetValueInt32(nameof(MinimumLearningFrames), 4), 2, BaselineWindow);
+        set { accessor.SetValueInt32(nameof(MinimumLearningFrames), Clamp(value, 2, BaselineWindow)); Raise(); }
     }
 
     public double WorstMetricWeight {

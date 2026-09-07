@@ -45,6 +45,20 @@ All notable changes to QualitySessionMeter are documented here.
 - Acceptance-rate and accepted-frame session-quality indicators.
 - GitHub Actions Windows build and Release artifact publishing.
 
+#### Hardened before field testing
+
+- Enabled quality metrics with unavailable data now produce an explicit `ERROR` / unassessed frame instead of being silently treated as a perfect or accepted measurement.
+- `MinimumLearningFrames` can no longer exceed the rolling baseline window.
+- The hard guide-excursion threshold can no longer be configured below the normal excursion threshold.
+- Session reset is serialized against frame processing and no longer clears guide samples belonging to a potentially active exposure.
+- A physical frame receives one stable frame index even if analysis throws; error logging no longer skips an index.
+- Frame timestamps now use the exposure-start timestamp where available.
+- Session folders use millisecond-resolution, collision-safe names; JSON now keeps a stable `createdUtc` plus `updatedUtc`.
+- CSV now persists analysis/file-action error messages.
+- Rejected-file move/prefix failures are no longer silent after retries; the failure is recorded while the original frame remains preserved.
+- SVG timelines explicitly distinguish analysis-error frames.
+- Repository/package licensing metadata aligned with the existing Apache-2.0 license.
+
 #### Deliberately excluded from rejection logic
 
 - HFR
@@ -55,8 +69,8 @@ These metrics were excluded after real-world observations showed they can remain
 
 ### Validation
 
-V1 compiled successfully on a GitHub Actions Windows runner against `NINA.Plugin 3.2.0.9001`.
+V1 compiled successfully on a GitHub Actions Windows runner against `NINA.Plugin 3.2.0.9001` before the hardening pass. The hardening commit is independently validated by CI before field testing.
 
 ### Next validation stage
 
-Real-night Monitor Only testing is required to tune practical thresholds across different mounts, focal lengths, filters, guide cadences and sky conditions before an official public plugin-store release.
+Real-night Monitor Only testing is required to tune practical thresholds across different mounts, focal lengths, filters, guide cadences and sky conditions before an official public plugin-store release. See `docs/REAL_NIGHT_TEST_PLAN.md`.

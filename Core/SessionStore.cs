@@ -17,6 +17,7 @@ public sealed class SessionStore {
     private readonly List<FrameQualityResult> results = new();
     private readonly SemaphoreSlim ioLock = new(1, 1);
     private string sessionFolder;
+    private DateTime sessionCreatedUtc;
 
     public string SessionFolder {
         get { lock (sync) return sessionFolder ?? ""; }
@@ -30,6 +31,7 @@ public sealed class SessionStore {
         lock (sync) {
             results.Clear();
             sessionFolder = null;
+            sessionCreatedUtc = default;
         }
     }
 
@@ -50,14 +52,24 @@ public sealed class SessionStore {
     private void EnsureSession() {
         lock (sync) {
             if (!string.IsNullOrWhiteSpace(sessionFolder)) return;
+
             var baseDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "NINA",
                 "QualitySessionMeter",
                 "Sessions");
             Directory.CreateDirectory(baseDir);
-            sessionFolder = Path.Combine(baseDir, DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture));
-            Directory.CreateDirectory(sessionFolder);
+
+            sessionCreatedUtc = DateTime.UtcNow;
+            string stem = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss_fff", CultureInfo.InvariantCulture);
+            string candidate = Path.Combine(baseDir, stem);
+            int suffix = 1;
+            while (Directory.Exists(candidate)) {
+                candidate = Path.Combine(baseDir, $"{stem}_{suffix++}");
+            }
+
+            Directory.CreateDirectory(candidate);
+            sessionFolder = candidate;
         }
     }
 
@@ -68,7 +80,7 @@ public sealed class SessionStore {
         await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
 
         if (!exists) {
-            await writer.WriteLineAsync("Frame,TimestampUtc,Filename,Target,Filter,Exposure,Gain,BinX,BinY,Stars,StarsBaseline,StarsDeltaPct,Background,BackgroundBaseline,BackgroundDeltaPct,GuideSamples,GuideRMS,MaxGuideExcursion,SustainedExcursionSeconds,GuidingQuality,StabilityQuality,TransparencyQuality,BackgroundQuality,OverallQuality,Status,RejectReasons,ProbableCause,MonitorOnly");
+            await writer.WriteLineAsync("Frame,TimestampUtc,Filename,Target,Filter,Exposure,Gain,BinX,BinY,Stars,StarsBaseline,StarsDeltaPct,Background,BackgroundBaseline,BackgroundDeltaPct,GuideSamples,GuideRMS,MaxGuideExcursion,SustainedExcursionSeconds,GuidingQuality,StabilityQuality,TransparencyQuality,BackgroundQuality,OverallQuality,Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly");
         }
 
         string[] fields = {
@@ -99,6 +111,7 @@ public sealed class SessionStore {
             r.Status.ToString(),
             Csv(r.ReasonText),
             Csv(r.ProbableCause),
+            Csv(r.ErrorMessage),
             r.MonitorOnly ? "true" : "false"
         };
         await writer.WriteLineAsync(string.Join(",", fields));
@@ -106,7 +119,11 @@ public sealed class SessionStore {
 
     private async Task WriteSummaryAsync() {
         FrameQualityResult[] copy;
-        lock (sync) copy = results.ToArray();
+        DateTime created;
+        lock (sync) {
+            copy = results.ToArray();
+            created = sessionCreatedUtc;
+        }
 
         int usable = copy.Count(x => x.IsUsable);
         int rejected = copy.Count(x => x.Status == FrameStatus.Rejected);
@@ -116,7 +133,8 @@ public sealed class SessionStore {
         double acceptanceRate = usable + rejected == 0 ? 0 : usable * 100.0 / (usable + rejected);
 
         var summary = new {
-            createdUtc = DateTime.UtcNow,
+            createdUtc = created,
+            updatedUtc = DateTime.UtcNow,
             captured = copy.Length,
             usable,
             rejected,
@@ -171,6 +189,7 @@ public sealed class SessionStore {
             string color = copy[i].Status == FrameStatus.Rejected ? "#f28b82"
                 : copy[i].Status == FrameStatus.Warning ? "#fdd663"
                 : copy[i].Status == FrameStatus.Learning ? "#bdc1c6"
+                : copy[i].Status == FrameStatus.Error ? "#ff7878"
                 : "#81c995";
             sb.AppendLine($"<circle cx=\"{x:0.##}\" cy=\"{y:0.##}\" r=\"4\" fill=\"{color}\"/>");
         }

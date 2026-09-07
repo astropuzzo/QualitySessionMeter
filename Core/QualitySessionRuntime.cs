@@ -77,9 +77,14 @@ public sealed class QualitySessionRuntime : IDisposable {
 
     private async Task ProcessImageAsync(ImageSavedEventArgs e) {
         await processingLock.WaitAsync();
+        int assignedFrameIndex = Interlocked.Increment(ref frameIndex);
+        DateTime frameTimestampUtc = DateTime.UtcNow;
+
         try {
             var meta = e.MetaData;
             var start = NormalizeUtc(meta.Image.ExposureStart);
+            if (start != DateTime.MinValue) frameTimestampUtc = start;
+
             var guide = guideCollector.GetExposureMetrics(start, e.Duration, settings.ExcursionThreshold);
 
             var key = new BaselineKey(
@@ -93,8 +98,8 @@ public sealed class QualitySessionRuntime : IDisposable {
 
             var snapshot = baseline.GetSnapshot(key, settings.MinimumLearningFrames);
             var input = new FrameQualityInput {
-                FrameIndex = Interlocked.Increment(ref frameIndex),
-                TimestampUtc = DateTime.UtcNow,
+                FrameIndex = assignedFrameIndex,
+                TimestampUtc = frameTimestampUtc,
                 OriginalPath = e.PathToImage?.IsFile == true ? e.PathToImage.LocalPath : e.PathToImage?.ToString(),
                 Target = meta.Target?.Name ?? "",
                 Filter = e.Filter ?? meta.FilterWheel?.Filter ?? "",
@@ -129,10 +134,10 @@ public sealed class QualitySessionRuntime : IDisposable {
         } catch (Exception ex) {
             Logger.Error(ex);
             var result = new FrameQualityResult {
-                FrameIndex = Interlocked.Increment(ref frameIndex),
-                TimestampUtc = DateTime.UtcNow,
-                OriginalPath = e.PathToImage?.ToString(),
-                FinalPath = e.PathToImage?.ToString(),
+                FrameIndex = assignedFrameIndex,
+                TimestampUtc = frameTimestampUtc,
+                OriginalPath = e.PathToImage?.IsFile == true ? e.PathToImage.LocalPath : e.PathToImage?.ToString(),
+                FinalPath = e.PathToImage?.IsFile == true ? e.PathToImage.LocalPath : e.PathToImage?.ToString(),
                 Status = FrameStatus.Error,
                 OverallQuality = 0,
                 ErrorMessage = ex.Message,
@@ -147,10 +152,14 @@ public sealed class QualitySessionRuntime : IDisposable {
     }
 
     public void ResetSession() {
-        baseline.Clear();
-        guideCollector.Clear();
-        sessionStore.Reset();
-        Interlocked.Exchange(ref frameIndex, 0);
+        processingLock.Wait();
+        try {
+            baseline.Clear();
+            sessionStore.Reset();
+            Interlocked.Exchange(ref frameIndex, 0);
+        } finally {
+            processingLock.Release();
+        }
     }
 
     private static DateTime NormalizeUtc(DateTime value) {
