@@ -6,6 +6,7 @@ using NINA.Plugin.QualitySessionMeter.Models;
 using NINA.Plugin.QualitySessionMeter.Settings;
 using NINA.Plugin.QualitySessionMeter.Synthetic;
 using NINA.Profile.Interfaces;
+using NINA.Sequencer.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
@@ -20,6 +21,7 @@ namespace NINA.Plugin.QualitySessionMeter.Core;
 public sealed class QualitySessionRuntime : IDisposable {
     private readonly IProfileService profileService;
     private readonly IImageSaveMediator imageSaveMediator;
+    private readonly ISequenceMediator sequenceMediator;
     private readonly QualitySettings settings;
     private readonly BaselineEngine baseline = new();
     private readonly GuideCollector guideCollector;
@@ -27,6 +29,8 @@ public sealed class QualitySessionRuntime : IDisposable {
     private readonly RejectedFileService rejectedFileService = new();
     private readonly SessionStore sessionStore = new();
     private readonly SemaphoreSlim processingLock = new(1, 1);
+    private readonly object controlSync = new();
+    private readonly HashSet<string> controlTokens = new(StringComparer.Ordinal);
     private int frameIndex;
     private bool disposed;
 
@@ -59,15 +63,18 @@ public sealed class QualitySessionRuntime : IDisposable {
     public string ActiveSessionFolder => IsSyntheticMode
         ? syntheticSessionStore?.SessionFolder ?? ""
         : sessionStore.SessionFolder;
+    public bool IsSequencerControlArmed { get { lock (controlSync) return controlTokens.Count > 0; } }
 
     public QualitySessionRuntime(
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
         IGuiderMediator guiderMediator,
+        ISequenceMediator sequenceMediator,
         QualitySettings settings) {
 
         this.profileService = profileService;
         this.imageSaveMediator = imageSaveMediator;
+        this.sequenceMediator = sequenceMediator;
         this.settings = settings;
         guideCollector = new GuideCollector(guiderMediator);
 
@@ -75,10 +82,58 @@ public sealed class QualitySessionRuntime : IDisposable {
         imageSaveMediator.ImageSaved += ImageSaved;
     }
 
+    public string ArmSequencerControl() {
+        if (!settings.Enabled || IsSyntheticMode) return "";
+        var token = Guid.NewGuid().ToString("N");
+        lock (controlSync) controlTokens.Add(token);
+        Logger.Info($"QualitySessionMeter V3: armed controlled sequencer block {token[..8]}.");
+        return token;
+    }
+
+    public void DisarmSequencerControl(string token) {
+        if (string.IsNullOrWhiteSpace(token)) return;
+        lock (controlSync) controlTokens.Remove(token);
+    }
+
+    private FrameSourceInfo ResolveSource(string sequenceTitle) {
+        bool controlled = IsSequencerControlArmed;
+        bool hasSequenceMetadata = !string.IsNullOrWhiteSpace(sequenceTitle);
+        bool sequencerKnown = controlled || hasSequenceMetadata;
+
+        var kind = controlled
+            ? FrameSourceKind.QsmControlledBlock
+            : sequencerKnown
+                ? FrameSourceKind.AdvancedSequencer
+                : FrameSourceKind.ManualOrExternalLight;
+
+        bool monitoringEligible = settings.MonitoringScope switch {
+            MonitoringScope.ControlledBlocksOnly => controlled,
+            MonitoringScope.AdvancedSequencerLights => sequencerKnown,
+            MonitoringScope.AllLights => true,
+            _ => false
+        };
+
+        // File mutation is deliberately stricter than monitoring. Unknown/manual LIGHTs are never
+        // renamed or moved even when AllLights monitoring is explicitly enabled.
+        bool fileActionEligible = monitoringEligible &&
+            kind is FrameSourceKind.QsmControlledBlock or FrameSourceKind.AdvancedSequencer;
+
+        return new FrameSourceInfo {
+            Kind = kind,
+            SequenceTitle = sequenceTitle ?? "",
+            QsmControlled = controlled,
+            MonitoringEligible = monitoringEligible,
+            FileActionEligible = fileActionEligible
+        };
+    }
+
     private async Task BeforeFinalizeImageSaved(object sender, BeforeFinalizeImageSavedEventArgs e) {
         if (IsSyntheticMode) return;
         if (!settings.Enabled || e?.Image?.RawImageData?.MetaData?.Image == null) return;
         if (e.Image.RawImageData.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
+
+        var source = ResolveSource(e.Image.RawImageData.MetaData.Sequence?.Title ?? "");
+        if (!source.MonitoringEligible) return;
 
         try {
             var analysis = e.Image.RawImageData.StarDetectionAnalysis;
@@ -104,13 +159,19 @@ public sealed class QualitySessionRuntime : IDisposable {
         if (IsSyntheticMode) return;
         if (!settings.Enabled || e?.MetaData?.Image == null) return;
         if (e.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
-        _ = ProcessImageAsync(e);
+
+        var source = ResolveSource(e.MetaData.Sequence?.Title ?? "");
+        if (!source.MonitoringEligible) {
+            Logger.Debug($"QualitySessionMeter ignored LIGHT from {source.SourceText}; scope={settings.MonitoringScope}.");
+            return;
+        }
+        _ = ProcessImageAsync(e, source);
     }
 
-    private async Task ProcessImageAsync(ImageSavedEventArgs e) {
+    private async Task ProcessImageAsync(ImageSavedEventArgs e, FrameSourceInfo source) {
         await processingLock.WaitAsync();
 
-        if (IsSyntheticMode) {
+        if (IsSyntheticMode || !settings.Enabled) {
             processingLock.Release();
             return;
         }
@@ -153,6 +214,10 @@ public sealed class QualitySessionRuntime : IDisposable {
             };
 
             var result = qualityEngine.Evaluate(input, settings);
+            result.SourceKind = source.Kind;
+            result.SequenceTitle = source.SequenceTitle;
+            result.QsmControlled = source.QsmControlled;
+            result.FileActionEligible = source.FileActionEligible;
 
             if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
                 baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow);
@@ -160,7 +225,10 @@ public sealed class QualitySessionRuntime : IDisposable {
 
             if (result.Status == FrameStatus.Rejected && !settings.MonitorOnly) {
                 try {
-                    result.FinalPath = await rejectedFileService.ApplyAsync(result.OriginalPath, settings);
+                    result.FinalPath = await rejectedFileService.ApplyAsync(
+                        result.OriginalPath,
+                        settings,
+                        result.FileActionEligible);
                 } catch (Exception ex) {
                     result.ErrorMessage = $"Rejected-file action failed: {ex.Message}";
                     Logger.Warning($"QualitySessionMeter rejected-file action failed: {ex.Message}");
@@ -176,6 +244,10 @@ public sealed class QualitySessionRuntime : IDisposable {
                 TimestampUtc = frameTimestampUtc,
                 OriginalPath = e.PathToImage?.IsFile == true ? e.PathToImage.LocalPath : e.PathToImage?.ToString(),
                 FinalPath = e.PathToImage?.IsFile == true ? e.PathToImage.LocalPath : e.PathToImage?.ToString(),
+                SourceKind = source.Kind,
+                SequenceTitle = source.SequenceTitle,
+                QsmControlled = source.QsmControlled,
+                FileActionEligible = source.FileActionEligible,
                 Status = FrameStatus.Error,
                 OverallQuality = 0,
                 ErrorMessage = ex.Message,
@@ -192,11 +264,6 @@ public sealed class QualitySessionRuntime : IDisposable {
     public Task RunCanonicalSyntheticSessionAsync(int frameDelayMs = 150) =>
         RunSyntheticSessionAsync(SyntheticSessionGenerator.CanonicalScenarioId, frameDelayMs);
 
-    /// <summary>
-    /// Runs one deterministic synthetic whole-night profile entirely inside the plugin. It does not
-    /// access the camera, consume real ImageSaved events, touch live baselines or invoke file actions.
-    /// Production QualityEngine, BaselineEngine, GuideMetricsCalculator and SessionStore code paths are used.
-    /// </summary>
     public async Task RunSyntheticSessionAsync(string scenarioId, int frameDelayMs = 150) {
         if (disposed || IsSyntheticRunning) return;
 
@@ -446,6 +513,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         imageSaveMediator.BeforeFinalizeImageSaved -= BeforeFinalizeImageSaved;
         imageSaveMediator.ImageSaved -= ImageSaved;
         guideCollector.Dispose();
+        lock (controlSync) controlTokens.Clear();
         processingLock.Dispose();
     }
 }
@@ -458,9 +526,10 @@ public static class QualitySessionRuntimeRegistry {
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
         IGuiderMediator guiderMediator,
+        ISequenceMediator sequenceMediator,
         QualitySettings settings) {
         lock (Sync) {
-            instance ??= new QualitySessionRuntime(profileService, imageSaveMediator, guiderMediator, settings);
+            instance ??= new QualitySessionRuntime(profileService, imageSaveMediator, guiderMediator, sequenceMediator, settings);
             return instance;
         }
     }
