@@ -3,13 +3,16 @@ using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Interfaces.ViewModel;
 using NINA.Plugin.QualitySessionMeter.Core;
 using NINA.Plugin.QualitySessionMeter.Settings;
+using NINA.Plugin.QualitySessionMeter.Synthetic;
 using NINA.Profile;
 using NINA.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.ViewModel;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -21,6 +24,26 @@ public sealed class SyntheticLabDockable : DockableVM, IDisposable {
     private readonly QualitySessionRuntime runtime;
 
     public override bool IsTool { get; } = true;
+
+    public IReadOnlyList<SyntheticSessionDefinition> Scenarios { get; } = SyntheticSessionGenerator.GetScenarios();
+
+    private SyntheticSessionDefinition selectedScenario;
+    public SyntheticSessionDefinition SelectedScenario {
+        get => selectedScenario;
+        set {
+            if (value == null || ReferenceEquals(selectedScenario, value)) return;
+            selectedScenario = value;
+            RaisePropertyChanged();
+            RaisePropertyChanged(nameof(ScenarioDescription));
+            RaisePropertyChanged(nameof(ScenarioExpectedSummary));
+        }
+    }
+
+    public string ScenarioDescription => SelectedScenario?.Description ?? "Select a synthetic night profile.";
+    public string ScenarioExpectedSummary => SelectedScenario?.ExpectedSummary ?? "—";
+    public string RunningScenario => string.IsNullOrWhiteSpace(runtime.SyntheticSessionName)
+        ? SelectedScenario?.DisplayName ?? "—"
+        : runtime.SyntheticSessionName;
 
     private int frameDelayMs = 150;
     public int FrameDelayMs {
@@ -61,6 +84,9 @@ public sealed class SyntheticLabDockable : DockableVM, IDisposable {
         Title = "QSM Synthetic Lab";
         ImageGeometry = PluginIcon.CreateMeterGeometry();
 
+        selectedScenario = Scenarios.FirstOrDefault(x => x.Id == SyntheticSessionGenerator.CanonicalScenarioId)
+            ?? Scenarios.FirstOrDefault();
+
         var accessor = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         var settings = new QualitySettings(accessor);
         runtime = QualitySessionRuntimeRegistry.GetOrCreate(profileService, imageSaveMediator, guiderMediator, settings);
@@ -73,7 +99,9 @@ public sealed class SyntheticLabDockable : DockableVM, IDisposable {
         OpenFolderCommand = new RelayCommand(OpenFolder);
     }
 
-    private Task RunAsync() => runtime.RunCanonicalSyntheticSessionAsync(FrameDelayMs);
+    private Task RunAsync() => runtime.RunSyntheticSessionAsync(
+        SelectedScenario?.Id ?? SyntheticSessionGenerator.CanonicalScenarioId,
+        FrameDelayMs);
 
     private void OpenFolder() {
         var path = runtime.ActiveSessionFolder;
@@ -94,6 +122,7 @@ public sealed class SyntheticLabDockable : DockableVM, IDisposable {
             RaisePropertyChanged(nameof(FailureSummary));
             RaisePropertyChanged(nameof(SessionFolder));
             RaisePropertyChanged(nameof(SafetyText));
+            RaisePropertyChanged(nameof(RunningScenario));
         }
 
         var dispatcher = Application.Current?.Dispatcher;
