@@ -26,7 +26,8 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
         IGuiderMediator guiderMediator,
-        ISequenceMediator sequenceMediator) {
+        ISequenceMediator sequenceMediator,
+        IWeatherDataMediator weatherDataMediator) {
 
         this.profileService = profileService;
         PluginSettings = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
@@ -37,6 +38,7 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
             imageSaveMediator,
             guiderMediator,
             sequenceMediator,
+            weatherDataMediator,
             Settings);
 
         profileService.ProfileChanged += ProfileChanged;
