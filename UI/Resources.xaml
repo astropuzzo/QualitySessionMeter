@@ -63,7 +63,6 @@
                             <TextBlock Text="Maximum RMS (arcsec)" VerticalAlignment="Center"/>
                             <TextBox Grid.Column="1" Text="{Binding Settings.MaxGuideRms, UpdateSourceTrigger=LostFocus}"/>
                         </Grid>
-
                         <CheckBox Content="Reject sustained guide excursion" IsChecked="{Binding Settings.EnableSustainedExcursion}" Margin="0,3"/>
                         <Grid Margin="20,3,0,3">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
@@ -75,7 +74,6 @@
                             <TextBlock Text="Minimum duration (seconds)" VerticalAlignment="Center"/>
                             <TextBox Grid.Column="1" Text="{Binding Settings.ExcursionMinimumDuration, UpdateSourceTrigger=LostFocus}"/>
                         </Grid>
-
                         <CheckBox Content="Reject hard guide excursion" IsChecked="{Binding Settings.EnableHardExcursion}" Margin="0,3"/>
                         <Grid Margin="20,3,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
@@ -93,7 +91,6 @@
                             <TextBlock Text="Maximum star loss (%)" VerticalAlignment="Center"/>
                             <TextBox Grid.Column="1" Text="{Binding Settings.MaxStarLossPercent, UpdateSourceTrigger=LostFocus}"/>
                         </Grid>
-
                         <CheckBox Content="Reject background deviation" IsChecked="{Binding Settings.EnableBackground}" Margin="0,3"/>
                         <Grid Margin="20,3,0,3">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
@@ -131,118 +128,158 @@
     </DataTemplate>
 
     <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.UI.QualitySessionMeterDockable_Dockable">
-        <Grid Margin="6">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="150"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <Border Grid.Row="0" Style="{StaticResource QsmCardStyle}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="130"/>
-                        <ColumnDefinition Width="145"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="QUALITY" Style="{StaticResource QsmSectionTitle}"/>
-                        <TextBlock Text="{Binding CurrentFrame.QualityText, TargetNullValue=—}" FontSize="38" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
-                        <TextBlock Text="{Binding CurrentFrame.QualityLabel, TargetNullValue=Waiting for frame}" Foreground="{StaticResource QsmAccent}" FontWeight="SemiBold"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                        <TextBlock Text="CONFIDENCE" Style="{StaticResource QsmSectionTitle}"/>
-                        <TextBlock Text="{Binding CurrentFrame.ConfidenceText, TargetNullValue=—}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
-                        <TextBlock Text="{Binding CurrentFrame.ConfidenceLabel, TargetNullValue=Waiting}" Foreground="{StaticResource QsmAccent}" FontWeight="SemiBold"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2" Margin="12,0,0,0">
-                        <TextBlock Text="{Binding ModeText}" Style="{StaticResource QsmSectionTitle}"/>
-                        <TextBlock Text="{Binding CurrentFrame.StatusText, TargetNullValue=IDLE}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
-                        <TextBlock Text="{Binding CurrentFrame.ProbableCause, TargetNullValue=Waiting for first LIGHT frame}" Foreground="{StaticResource QsmSecondaryText}" Margin="0,4,0,0"/>
-                        <TextBlock Text="{Binding CurrentFrame.ReasonText}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                        <TextBlock Text="{Binding CurrentFrame.ConfidenceReason}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,4,0,0" FontStyle="Italic"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <Border Grid.Row="1" Style="{StaticResource QsmCardStyle}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Text="GUIDE RMS" Style="{StaticResource QsmSectionTitle}"/>
-                        <TextBlock Text="{Binding CurrentFrame.GuideRmsText, TargetNullValue=N/A}" FontSize="16"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1">
-                        <TextBlock Text="MAX EXCURSION" Style="{StaticResource QsmSectionTitle}"/>
-                        <TextBlock Text="{Binding CurrentFrame.ExcursionText, TargetNullValue=N/A}" FontSize="16"/>
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Text="STARS" Style="{StaticResource QsmSectionTitle}"/>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding CurrentFrame.StarsText, TargetNullValue=N/A}" FontSize="16"/>
-                            <TextBlock Text="{Binding CurrentFrame.StarDeltaText}" Margin="6,2,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="6">
+                <Border Style="{StaticResource QsmCardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/><ColumnDefinition Width="145"/><ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="QUALITY" Style="{StaticResource QsmSectionTitle}"/>
+                            <TextBlock Text="{Binding CurrentFrame.QualityText, TargetNullValue=—}" FontSize="38" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
+                            <TextBlock Text="{Binding CurrentFrame.QualityLabel, TargetNullValue=Waiting for frame}" Foreground="{StaticResource QsmAccent}" FontWeight="SemiBold"/>
                         </StackPanel>
-                    </StackPanel>
-                    <StackPanel Grid.Column="3">
-                        <TextBlock Text="BACKGROUND" Style="{StaticResource QsmSectionTitle}"/>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding CurrentFrame.BackgroundText, TargetNullValue=N/A}" FontSize="16"/>
-                            <TextBlock Text="{Binding CurrentFrame.BackgroundDeltaText}" Margin="6,2,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
+                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                            <TextBlock Text="CONFIDENCE" Style="{StaticResource QsmSectionTitle}"/>
+                            <TextBlock Text="{Binding CurrentFrame.ConfidenceText, TargetNullValue=—}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
+                            <TextBlock Text="{Binding CurrentFrame.ConfidenceLabel, TargetNullValue=Waiting}" Foreground="{StaticResource QsmAccent}" FontWeight="SemiBold"/>
                         </StackPanel>
-                    </StackPanel>
-                </Grid>
-            </Border>
+                        <StackPanel Grid.Column="2" Margin="12,0,0,0">
+                            <TextBlock Text="{Binding ModeText}" Style="{StaticResource QsmSectionTitle}"/>
+                            <TextBlock Text="{Binding CurrentFrame.StatusText, TargetNullValue=IDLE}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
+                            <TextBlock Text="{Binding CurrentFrame.ProbableCause, TargetNullValue=Waiting for first LIGHT frame}" Foreground="{StaticResource QsmSecondaryText}" Margin="0,3,0,0"/>
+                            <TextBlock Text="{Binding CurrentFrame.ReasonText}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                            <TextBlock Text="{Binding CurrentFrame.ConfidenceReason}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,3,0,0" FontStyle="Italic"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
 
-            <Border Grid.Row="2" Style="{StaticResource QsmCardStyle}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0"><TextBlock Text="CAPTURED" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding Captured}" FontSize="16"/></StackPanel>
-                    <StackPanel Grid.Column="1"><TextBlock Text="USABLE" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding Usable}" FontSize="16"/></StackPanel>
-                    <StackPanel Grid.Column="2"><TextBlock Text="REJECTED" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding Rejected}" FontSize="16"/></StackPanel>
-                    <StackPanel Grid.Column="3"><TextBlock Text="ACCEPTANCE" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding AcceptanceRate, StringFormat={}{0:0.0}%}" FontSize="16"/></StackPanel>
-                    <StackPanel Grid.Column="4"><TextBlock Text="SESSION QUALITY" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding SessionQuality, StringFormat={}{0:0}}" FontSize="16"/></StackPanel>
-                </Grid>
-            </Border>
+                <Border Style="{StaticResource QsmCardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="GUIDE RMS" Style="{StaticResource QsmSectionTitle}"/>
+                            <TextBlock Text="{Binding CurrentFrame.GuideRmsText, TargetNullValue=N/A}" FontSize="16"/>
+                            <TextBlock Text="{Binding CurrentFrame.ExcursionText}" Foreground="{StaticResource QsmSecondaryText}" FontSize="11"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="GUIDE PATTERN" Style="{StaticResource QsmSectionTitle}"/>
+                            <TextBlock Text="{Binding CurrentFrame.GuidePatternText, TargetNullValue=N/A}" FontSize="14" FontWeight="SemiBold" ToolTip="{Binding CurrentFrame.GuidePatternDetail}"/>
+                            <TextBlock Text="{Binding CurrentFrame.GuidePatternConfidenceText}" Foreground="{StaticResource QsmSecondaryText}" FontSize="11"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="STARS" Style="{StaticResource QsmSectionTitle}"/>
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding CurrentFrame.StarsText, TargetNullValue=N/A}" FontSize="16"/><TextBlock Text="{Binding CurrentFrame.StarDeltaText}" Margin="6,2,0,0" Foreground="{StaticResource QsmSecondaryText}"/></StackPanel>
+                            <TextBlock Text="{Binding CurrentFrame.StarTrendResidualText}" Foreground="{StaticResource QsmSecondaryText}" FontSize="11"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="3">
+                            <TextBlock Text="BACKGROUND" Style="{StaticResource QsmSectionTitle}"/>
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding CurrentFrame.BackgroundText, TargetNullValue=N/A}" FontSize="16"/><TextBlock Text="{Binding CurrentFrame.BackgroundDeltaText}" Margin="6,2,0,0" Foreground="{StaticResource QsmSecondaryText}"/></StackPanel>
+                            <TextBlock Text="{Binding CurrentFrame.BackgroundTrendResidualText}" Foreground="{StaticResource QsmSecondaryText}" FontSize="11"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="TEMPORAL" Style="{StaticResource QsmSectionTitle}"/>
+                            <TextBlock Text="{Binding CurrentFrame.TrendText, TargetNullValue=N/A}" FontSize="16" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding EventCount, StringFormat={}{0} session events}" Foreground="{StaticResource QsmSecondaryText}" FontSize="11"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
 
-            <Border Grid.Row="3" Style="{StaticResource QsmCardStyle}">
-                <Grid>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                    <TextBlock Text="QUALITY TIMELINE — last 160 frames" Style="{StaticResource QsmSectionTitle}"/>
-                    <local:QualityTimelineControl Grid.Row="1" ItemsSource="{Binding Frames}" Margin="0,4,0,0"/>
-                </Grid>
-            </Border>
+                <Border Style="{StaticResource QsmCardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0"><TextBlock Text="CAPTURED" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding Captured}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="1"><TextBlock Text="USABLE" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding Usable}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="2"><TextBlock Text="REJECTED" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding Rejected}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="3"><TextBlock Text="ACCEPTANCE" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding AcceptanceRate, StringFormat={}{0:0.0}%}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="4"><TextBlock Text="SESSION QUALITY" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding SessionQuality, StringFormat={}{0:0}}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="5"><TextBlock Text="SESSION CONF." Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding SessionConfidence, StringFormat={}{0:0}%}" FontSize="16"/></StackPanel>
+                    </Grid>
+                </Border>
 
-            <Border Grid.Row="4" Style="{StaticResource QsmCardStyle}">
-                <Grid>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <TextBlock Text="FRAME HISTORY" Style="{StaticResource QsmSectionTitle}"/>
-                    <DataGrid Grid.Row="1" ItemsSource="{Binding Frames}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/>
-                            <DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/>
-                            <DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="62"/>
-                            <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="90"/>
-                            <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="70"/>
-                            <DataGridTextColumn Header="Stars Δ" Binding="{Binding StarDeltaText}" Width="75"/>
-                            <DataGridTextColumn Header="BG Δ" Binding="{Binding BackgroundDeltaText}" Width="75"/>
-                            <DataGridTextColumn Header="Cause" Binding="{Binding ProbableCause}" Width="*"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                    <DockPanel Grid.Row="2" Margin="0,8,0,0">
+                <Border Style="{StaticResource QsmCardStyle}">
+                    <Grid Height="220">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <TextBlock Text="MULTICHANNEL TIMELINE — Q / confidence · guide RMS · stars/background Δ" Style="{StaticResource QsmSectionTitle}"/>
+                        <local:QualityTimelineControl Grid.Row="1" ItemsSource="{Binding Frames}" Margin="0,4,0,0"/>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource QsmCardStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="150"/></Grid.RowDefinitions>
+                        <TextBlock Text="SESSION EVENTS — latest 12" Style="{StaticResource QsmSectionTitle}"/>
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding Events}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Event" Binding="{Binding Id}" Width="55"/>
+                                <DataGridTextColumn Header="Time" Binding="{Binding TimeRangeText}" Width="90"/>
+                                <DataGridTextColumn Header="Type" Binding="{Binding TypeText}" Width="170"/>
+                                <DataGridTextColumn Header="Frames" Binding="{Binding AffectedFrames}" Width="62"/>
+                                <DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="65"/>
+                                <DataGridTextColumn Header="Severity" Binding="{Binding SeverityText}" Width="75"/>
+                                <DataGridTextColumn Header="Primary cause" Binding="{Binding PrimaryCause}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource QsmCardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="125"/></Grid.RowDefinitions>
+                            <TextBlock Text="BEST ACCEPTED" Style="{StaticResource QsmSectionTitle}"/>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding BestAccepted}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
+                                <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/><DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/><DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="62"/><DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*"/></DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                        <Grid Grid.Column="2">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="125"/></Grid.RowDefinitions>
+                            <TextBlock Text="WORST ACCEPTED" Style="{StaticResource QsmSectionTitle}"/>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding WorstAccepted}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
+                                <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/><DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/><DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="62"/><DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*"/></DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource QsmCardStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="260"/></Grid.RowDefinitions>
+                        <TextBlock Text="FRAME HISTORY" Style="{StaticResource QsmSectionTitle}"/>
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding Frames}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/>
+                                <DataGridTextColumn Header="Q" Binding="{Binding QualityText}" Width="45"/>
+                                <DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="58"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="88"/>
+                                <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="65"/>
+                                <DataGridTextColumn Header="Pattern" Binding="{Binding GuidePatternText}" Width="110"/>
+                                <DataGridTextColumn Header="Trend" Binding="{Binding TrendText}" Width="68"/>
+                                <DataGridTextColumn Header="Stars Δ" Binding="{Binding StarDeltaText}" Width="70"/>
+                                <DataGridTextColumn Header="BG Δ" Binding="{Binding BackgroundDeltaText}" Width="70"/>
+                                <DataGridTextColumn Header="Cause" Binding="{Binding ProbableCause}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource QsmCardStyle}">
+                    <DockPanel>
                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                            <Button Content="Open session folder" Command="{Binding OpenSessionFolderCommand}" Margin="4,0"/>
-                            <Button Content="Reset session" Command="{Binding ResetSessionCommand}" Margin="4,0"/>
+                            <Button Content="Open HTML report" Command="{Binding OpenReportCommand}" Margin="4,0" Padding="10,4"/>
+                            <Button Content="Open session folder" Command="{Binding OpenSessionFolderCommand}" Margin="4,0" Padding="10,4"/>
+                            <Button Content="Reset session" Command="{Binding ResetSessionCommand}" Margin="4,0" Padding="10,4"/>
                         </StackPanel>
                         <TextBlock Text="{Binding SessionFolder}" Foreground="{StaticResource QsmSecondaryText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                     </DockPanel>
-                </Grid>
-            </Border>
-        </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
     </DataTemplate>
 </ResourceDictionary>
