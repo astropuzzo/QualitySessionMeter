@@ -9,64 +9,80 @@ var outputRoot = args.Length > 0
     : Path.Combine(Path.GetTempPath(), "QualitySessionMeter-SyntheticCheck", Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(outputRoot);
 
-var settings = SyntheticSessionGenerator.CreateCanonicalSettings();
-var baseline = new BaselineEngine();
-var engine = new QualityEngine();
-var store = new SessionStore(Path.Combine(outputRoot, "session"));
-var definitions = SyntheticSessionGenerator.BuildCanonicalNight();
+var scenarios = SyntheticSessionGenerator.GetScenarios();
 var baseTime = new DateTime(2026, 9, 7, 20, 0, 0, DateTimeKind.Utc);
+int totalFrames = 0;
 
-Console.WriteLine($"QualitySessionMeter synthetic check: {definitions.Count} canonical frames");
+Console.WriteLine($"QualitySessionMeter synthetic check: {scenarios.Count} whole-night profiles");
 Console.WriteLine($"Output: {outputRoot}");
 Console.WriteLine();
 
-for (int i = 0; i < definitions.Count; i++) {
-    var d = definitions[i];
-    var start = baseTime.AddMinutes(i * 4);
-    var key = new BaselineKey(d.Target, d.Filter, d.ExposureSeconds, 100, 1, 1, "SyntheticCam");
-    var snapshot = baseline.GetSnapshot(key, settings.MinimumLearningFrames);
-    var guideSamples = d.GuideFactory?.Invoke(start, d.ExposureSeconds) ?? Array.Empty<GuideSample>();
-    var guide = GuideMetricsCalculator.Calculate(guideSamples, start, d.ExposureSeconds, settings.ExcursionThreshold);
+foreach (var scenario in scenarios) {
+    var settings = SyntheticSessionGenerator.CreateCanonicalSettings();
+    var baseline = new BaselineEngine();
+    var engine = new QualityEngine();
+    var store = new SessionStore(Path.Combine(outputRoot, "sessions", scenario.Id));
+    int failuresBefore = failures.Count;
 
-    var input = new FrameQualityInput {
-        FrameIndex = i + 1,
-        TimestampUtc = start,
-        OriginalPath = $"SYNTHETIC://frame_{i + 1:000}.fits",
-        Target = d.Target,
-        Filter = d.Filter,
-        ExposureSeconds = d.ExposureSeconds,
-        Gain = 100,
-        BinX = 1,
-        BinY = 1,
-        Camera = "SyntheticCam",
-        StarCount = d.StarCount,
-        BackgroundMedian = d.BackgroundMedian,
-        Baseline = snapshot,
-        Guide = guide
-    };
+    Console.WriteLine($"=== {scenario.DisplayName} ({scenario.Id}) ===");
+    Console.WriteLine(scenario.Description);
+    Console.WriteLine(scenario.ExpectedSummary);
 
-    var result = engine.Evaluate(input, settings);
-    result.MonitorOnly = true;
+    for (int i = 0; i < scenario.Frames.Count; i++) {
+        var d = scenario.Frames[i];
+        var start = baseTime.AddDays(Array.IndexOf(scenarios.ToArray(), scenario)).AddMinutes(i * 4);
+        var key = new BaselineKey(d.Target, d.Filter, d.ExposureSeconds, 100, 1, 1, "SyntheticCam");
+        var snapshot = baseline.GetSnapshot(key, settings.MinimumLearningFrames);
+        var guideSamples = d.GuideFactory?.Invoke(start, d.ExposureSeconds) ?? Array.Empty<GuideSample>();
+        var guide = GuideMetricsCalculator.Calculate(guideSamples, start, d.ExposureSeconds, settings.ExcursionThreshold);
 
-    if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
-        baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow);
+        var input = new FrameQualityInput {
+            FrameIndex = i + 1,
+            TimestampUtc = start,
+            OriginalPath = $"SYNTHETIC://{scenario.Id}/frame_{i + 1:000}.fits",
+            Target = d.Target,
+            Filter = d.Filter,
+            ExposureSeconds = d.ExposureSeconds,
+            Gain = 100,
+            BinX = 1,
+            BinY = 1,
+            Camera = "SyntheticCam",
+            StarCount = d.StarCount,
+            BackgroundMedian = d.BackgroundMedian,
+            Baseline = snapshot,
+            Guide = guide
+        };
+
+        var result = engine.Evaluate(input, settings);
+        result.MonitorOnly = true;
+
+        if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
+            baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow);
+        }
+
+        Validate(scenario, d, result, failures);
+        await store.AppendAsync(result);
+        totalFrames++;
+
+        Console.WriteLine(
+            $"{i + 1,2}. {d.Name,-42} expected={d.ExpectedStatus,-8} actual={result.Status,-8} " +
+            $"Q={result.OverallQuality,5:0.0} RMS={Fmt(result.GuideRmsArcsec),6} Peak={Fmt(result.MaxGuideExcursionArcsec),6} " +
+            $"Sustain={Fmt(result.SustainedGuideExcursionSeconds),5} reasons={result.ReasonText}");
     }
 
-    Validate(d, result, failures);
-    await store.AppendAsync(result);
-
-    Console.WriteLine(
-        $"{i + 1,2}. {d.Name,-42} expected={d.ExpectedStatus,-8} actual={result.Status,-8} " +
-        $"Q={result.OverallQuality,5:0.0} RMS={Fmt(result.GuideRmsArcsec),6} Peak={Fmt(result.MaxGuideExcursionArcsec),6} " +
-        $"Sustain={Fmt(result.SustainedGuideExcursionSeconds),5} reasons={result.ReasonText}");
+    ValidateArtifacts(scenario, store, scenario.Frames.Count, failures);
+    int scenarioFailures = failures.Count - failuresBefore;
+    Console.WriteLine(scenarioFailures == 0
+        ? $"PROFILE VERDICT: PASS {scenario.Frames.Count}/{scenario.Frames.Count}"
+        : $"PROFILE VERDICT: FAIL ({scenarioFailures} mismatch/error records)");
+    Console.WriteLine();
 }
 
-ValidateArtifacts(store, definitions.Count, failures);
 await ValidateFileActions(outputRoot, failures);
 
 var verdict = failures.Count == 0 ? "PASS" : "FAIL";
-Console.WriteLine();
-Console.WriteLine($"VERDICT: {verdict} ({definitions.Count - failures.Count}/{definitions.Count} canonical checks without mismatch; failures={failures.Count})");
+Console.WriteLine($"GLOBAL VERDICT: {verdict}");
+Console.WriteLine($"Profiles: {scenarios.Count}; Frames exercised: {totalFrames}; Failures: {failures.Count}");
 
 if (failures.Count > 0) {
     foreach (var failure in failures) Console.WriteLine("FAIL: " + failure);
@@ -75,13 +91,23 @@ if (failures.Count > 0) {
 var verdictPath = Path.Combine(outputRoot, "SYNTHETIC_CHECK_VERDICT.txt");
 await File.WriteAllLinesAsync(
     verdictPath,
-    new[] { $"VERDICT: {verdict}", $"Canonical frames: {definitions.Count}", $"Failures: {failures.Count}" }
-        .Concat(failures.Select(x => "- " + x)));
+    new[] {
+        $"VERDICT: {verdict}",
+        $"Profiles: {scenarios.Count}",
+        $"Frames exercised: {totalFrames}",
+        $"Failures: {failures.Count}"
+    }.Concat(scenarios.Select(x => $"- {x.DisplayName}: {x.ExpectedSummary}"))
+     .Concat(failures.Select(x => "FAIL: " + x)));
 
 return failures.Count == 0 ? 0 : 1;
 
-static void Validate(SyntheticFrameDefinition expected, FrameQualityResult actual, List<string> failures) {
-    var prefix = $"Frame {actual.FrameIndex} ({expected.Name})";
+static void Validate(
+    SyntheticSessionDefinition scenario,
+    SyntheticFrameDefinition expected,
+    FrameQualityResult actual,
+    List<string> failures) {
+
+    var prefix = $"{scenario.DisplayName} / frame {actual.FrameIndex} ({expected.Name})";
 
     if (actual.Status != expected.ExpectedStatus) {
         failures.Add($"{prefix}: expected status {expected.ExpectedStatus}, got {actual.Status}");
@@ -122,21 +148,26 @@ static void Validate(SyntheticFrameDefinition expected, FrameQualityResult actua
     }
 }
 
-static void ValidateArtifacts(SessionStore store, int expectedFrames, List<string> failures) {
+static void ValidateArtifacts(
+    SyntheticSessionDefinition scenario,
+    SessionStore store,
+    int expectedFrames,
+    List<string> failures) {
+
     var csv = Path.Combine(store.SessionFolder, "frames.csv");
     var json = Path.Combine(store.SessionFolder, "session.json");
     var svg = Path.Combine(store.SessionFolder, "quality.svg");
 
     foreach (var file in new[] { csv, json, svg }) {
         if (!File.Exists(file) || new FileInfo(file).Length == 0) {
-            failures.Add($"Artifact missing or empty: {file}");
+            failures.Add($"{scenario.DisplayName}: artifact missing or empty: {file}");
         }
     }
 
     if (File.Exists(csv)) {
         var lines = File.ReadLines(csv).Count();
         if (lines != expectedFrames + 1) {
-            failures.Add($"frames.csv expected {expectedFrames + 1} lines including header, got {lines}");
+            failures.Add($"{scenario.DisplayName}: frames.csv expected {expectedFrames + 1} lines including header, got {lines}");
         }
     }
 
@@ -146,10 +177,10 @@ static void ValidateArtifacts(SessionStore store, int expectedFrames, List<strin
             var captured = document.RootElement.GetProperty("captured").GetInt32();
             var frameCount = document.RootElement.GetProperty("frames").GetArrayLength();
             if (captured != expectedFrames || frameCount != expectedFrames) {
-                failures.Add($"session.json expected {expectedFrames} frames, got captured={captured}, frames={frameCount}");
+                failures.Add($"{scenario.DisplayName}: session.json expected {expectedFrames} frames, got captured={captured}, frames={frameCount}");
             }
         } catch (Exception ex) {
-            failures.Add("session.json parse failed: " + ex.Message);
+            failures.Add($"{scenario.DisplayName}: session.json parse failed: {ex.Message}");
         }
     }
 }
