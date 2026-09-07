@@ -5,6 +5,7 @@ using NINA.Plugin.QualitySessionMeter.Core;
 using NINA.Plugin.QualitySessionMeter.Settings;
 using NINA.Profile;
 using NINA.Profile.Interfaces;
+using NINA.Sequencer.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.Mediator;
 using System;
 using System.ComponentModel;
@@ -24,7 +25,8 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
     public QualitySessionMeterPlugin(
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
-        IGuiderMediator guiderMediator) {
+        IGuiderMediator guiderMediator,
+        ISequenceMediator sequenceMediator) {
 
         this.profileService = profileService;
         PluginSettings = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
@@ -34,6 +36,7 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
             profileService,
             imageSaveMediator,
             guiderMediator,
+            sequenceMediator,
             Settings);
 
         profileService.ProfileChanged += ProfileChanged;
