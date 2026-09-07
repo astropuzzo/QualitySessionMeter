@@ -4,84 +4,176 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:NINA.Plugin.QualitySessionMeter.UI">
 
+    <Style x:Key="QsmCcSectionTitle" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+    </Style>
+
+    <Style x:Key="QsmCcHelp" TargetType="TextBlock">
+        <Setter Property="Opacity" Value="0.68"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+
     <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.UI.QsmControlCenterDockable_Dockable">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="10">
-                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+            <StackPanel Margin="10" MaxWidth="1050" HorizontalAlignment="Left" ToolTipService.ShowDuration="30000">
+
+                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,8">
                     <StackPanel>
                         <TextBlock Text="QSM CONTROL CENTER" FontSize="20" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding ActivationText}" Margin="0,5,0,10" FontWeight="SemiBold" Foreground="#8AB4F8" TextWrapping="Wrap"/>
-                        <CheckBox Content="Enable QualitySessionMeter" IsChecked="{Binding Settings.Enabled}" FontSize="15" FontWeight="SemiBold" Margin="0,3"/>
-                        <CheckBox Content="Monitor only — analyze/count/report, never rename or move files" IsChecked="{Binding Settings.MonitorOnly}" Margin="0,5"/>
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Monitoring scope" VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.MonitoringScopeIndex}">
-                                <ComboBoxItem Content="QSM controlled blocks only"/>
-                                <ComboBoxItem Content="Advanced Sequencer LIGHTs (recommended)"/>
-                                <ComboBoxItem Content="All LIGHTs (manual files still mutation-protected)"/>
+                        <TextBlock Text="{Binding ActivationText}" Margin="0,5,0,12" FontWeight="SemiBold" Foreground="#8AB4F8" TextWrapping="Wrap"
+                                   ToolTip="Current global QSM state. OFF disables analysis and sequence control. MONITOR ONLY analyzes and counts frames but never renames or moves image files."/>
+
+                        <Grid Margin="0,2,0,0" ToolTip="Master switch. When OFF, QualitySessionMeter does not analyze LIGHT frames, does not update QSM counters and QSM Advanced Sequencer control items refuse to operate.">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Enable QualitySessionMeter" FontSize="14" FontWeight="SemiBold"/>
+                                <TextBlock Text="Master ON/OFF switch for analysis and V3 sequencer control." Style="{StaticResource QsmCcHelp}"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Settings.Enabled}" VerticalAlignment="Center" Margin="18,0,0,0"
+                                      ToolTip="ON: QSM can assess eligible LIGHT frames. OFF: QSM ignores them and V3 control blocks fail safe."/>
+                        </Grid>
+
+                        <Border Height="1" Background="#2A3039" Margin="0,10"/>
+
+                        <Grid ToolTip="Safety mode recommended for first-sky tests. QSM still classifies frames and produces counters/reports, but rejected-file actions are suppressed so no image file is renamed or moved.">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Monitor only" FontWeight="SemiBold"/>
+                                <TextBlock Text="Analyze, count and report; never rename or move rejected files." Style="{StaticResource QsmCcHelp}"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Settings.MonitorOnly}" VerticalAlignment="Center" Margin="18,0,0,0"
+                                      ToolTip="Keep this ON while validating a new setup. Turn it OFF only when you intentionally want the selected rejected-file action to run on provenance-eligible LIGHT frames."/>
+                        </Grid>
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="430"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Monitoring scope" VerticalAlignment="Center" FontWeight="SemiBold"
+                                       ToolTip="Defines which LIGHT frames QSM is allowed to analyze. It does not override the separate file-mutation safety gate."/>
+                            <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.MonitoringScopeIndex}"
+                                      ToolTip="Recommended: Advanced Sequencer LIGHTs. Controlled blocks only is the strictest V3 mode. All LIGHTs also monitors manual/external LIGHT exposures, but provenance-unknown files remain protected from rename/move.">
+                                <ComboBoxItem Content="QSM controlled blocks only" ToolTip="Strictest mode. Only LIGHT frames captured while a QSM-controlled sequencer block is explicitly armed are assessed."/>
+                                <ComboBoxItem Content="Advanced Sequencer LIGHTs (recommended)" ToolTip="Recommended normal mode. Assess LIGHT frames carrying Advanced Sequencer provenance, including QSM-controlled blocks."/>
+                                <ComboBoxItem Content="All LIGHTs (manual files still mutation-protected)" ToolTip="Compatibility/diagnostic mode. Manual or external frames tagged LIGHT can be monitored, but file mutation remains blocked without safe provenance."/>
                             </ComboBox>
                         </Grid>
                     </StackPanel>
                 </Border>
 
-                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="ADAPTIVE CALIBRATION" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <TextBlock Text="ADAPTIVE CALIBRATION" Style="{StaticResource QsmCcSectionTitle}"
+                                   ToolTip="Uses a stable run of accepted frames from the same imaging context to estimate reasonable thresholds. This is separate from the per-frame adaptive baseline used for star/background comparison."/>
+                        <TextBlock Text="Optional threshold assistance based on stable accepted data. Suggest Only is the recommended default." Style="{StaticResource QsmCcHelp}" Margin="0,0,0,10"/>
+
                         <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Mode" VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.AdaptiveThresholdModeIndex}">
-                                <ComboBoxItem Content="OFF"/>
-                                <ComboBoxItem Content="Suggest Only (recommended)"/>
-                                <ComboBoxItem Content="Automatic — bounded by safety ceilings"/>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="430"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Mode" VerticalAlignment="Center" FontWeight="SemiBold"
+                                       ToolTip="OFF disables calibration suggestions. Suggest Only computes a proposal but never changes thresholds by itself. Automatic applies bounded proposals only within configured safety ceilings."/>
+                            <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.AdaptiveThresholdModeIndex}"
+                                      ToolTip="Suggest Only is safest: you review the proposal before applying it. Automatic is intended for users who understand the safety ceilings and their mount/site behavior.">
+                                <ComboBoxItem Content="OFF" ToolTip="No calibration proposal is generated or applied."/>
+                                <ComboBoxItem Content="Suggest Only (recommended)" ToolTip="QSM proposes values after a stable sample window; nothing changes until you press Apply suggestion."/>
+                                <ComboBoxItem Content="Automatic — bounded by safety ceilings" ToolTip="QSM may apply a stable-context proposal automatically, but never beyond the explicit safety ceilings stored in settings."/>
                             </ComboBox>
                         </Grid>
-                        <Grid Margin="0,6,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Stable calibration window" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.CalibrationWindow, UpdateSourceTrigger=LostFocus}"/>
+
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Stable calibration window" VerticalAlignment="Center" FontWeight="SemiBold"
+                                       ToolTip="Number of accepted frames from the same context required before QSM considers the sample stable enough to propose thresholds. Larger values are slower but usually more representative."/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.CalibrationWindow, UpdateSourceTrigger=LostFocus}"
+                                     ToolTip="Accepted same-context frames required for a calibration proposal."/>
                             <TextBlock Grid.Column="2" Margin="8,0,0,0" Opacity="0.65" VerticalAlignment="Center" Text="accepted frames"/>
                         </Grid>
-                        <TextBlock Text="{Binding CalibrationStatus}" Margin="0,10,0,2" TextWrapping="Wrap" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding CalibrationValues}" TextWrapping="Wrap" Opacity="0.8"/>
-                        <TextBlock Text="{Binding Calibration.Reason}" Margin="0,3,0,8" TextWrapping="Wrap" Opacity="0.65" FontStyle="Italic"/>
+
+                        <Border Background="#11151B" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="5" Padding="9" Margin="0,12,0,8">
+                            <StackPanel>
+                                <TextBlock Text="{Binding CalibrationStatus}" TextWrapping="Wrap" FontWeight="SemiBold"
+                                           ToolTip="Shows whether a calibration proposal is ready and the context/sample count used."/>
+                                <TextBlock Text="{Binding CalibrationValues}" TextWrapping="Wrap" Opacity="0.82" Margin="0,3,0,0"
+                                           ToolTip="Proposed thresholds. These values are not active until applied, unless Adaptive Calibration is set to Automatic."/>
+                                <TextBlock Text="{Binding Calibration.Reason}" Margin="0,3,0,0" TextWrapping="Wrap" Opacity="0.65" FontStyle="Italic"
+                                           ToolTip="Reason why a proposal is or is not currently available."/>
+                            </StackPanel>
+                        </Border>
+
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="Apply suggestion" Command="{Binding ApplyCalibrationCommand}" Margin="0,0,6,0" Padding="10,4"/>
-                            <Button Content="Ignore for this context" Command="{Binding IgnoreCalibrationCommand}" Padding="10,4"/>
+                            <Button Content="Apply suggestion" Command="{Binding ApplyCalibrationCommand}" IsEnabled="{Binding Calibration.Available}" Margin="0,0,8,0" Padding="10,4"
+                                    ToolTip="Apply the currently displayed suggested thresholds to QSM. The proposal is context-derived and remains bounded by the configured safety ceilings."/>
+                            <Button Content="Ignore for this context" Command="{Binding IgnoreCalibrationCommand}" IsEnabled="{Binding Calibration.Available}" Padding="10,4"
+                                    ToolTip="Dismiss this proposal for the current imaging context so it is not repeatedly offered during this session."/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="PREDICTION &amp; ENVIRONMENT" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                        <CheckBox Content="Predictive degradation warnings" IsChecked="{Binding Settings.PredictiveWarningsEnabled}"/>
-                        <TextBlock Text="{Binding PredictionText}" Margin="18,3,0,8" TextWrapping="Wrap"/>
-                        <CheckBox Content="Environmental correlation (diagnostic only)" IsChecked="{Binding Settings.EnvironmentalCorrelationEnabled}"/>
-                        <TextBlock Text="{Binding EnvironmentText}" Margin="18,3,0,0" TextWrapping="Wrap"/>
+                        <TextBlock Text="PREDICTION &amp; ENVIRONMENT" Style="{StaticResource QsmCcSectionTitle}"/>
+
+                        <Grid ToolTip="Predictive warnings use recent QSM trend evidence to warn that a threshold may be approached soon. Prediction alone never creates a hard rejection.">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Predictive degradation warnings" FontWeight="SemiBold"/>
+                                <TextBlock Text="Early warning only; predictive evidence never rejects a frame by itself." Style="{StaticResource QsmCcHelp}"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Settings.PredictiveWarningsEnabled}" VerticalAlignment="Center" Margin="18,0,0,0"
+                                      ToolTip="Enable/disable predictive diagnostics. Hard ACCEPT/REJECT decisions still come only from measured enabled rejection rules."/>
+                        </Grid>
+                        <TextBlock Text="{Binding PredictionText}" Margin="0,5,0,12" TextWrapping="Wrap" Opacity="0.82"
+                                   ToolTip="Latest prediction channel, message and confidence. A dash means no actionable predictive warning is currently available."/>
+
+                        <Grid ToolTip="Correlates the latest assessed frame with weather/environment values exposed by N.I.N.A. when available. This is diagnostic context, not a rejection rule.">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Environmental correlation" FontWeight="SemiBold"/>
+                                <TextBlock Text="Diagnostic only: weather data can explain patterns but does not reject frames." Style="{StaticResource QsmCcHelp}"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnvironmentalCorrelationEnabled}" VerticalAlignment="Center" Margin="18,0,0,0"
+                                      ToolTip="Enable capture of supported N.I.N.A. weather/environment values alongside QSM frame results. Missing sensors are handled as unavailable data."/>
+                        </Grid>
+                        <TextBlock Text="{Binding EnvironmentText}" Margin="0,5,0,0" TextWrapping="Wrap" Opacity="0.82"
+                                   ToolTip="Environmental context for the latest assessed frame. If N.I.N.A. has no connected weather/environment source, QSM reports that explicitly."/>
                     </StackPanel>
                 </Border>
 
-                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="12">
+                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="14">
                     <StackPanel>
-                        <TextBlock Text="SMART RECOVERY" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                        <CheckBox Content="Enable QSM Smart Recovery Gate behavior" IsChecked="{Binding Settings.SmartPauseEnabled}"/>
-                        <TextBlock Margin="18,3,0,8" Opacity="0.7" TextWrapping="Wrap" Text="Opt-in. The Advanced Sequencer gate waits only BETWEEN exposures after a persistent reject streak; it never aborts an active exposure."/>
-                        <Grid Margin="18,3,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Reject/error streak before wait"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseRejectStreak, UpdateSourceTrigger=LostFocus}"/>
+                        <TextBlock Text="SMART RECOVERY" Style="{StaticResource QsmCcSectionTitle}"
+                                   ToolTip="Optional Advanced Sequencer gate behavior. After persistent controlled-frame degradation it waits between exposures for a cooldown/healthy-guiding condition. It never aborts an exposure already in progress."/>
+
+                        <Grid ToolTip="Enables the opt-in Smart Recovery Gate. This affects only sequences that actually contain/use that QSM gate; enabling the setting alone does not inject new sequence instructions.">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Enable Smart Recovery behavior" FontWeight="SemiBold"/>
+                                <TextBlock Text="Wait between exposures after persistent degradation; never abort an active exposure." Style="{StaticResource QsmCcHelp}"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Settings.SmartPauseEnabled}" VerticalAlignment="Center" Margin="18,0,0,0"
+                                      ToolTip="OFF: the Smart Recovery Gate passes without recovery waiting. ON: the gate can enter a bounded between-exposure recovery wait after the configured reject/error streak."/>
                         </Grid>
-                        <Grid Margin="18,5,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Cooldown seconds"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseSeconds, UpdateSourceTrigger=LostFocus}"/>
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="270"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Reject/error streak before wait" VerticalAlignment="Center"
+                                       ToolTip="How many consecutive rejected or analysis-error QSM-controlled frames are required before Smart Recovery considers degradation persistent."/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseRejectStreak, UpdateSourceTrigger=LostFocus}"
+                                     ToolTip="Consecutive controlled REJECTED/ERROR frames required to trigger recovery waiting. A single bad frame should not pause the sequence."/>
                         </Grid>
-                        <Grid Margin="18,5,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Healthy guide samples to resume"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartResumeHealthyGuideChecks, UpdateSourceTrigger=LostFocus}"/>
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="270"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Cooldown seconds" VerticalAlignment="Center"
+                                       ToolTip="Minimum delay used by the recovery gate before re-checking whether conditions are healthy enough to continue."/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseSeconds, UpdateSourceTrigger=LostFocus}"
+                                     ToolTip="Cooldown duration in seconds between recovery checks."/>
+                        </Grid>
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="270"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Healthy guide samples to resume" VerticalAlignment="Center"
+                                       ToolTip="Number of consecutive healthy guide checks required before Smart Recovery allows the Advanced Sequencer to proceed again."/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartResumeHealthyGuideChecks, UpdateSourceTrigger=LostFocus}"
+                                     ToolTip="Consecutive healthy guide checks needed to resume. Requiring several checks reduces pause/resume oscillation."/>
                         </Grid>
                     </StackPanel>
                 </Border>

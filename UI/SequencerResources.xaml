@@ -21,19 +21,33 @@
     <DataTemplate DataType="{x:Type seq:QsmValidFrameTargetCondition}">
         <nina:SequenceBlockView>
             <nina:SequenceBlockView.SequenceItemContent>
-                <Grid MinWidth="520">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid MinWidth="600" ToolTipService.ShowDuration="30000">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="78"/><ColumnDefinition Width="18"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="82"/><ColumnDefinition Width="24"/><ColumnDefinition Width="220"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Valid target"/>
-                    <TextBox Grid.Row="0" Grid.Column="1" Margin="6,0,0,0" Text="{Binding TargetValidFrames, UpdateSourceTrigger=LostFocus}" TextAlignment="Right"/>
-                    <CheckBox Grid.Row="0" Grid.Column="3" VerticalAlignment="Center" IsChecked="{Binding CountWarningsAsValid}" Content="Warnings count as valid"/>
-                    <StackPanel Grid.Row="0" Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right">
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Valid target" FontWeight="SemiBold"
+                               ToolTip="Number of genuinely valid QSM-classified frames this repeated container must accumulate before the condition completes. Physical captures can exceed this number because REJECTED, ERROR and LEARNING frames do not advance valid progress."/>
+                    <TextBox Grid.Row="0" Grid.Column="1" Margin="6,0,0,0" Text="{Binding TargetValidFrames, UpdateSourceTrigger=LostFocus}" TextAlignment="Right"
+                             ToolTip="Requested valid-frame count. Example: target 300 means QSM keeps the repeated acquisition running until 300 valid frames have been counted, regardless of how many rejected/learning/error frames were physically captured."/>
+
+                    <TextBlock Grid.Row="0" Grid.Column="3" VerticalAlignment="Center" Text="Count WARNING as valid" FontWeight="SemiBold"
+                               ToolTip="WARNING is a usable frame that raised a non-reject condition. ON (default) lets WARNING advance the valid target. OFF records WARNING but does not increment valid progress."/>
+                    <CheckBox Grid.Row="0" Grid.Column="4" VerticalAlignment="Center" IsChecked="{Binding CountWarningsAsValid}" Margin="8,0,14,0"
+                              ToolTip="Recommended default ON. ACCEPTED always counts. REJECTED, ERROR and LEARNING never count in V3. WARNING counts only when this switch is ON."/>
+
+                    <StackPanel Grid.Row="0" Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Right"
+                                ToolTip="Live QSM progress and the latest classification consumed by this condition.">
                         <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding ProgressText}"/>
                         <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Opacity="0.72" Text="{Binding LastStatus}"/>
                     </StackPanel>
-                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Margin="0,6,0,0" Opacity="0.72" Text="{Binding BreakdownText}"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="6" Margin="0,6,0,0" Opacity="0.72" TextWrapping="Wrap"
+                               Text="QSM waits for the classification belonging to the controlled LIGHT from this iteration. It never decrements N.I.N.A.'s native Take Exposure counter; it owns a separate valid-frame target."
+                               ToolTip="Safety model: one eligible controlled LIGHT per repeated iteration is the supported V3 field-test pattern. If the matching QSM result is missing, the condition fails safe instead of capturing indefinitely."/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="6" Margin="0,5,0,0" Opacity="0.82" Text="{Binding BreakdownText}"
+                               ToolTip="Breakdown of physically captured eligible frames: valid, rejected, warning, learning and error. The total captured count can therefore be larger than the valid count."/>
                 </Grid>
             </nina:SequenceBlockView.SequenceItemContent>
         </nina:SequenceBlockView>
@@ -42,7 +56,7 @@
     <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.Sequencer.QsmValidFrameTargetCondition_Mini">
         <mini:MiniSequenceItem>
             <mini:MiniSequenceItem.SequenceItemContent>
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" ToolTip="QSM Valid Frame Target: valid progress followed by the latest consumed classification. REJECTED, ERROR and LEARNING do not advance the target.">
                     <TextBlock FontWeight="SemiBold" Text="{Binding ProgressText}"/>
                     <TextBlock Margin="8,0,0,0" Opacity="0.72" Text="{Binding LastStatus}"/>
                 </StackPanel>
@@ -53,10 +67,13 @@
     <DataTemplate DataType="{x:Type seq:QsmSmartRecoveryGate}">
         <nina:SequenceBlockView>
             <nina:SequenceBlockView.SequenceItemContent>
-                <Grid MinWidth="500">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid MinWidth="520" ToolTipService.ShowDuration="30000"
+                      ToolTip="QSM Smart Recovery Gate. Optional between-exposure gate: after persistent controlled-frame rejection/error evidence it can wait for the configured cooldown and healthy guide checks before allowing the sequence to proceed. It never aborts an exposure in progress.">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <TextBlock FontWeight="SemiBold" Text="{Binding LastAction}"/>
                     <TextBlock Grid.Row="1" Margin="0,5,0,0" Opacity="0.72" TextWrapping="Wrap" Text="{Binding LastDetail}"/>
+                    <TextBlock Grid.Row="2" Margin="0,5,0,0" Opacity="0.58" FontSize="11" TextWrapping="Wrap"
+                               Text="Controlled by QSM Control Center → Smart Recovery. One isolated bad frame is not intended to trigger recovery waiting."/>
                 </Grid>
             </nina:SequenceBlockView.SequenceItemContent>
         </nina:SequenceBlockView>
@@ -65,7 +82,8 @@
     <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.Sequencer.QsmSmartRecoveryGate_Mini">
         <mini:MiniSequenceItem>
             <mini:MiniSequenceItem.SequenceItemContent>
-                <TextBlock FontWeight="SemiBold" Text="{Binding LastAction}"/>
+                <TextBlock FontWeight="SemiBold" Text="{Binding LastAction}"
+                           ToolTip="QSM Smart Recovery Gate status. Hover/open the full sequence item for recovery detail."/>
             </mini:MiniSequenceItem.SequenceItemContent>
         </mini:MiniSequenceItem>
     </DataTemplate>

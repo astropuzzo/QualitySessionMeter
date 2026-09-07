@@ -6,14 +6,15 @@ using System.Collections.Specialized;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace NINA.Plugin.QualitySessionMeter.UI;
 
 /// <summary>
-/// Compact three-band V2 timeline: Quality/Confidence, Guide RMS, and image-signal deviations.
-/// Rejected frames are presentation-only vertical markers with compact cause icons.
-/// This control never participates in quality decisions.
+/// Compact three-band timeline: Quality/Confidence, Guide RMS, and image-signal deviations.
+/// Rejected/warning/error markers are presentation-only and never participate in quality decisions.
 /// </summary>
 public sealed class QualityTimelineControl : FrameworkElement {
     public static readonly DependencyProperty ItemsSourceProperty =
@@ -23,7 +24,27 @@ public sealed class QualityTimelineControl : FrameworkElement {
             typeof(QualityTimelineControl),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnItemsSourceChanged));
 
+    private const string TimelineHelp =
+        "QSM multichannel timeline. Top band: blue = Quality score, purple = Confidence. " +
+        "Middle band: green = exposure Guide RMS. Bottom band: yellow = star-count deviation, salmon = background deviation. " +
+        "Vertical red lines mark REJECTED frames, amber lines mark WARNING frames and red ! marks analysis errors. " +
+        "Cause codes: G = guiding/tracking, S = stars/transparency/cloud, B = background/haze/sky brightness. " +
+        "Hover an event line for the exact frame, cause and raw rejection reason.";
+
+    private sealed class MarkerHit {
+        public Rect Area { get; init; }
+        public string Text { get; init; } = "";
+    }
+
+    private readonly List<MarkerHit> markerHits = new();
     private INotifyCollectionChanged observed;
+    private string activeToolTip = TimelineHelp;
+
+    public QualityTimelineControl() {
+        ToolTipService.SetShowDuration(this, 30000);
+        ToolTipService.SetInitialShowDelay(this, 250);
+        ToolTipService.SetToolTip(this, TimelineHelp);
+    }
 
     public IEnumerable ItemsSource {
         get => (IEnumerable)GetValue(ItemsSourceProperty);
@@ -40,20 +61,38 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
     private void CollectionChanged(object sender, NotifyCollectionChangedEventArgs e) => InvalidateVisual();
 
+    protected override void OnMouseMove(MouseEventArgs e) {
+        base.OnMouseMove(e);
+        var p = e.GetPosition(this);
+        string text = markerHits.FirstOrDefault(x => x.Area.Contains(p))?.Text ?? TimelineHelp;
+        if (string.Equals(text, activeToolTip, StringComparison.Ordinal)) return;
+        activeToolTip = text;
+        ToolTipService.SetToolTip(this, text);
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e) {
+        base.OnMouseLeave(e);
+        if (string.Equals(activeToolTip, TimelineHelp, StringComparison.Ordinal)) return;
+        activeToolTip = TimelineHelp;
+        ToolTipService.SetToolTip(this, TimelineHelp);
+    }
+
     protected override void OnRender(DrawingContext dc) {
         base.OnRender(dc);
+        markerHits.Clear();
+
         double w = ActualWidth;
         double h = ActualHeight;
-        if (w <= 20 || h <= 55) return;
+        if (w <= 40 || h <= 70) return;
 
         var frames = ItemsSource?.Cast<object>().OfType<FrameQualityResult>().TakeLast(160).ToArray()
             ?? Array.Empty<FrameQualityResult>();
 
-        const double labelWidth = 74;
-        const double markerLane = 30;
+        const double labelWidth = 108;
+        const double markerLane = 34;
         const double gap = 5;
-        double plotW = Math.Max(1, w - labelWidth);
-        double bandH = Math.Max(18, (h - markerLane - gap * 2) / 3.0);
+        double plotW = Math.Max(1, w - labelWidth - 1);
+        double bandH = Math.Max(18, (h - markerLane - gap * 2 - 1) / 3.0);
 
         var background = FrozenBrush(18, 22, 28);
         var borderPen = FrozenPen(48, 54, 61, 1);
@@ -64,17 +103,17 @@ public sealed class QualityTimelineControl : FrameworkElement {
         var starsPen = FrozenPen(253, 214, 99, 1.5);
         var backgroundPen = FrozenPen(242, 139, 130, 1.5);
 
-        DrawRejectLaneLabel(dc, textBrush);
+        DrawEventLaneLabel(dc, textBrush);
 
         for (int b = 0; b < 3; b++) {
             double y = markerLane + b * (bandH + gap);
             dc.DrawRectangle(background, borderPen, new Rect(labelWidth, y, plotW, bandH));
-            dc.DrawLine(borderPen, new Point(labelWidth, y + bandH / 2), new Point(w, y + bandH / 2));
+            dc.DrawLine(borderPen, new Point(labelWidth, y + bandH / 2), new Point(labelWidth + plotW, y + bandH / 2));
         }
 
         DrawLabel(dc, "Q / CONF", markerLane + 2, textBrush);
         DrawLabel(dc, "RMS", markerLane + bandH + gap + 2, textBrush);
-        DrawLabel(dc, "IMG Δ", markerLane + 2 * (bandH + gap) + 2, textBrush);
+        DrawLabel(dc, "IMG DELTA", markerLane + 2 * (bandH + gap) + 2, textBrush);
 
         if (frames.Length == 0) return;
 
@@ -89,10 +128,10 @@ public sealed class QualityTimelineControl : FrameworkElement {
         DrawSeries(dc, frames, labelWidth, imgTop, plotW, bandH, f => f.StarDeviationPercent, -50, 50, starsPen);
         DrawSeries(dc, frames, labelWidth, imgTop, plotW, bandH, f => f.BackgroundDeviationPercent, -50, 50, backgroundPen);
 
-        DrawStatusMarkers(dc, frames, labelWidth, plotW, markerLane, h);
+        DrawStatusMarkers(dc, frames, labelWidth, plotW, markerLane, h - 1);
     }
 
-    private static void DrawStatusMarkers(
+    private void DrawStatusMarkers(
         DrawingContext dc,
         FrameQualityResult[] frames,
         double left,
@@ -101,12 +140,14 @@ public sealed class QualityTimelineControl : FrameworkElement {
         double height) {
 
         var rejectedPen = FrozenPen(255, 110, 105, 1.5);
-        var warningPen = FrozenPen(253, 214, 99, 0.9);
-        var errorPen = FrozenPen(255, 120, 120, 1.1);
-        var rejectedBand = FrozenBrush(44, 255, 110, 105);
-        var badgeFill = FrozenBrush(230, 91, 36, 41);
+        var warningPen = FrozenPen(253, 214, 99, 1.0);
+        var errorPen = FrozenPen(255, 120, 120, 1.4);
+        var rejectedBand = FrozenBrush(34, 255, 110, 105);
+        var badgeFill = FrozenBrush(235, 91, 36, 41);
         var badgeBorder = FrozenPen(255, 130, 125, 0.9);
         var badgeText = FrozenBrush(255, 255, 255);
+
+        double lastBadgeRight = double.NegativeInfinity;
 
         for (int i = 0; i < frames.Length; i++) {
             var frame = frames[i];
@@ -115,71 +156,69 @@ public sealed class QualityTimelineControl : FrameworkElement {
             if (frame.Status == FrameStatus.Rejected) {
                 dc.DrawRectangle(rejectedBand, null, new Rect(x - 2.5, markerLane, 5, Math.Max(0, height - markerLane)));
                 dc.DrawLine(rejectedPen, new Point(x, markerLane), new Point(x, height));
-                DrawCauseBadge(dc, RejectionVisual.GetIcons(frame), x, frame.FrameIndex, markerLane, badgeFill, badgeBorder, badgeText);
+                markerHits.Add(new MarkerHit {
+                    Area = new Rect(x - 6, 0, 12, Math.Max(1, height)),
+                    Text = RejectionVisual.GetTooltip(frame)
+                });
+
+                var rect = MeasureCauseBadge(RejectionVisual.GetIcons(frame), x, badgeText);
+                if (rect.Left > lastBadgeRight + 3) {
+                    DrawCauseBadge(dc, RejectionVisual.GetIcons(frame), rect, badgeFill, badgeBorder, badgeText);
+                    lastBadgeRight = rect.Right;
+                }
                 continue;
             }
 
             if (frame.Status == FrameStatus.Warning) {
                 dc.DrawLine(warningPen, new Point(x, markerLane), new Point(x, height));
+                markerHits.Add(new MarkerHit {
+                    Area = new Rect(x - 5, markerLane, 10, Math.Max(1, height - markerLane)),
+                    Text = $"Frame #{frame.FrameIndex} · WARNING · {frame.ProbableCause} · {frame.ReasonText}"
+                });
                 continue;
             }
 
             if (frame.Status == FrameStatus.Error) {
                 dc.DrawLine(errorPen, new Point(x, markerLane), new Point(x, height));
-                DrawCauseBadge(dc, RejectionVisual.ErrorIcon, x, frame.FrameIndex, markerLane, badgeFill, badgeBorder, badgeText);
+                markerHits.Add(new MarkerHit {
+                    Area = new Rect(x - 6, 0, 12, Math.Max(1, height)),
+                    Text = RejectionVisual.GetTooltip(frame)
+                });
+
+                var rect = MeasureCauseBadge(RejectionVisual.ErrorIcon, x, badgeText);
+                if (rect.Left > lastBadgeRight + 3) {
+                    DrawCauseBadge(dc, RejectionVisual.ErrorIcon, rect, badgeFill, badgeBorder, badgeText);
+                    lastBadgeRight = rect.Right;
+                }
             }
         }
     }
 
+    private static Rect MeasureCauseBadge(string codes, double x, Brush textBrush) {
+        if (string.IsNullOrWhiteSpace(codes)) return Rect.Empty;
+        var text = Format(codes, 9.5, textBrush, FontWeights.SemiBold);
+        const double badgeHeight = 15;
+        double badgeWidth = Math.Max(17, text.Width + 8);
+        return new Rect(x - badgeWidth / 2, 3, badgeWidth, badgeHeight);
+    }
+
     private static void DrawCauseBadge(
         DrawingContext dc,
-        string icons,
-        double x,
-        int frameIndex,
-        double markerLane,
+        string codes,
+        Rect rect,
         Brush fill,
         Pen border,
         Brush textBrush) {
 
-        if (string.IsNullOrWhiteSpace(icons)) return;
-
-        var text = new FormattedText(
-            icons,
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            new Typeface("Segoe UI Emoji"),
-            10.5,
-            textBrush,
-            1.0);
-
-        double badgeHeight = 13;
-        double badgeWidth = Math.Max(16, text.Width + 7);
-        double y = frameIndex % 2 == 0 ? 1 : Math.Max(1, markerLane - badgeHeight - 1);
-        var rect = new Rect(x - badgeWidth / 2, y, badgeWidth, badgeHeight);
+        if (string.IsNullOrWhiteSpace(codes) || rect.IsEmpty) return;
+        var text = Format(codes, 9.5, textBrush, FontWeights.SemiBold);
         dc.DrawRoundedRectangle(fill, border, rect, 4, 4);
-        dc.DrawText(text, new Point(rect.X + (badgeWidth - text.Width) / 2, rect.Y - 0.5));
+        dc.DrawText(text, new Point(rect.X + (rect.Width - text.Width) / 2, rect.Y + (rect.Height - text.Height) / 2 - 0.5));
     }
 
-    private static void DrawRejectLaneLabel(DrawingContext dc, Brush brush) {
-        var title = new FormattedText(
-            "REJECT",
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            new Typeface("Segoe UI"),
-            8,
-            brush,
-            1.0);
-        dc.DrawText(title, new Point(2, 3));
-
-        var icons = new FormattedText(
-            $"{RejectionVisual.GuideIcon} {RejectionVisual.SkyIcon} {RejectionVisual.BackgroundIcon}",
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            new Typeface("Segoe UI Emoji"),
-            9.5,
-            brush,
-            1.0);
-        dc.DrawText(icons, new Point(2, 14));
+    private static void DrawEventLaneLabel(DrawingContext dc, Brush brush) {
+        dc.DrawText(Format("EVENTS", 8.5, brush, FontWeights.SemiBold), new Point(2, 2));
+        dc.DrawText(Format("G guide  S sky  B bg  ! error", 8.2, brush, FontWeights.Normal), new Point(2, 15));
     }
 
     private static void DrawSeries(
@@ -207,17 +246,18 @@ public sealed class QualityTimelineControl : FrameworkElement {
         }
     }
 
-    private static void DrawLabel(DrawingContext dc, string text, double y, Brush brush) {
-        var formatted = new FormattedText(
+    private static void DrawLabel(DrawingContext dc, string text, double y, Brush brush) =>
+        dc.DrawText(Format(text, 9, brush, FontWeights.Normal), new Point(2, y));
+
+    private static FormattedText Format(string text, double size, Brush brush, FontWeight weight) =>
+        new(
             text,
             CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight,
-            new Typeface("Segoe UI"),
-            9,
+            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, weight, FontStretches.Normal),
+            size,
             brush,
             1.0);
-        dc.DrawText(formatted, new Point(2, y));
-    }
 
     private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
 
