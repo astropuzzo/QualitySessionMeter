@@ -8,6 +8,7 @@ namespace NINA.Plugin.QualitySessionMeter.Core;
 
 public sealed class QualityEngine {
     private readonly ConfidenceEngine confidenceEngine = new();
+    private readonly GuidePatternAnalyzer guidePatternAnalyzer = new();
 
     public FrameQualityResult Evaluate(FrameQualityInput input, QualitySettings settings) {
         var result = new FrameQualityResult {
@@ -91,6 +92,15 @@ public sealed class QualityEngine {
             if (result.BackgroundDeviationPercent > settings.MaxBackgroundIncreasePercent) reasons.Add("BACKGROUND_HIGH");
             if (result.BackgroundDeviationPercent < -settings.MaxBackgroundDecreasePercent) reasons.Add("BACKGROUND_LOW");
         }
+
+        var pattern = guidePatternAnalyzer.Analyze(input.Guide, settings);
+        result.GuidePattern = pattern.Pattern;
+        result.GuidePatternConfidence = pattern.Confidence;
+        result.GuideDriftArcsecPerMinute = pattern.DriftArcsecPerMinute;
+        result.GuideOscillationRangeArcsec = pattern.OscillationRangeArcsec;
+        result.GuidePatternSignChanges = pattern.SignChanges;
+        result.GuidePatternBurstiness = pattern.Burstiness;
+        result.GuidePatternDetail = pattern.Detail;
 
         var scores = new[] {
             result.GuidingQuality,
