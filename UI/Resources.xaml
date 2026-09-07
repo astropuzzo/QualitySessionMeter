@@ -144,6 +144,7 @@
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="145"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel>
@@ -151,11 +152,17 @@
                         <TextBlock Text="{Binding CurrentFrame.QualityText, TargetNullValue=—}" FontSize="38" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
                         <TextBlock Text="{Binding CurrentFrame.QualityLabel, TargetNullValue=Waiting for frame}" Foreground="{StaticResource QsmAccent}" FontWeight="SemiBold"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                    <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                        <TextBlock Text="CONFIDENCE" Style="{StaticResource QsmSectionTitle}"/>
+                        <TextBlock Text="{Binding CurrentFrame.ConfidenceText, TargetNullValue=—}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
+                        <TextBlock Text="{Binding CurrentFrame.ConfidenceLabel, TargetNullValue=Waiting}" Foreground="{StaticResource QsmAccent}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Margin="12,0,0,0">
                         <TextBlock Text="{Binding ModeText}" Style="{StaticResource QsmSectionTitle}"/>
                         <TextBlock Text="{Binding CurrentFrame.StatusText, TargetNullValue=IDLE}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
                         <TextBlock Text="{Binding CurrentFrame.ProbableCause, TargetNullValue=Waiting for first LIGHT frame}" Foreground="{StaticResource QsmSecondaryText}" Margin="0,4,0,0"/>
                         <TextBlock Text="{Binding CurrentFrame.ReasonText}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding CurrentFrame.ConfidenceReason}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,4,0,0" FontStyle="Italic"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -218,7 +225,8 @@
                     <DataGrid Grid.Row="1" ItemsSource="{Binding Frames}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/>
-                            <DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="65"/>
+                            <DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/>
+                            <DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="62"/>
                             <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="90"/>
                             <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="70"/>
                             <DataGridTextColumn Header="Stars Δ" Binding="{Binding StarDeltaText}" Width="75"/>
