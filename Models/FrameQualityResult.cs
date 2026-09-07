@@ -75,13 +75,23 @@ public sealed class FrameQualityResult {
     public bool MonitorOnly { get; set; }
 
     public bool IsUsable => Status is FrameStatus.Accepted or FrameStatus.Warning;
-    public string QualityLabel => OverallQuality switch {
-        >= 90 => "EXCELLENT",
-        >= 80 => "GOOD",
-        >= 65 => "FAIR",
-        >= 50 => "POOR",
-        _ => "BAD"
-    };
+
+    // The internal score remains available for persistence/regression, but a frame without a mature
+    // adaptive reference must not be presented to the user as "100 / EXCELLENT". Likewise an
+    // analysis-error frame is unassessed, not a perfect-quality frame.
+    public string QualityLabel {
+        get {
+            if (Status == FrameStatus.Learning) return "LEARNING";
+            if (Status == FrameStatus.Error) return "UNASSESSED";
+            return OverallQuality switch {
+                >= 90 => "EXCELLENT",
+                >= 80 => "GOOD",
+                >= 65 => "FAIR",
+                >= 50 => "POOR",
+                _ => "BAD"
+            };
+        }
+    }
 
     public string ConfidenceLabel => double.IsNaN(ConfidenceScore) ? "N/A" : ConfidenceScore switch {
         >= 95 => "VERY HIGH",
@@ -113,10 +123,14 @@ public sealed class FrameQualityResult {
         ? "(unknown)"
         : System.IO.Path.GetFileName(FinalPath ?? OriginalPath);
 
-    public string QualityText => OverallQuality.ToString("0", CultureInfo.InvariantCulture);
+    public string QualityText => Status is FrameStatus.Learning or FrameStatus.Error
+        ? "—"
+        : OverallQuality.ToString("0", CultureInfo.InvariantCulture);
+
     public string ConfidenceText => double.IsNaN(ConfidenceScore)
         ? "N/A"
         : ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + "%";
+
     public string GuideRmsText => FormatArcsec(GuideRmsArcsec);
     public string ExcursionText => FormatArcsec(MaxGuideExcursionArcsec);
     public string GuidePatternText => GuidePattern switch {
