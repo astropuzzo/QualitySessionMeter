@@ -203,10 +203,20 @@
                 </Border>
 
                 <Border Style="{StaticResource QsmCardStyle}">
-                    <Grid Height="220">
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                        <TextBlock Text="MULTICHANNEL TIMELINE — Q / confidence · guide RMS · stars/background Δ" Style="{StaticResource QsmSectionTitle}"/>
-                        <local:QualityTimelineControl Grid.Row="1" ItemsSource="{Binding Frames}" Margin="0,4,0,0"/>
+                    <Grid Height="270">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <TextBlock Text="MULTICHANNEL TIMELINE — live values, rolling baseline and active reject limits" Style="{StaticResource QsmSectionTitle}"/>
+                        <TextBlock Grid.Row="1" Margin="0,0,0,4" Foreground="{StaticResource QsmSecondaryText}" FontSize="10" Text="Dashed 0% = rolling clean-frame baseline · dashed colored lines = current limits · hover anywhere in the plot for exact frame/baseline values."/>
+                        <local:QualityTimelineControl Grid.Row="2"
+                                                      ItemsSource="{Binding Frames}"
+                                                      MaxGuideRms="{Binding Settings.MaxGuideRms}"
+                                                      MaxStarLossPercent="{Binding Settings.MaxStarLossPercent}"
+                                                      MaxBackgroundIncreasePercent="{Binding Settings.MaxBackgroundIncreasePercent}"
+                                                      MaxBackgroundDecreasePercent="{Binding Settings.MaxBackgroundDecreasePercent}"
+                                                      EnableGuideRms="{Binding Settings.EnableGuideRms}"
+                                                      EnableStarCount="{Binding Settings.EnableStarCount}"
+                                                      EnableBackground="{Binding Settings.EnableBackground}"
+                                                      Margin="0,4,0,0"/>
                     </Grid>
                 </Border>
 
