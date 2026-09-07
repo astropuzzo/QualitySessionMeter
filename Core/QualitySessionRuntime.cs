@@ -40,6 +40,7 @@ public sealed class QualitySessionRuntime : IDisposable {
     private string syntheticStatus = "OFF";
     private string syntheticLastScenario = "";
     private string syntheticFailureSummary = "";
+    private string syntheticSessionName = "";
 
     public event EventHandler<FrameQualityResult> FrameProcessed;
     public event EventHandler SyntheticStateChanged;
@@ -54,6 +55,7 @@ public sealed class QualitySessionRuntime : IDisposable {
     public string SyntheticStatus => syntheticStatus;
     public string SyntheticLastScenario => syntheticLastScenario;
     public string SyntheticFailureSummary => syntheticFailureSummary;
+    public string SyntheticSessionName => syntheticSessionName;
     public string ActiveSessionFolder => IsSyntheticMode
         ? syntheticSessionStore?.SessionFolder ?? ""
         : sessionStore.SessionFolder;
@@ -99,7 +101,6 @@ public sealed class QualitySessionRuntime : IDisposable {
     }
 
     private void ImageSaved(object sender, ImageSavedEventArgs e) {
-        // Synthetic Lab is deliberately isolated from real camera/save events.
         if (IsSyntheticMode) return;
         if (!settings.Enabled || e?.MetaData?.Image == null) return;
         if (e.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
@@ -109,9 +110,6 @@ public sealed class QualitySessionRuntime : IDisposable {
     private async Task ProcessImageAsync(ImageSavedEventArgs e) {
         await processingLock.WaitAsync();
 
-        // A real ImageSaved callback may already have been queued just before Synthetic Lab starts.
-        // Re-check after acquiring the processing lock so that callback is dropped rather than mixed
-        // into the isolated synthetic session.
         if (IsSyntheticMode) {
             processingLock.Release();
             return;
@@ -191,14 +189,18 @@ public sealed class QualitySessionRuntime : IDisposable {
         }
     }
 
+    public Task RunCanonicalSyntheticSessionAsync(int frameDelayMs = 150) =>
+        RunSyntheticSessionAsync(SyntheticSessionGenerator.CanonicalScenarioId, frameDelayMs);
+
     /// <summary>
-    /// Runs a deterministic synthetic night entirely inside the plugin. It does not access the camera,
-    /// does not consume real ImageSaved events, does not touch live baselines and never invokes file actions.
-    /// The same QualityEngine, BaselineEngine, GuideMetricsCalculator and SessionStore classes used by
-    /// production processing are exercised.
+    /// Runs one deterministic synthetic whole-night profile entirely inside the plugin. It does not
+    /// access the camera, consume real ImageSaved events, touch live baselines or invoke file actions.
+    /// Production QualityEngine, BaselineEngine, GuideMetricsCalculator and SessionStore code paths are used.
     /// </summary>
-    public async Task RunCanonicalSyntheticSessionAsync(int frameDelayMs = 150) {
+    public async Task RunSyntheticSessionAsync(string scenarioId, int frameDelayMs = 150) {
         if (disposed || IsSyntheticRunning) return;
+
+        var scenario = SyntheticSessionGenerator.GetScenario(scenarioId);
 
         await processingLock.WaitAsync();
         try {
@@ -212,23 +214,25 @@ public sealed class QualitySessionRuntime : IDisposable {
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "NINA",
                 "QualitySessionMeter",
-                "SyntheticSessions");
+                "SyntheticSessions",
+                Sanitize(scenario.Id));
             syntheticSessionStore = new SessionStore(syntheticRoot);
 
             syntheticProcessed = 0;
             syntheticFailures = 0;
             syntheticFailureSummary = "";
             syntheticLastScenario = "";
+            syntheticSessionName = scenario.DisplayName;
             syntheticStatus = "RUNNING";
             IsSyntheticMode = true;
             IsSyntheticRunning = true;
-            syntheticTotal = SyntheticSessionGenerator.BuildCanonicalNight().Count;
+            syntheticTotal = scenario.Frames.Count;
             RaiseSyntheticStateChanged();
         } finally {
             processingLock.Release();
         }
 
-        var definitions = SyntheticSessionGenerator.BuildCanonicalNight();
+        var definitions = scenario.Frames;
         var failures = new List<string>();
         var baseTime = new DateTime(2026, 9, 7, 20, 0, 0, DateTimeKind.Utc);
         var token = syntheticCts.Token;
@@ -261,7 +265,7 @@ public sealed class QualitySessionRuntime : IDisposable {
                 var input = new FrameQualityInput {
                     FrameIndex = i + 1,
                     TimestampUtc = start,
-                    OriginalPath = $"SYNTHETIC://frame_{i + 1:000}_{Sanitize(definition.Name)}.fits",
+                    OriginalPath = $"SYNTHETIC://{scenario.Id}/frame_{i + 1:000}_{Sanitize(definition.Name)}.fits",
                     Target = definition.Target,
                     Filter = definition.Filter,
                     ExposureSeconds = definition.ExposureSeconds,
@@ -303,13 +307,13 @@ public sealed class QualitySessionRuntime : IDisposable {
             }
 
             syntheticFailureSummary = failures.Count == 0
-                ? "All canonical scenarios matched the expected result."
+                ? $"All {scenario.DisplayName} frames matched the expected result."
                 : string.Join(Environment.NewLine, failures.Take(8)) + (failures.Count > 8 ? Environment.NewLine + "…" : "");
             syntheticStatus = failures.Count == 0
                 ? $"PASS {syntheticProcessed}/{syntheticTotal}"
                 : $"FAIL {syntheticFailures} of {syntheticTotal}";
 
-            await WriteSyntheticVerdictAsync(failures);
+            await WriteSyntheticVerdictAsync(scenario, failures);
         } catch (OperationCanceledException) {
             syntheticStatus = $"STOPPED {syntheticProcessed}/{syntheticTotal}";
             syntheticFailureSummary = "Synthetic session stopped by user.";
@@ -334,18 +338,26 @@ public sealed class QualitySessionRuntime : IDisposable {
         syntheticStatus = "OFF";
         syntheticLastScenario = "";
         syntheticFailureSummary = "";
+        syntheticSessionName = "";
         RaiseSyntheticStateChanged();
     }
 
-    private async Task WriteSyntheticVerdictAsync(IReadOnlyList<string> failures) {
+    private async Task WriteSyntheticVerdictAsync(
+        SyntheticSessionDefinition scenario,
+        IReadOnlyList<string> failures) {
+
         if (syntheticSessionStore == null || string.IsNullOrWhiteSpace(syntheticSessionStore.SessionFolder)) return;
 
         var sb = new StringBuilder();
         sb.AppendLine("# QualitySessionMeter Synthetic Lab verdict");
         sb.AppendLine();
+        sb.AppendLine($"Scenario: {scenario.DisplayName} ({scenario.Id})");
+        sb.AppendLine(scenario.Description);
+        sb.AppendLine();
         sb.AppendLine(failures.Count == 0 ? "VERDICT: PASS" : "VERDICT: FAIL");
         sb.AppendLine($"Frames: {syntheticProcessed}/{syntheticTotal}");
         sb.AppendLine($"Mismatches: {failures.Count}");
+        sb.AppendLine($"Expected profile: {scenario.ExpectedSummary}");
         sb.AppendLine();
         sb.AppendLine("This session was generated entirely inside QualitySessionMeter. No camera or real image file was used.");
         if (failures.Count > 0) {
