@@ -60,7 +60,15 @@ public sealed class FrameQualityResult {
         _ => "ERROR"
     };
 
-    public string ReasonText => RejectReasons.Count == 0 ? "—" : string.Join(", ", RejectReasons);
+    public string ReasonText {
+        get {
+            var parts = new List<string>();
+            if (RejectReasons.Count > 0) parts.Add(string.Join(", ", RejectReasons));
+            if (!string.IsNullOrWhiteSpace(ErrorMessage)) parts.Add(ErrorMessage);
+            return parts.Count == 0 ? "—" : string.Join(" · ", parts);
+        }
+    }
+
     public string FileName => string.IsNullOrWhiteSpace(FinalPath ?? OriginalPath)
         ? "(unknown)"
         : System.IO.Path.GetFileName(FinalPath ?? OriginalPath);
