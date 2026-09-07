@@ -16,9 +16,9 @@
     <Description>Real-time quality control, smart session analysis and accepted-frame acquisition for N.I.N.A.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
-    <Version>1.0.0.1</Version>
-    <AssemblyVersion>1.0.0.1</AssemblyVersion>
-    <FileVersion>1.0.0.1</FileVersion>
+    <Version>1.0.0.2</Version>
+    <AssemblyVersion>1.0.0.2</AssemblyVersion>
+    <FileVersion>1.0.0.2</FileVersion>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
