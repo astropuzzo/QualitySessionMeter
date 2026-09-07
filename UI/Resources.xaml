@@ -1,0 +1,240 @@
+<ResourceDictionary
+    x:Class="NINA.Plugin.QualitySessionMeter.UI.Resources"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:NINA.Plugin.QualitySessionMeter.UI">
+
+    <GeometryGroup x:Key="QSM_MeterSVG">
+        <EllipseGeometry Center="32,32" RadiusX="29" RadiusY="29"/>
+        <PathGeometry Figures="M 10,38 C 16,19 28,13 32,13 C 42,13 51,22 55,35"/>
+        <PathGeometry Figures="M 32,32 L 47,22"/>
+    </GeometryGroup>
+
+    <SolidColorBrush x:Key="QsmCard" Color="#171A20"/>
+    <SolidColorBrush x:Key="QsmCardBorder" Color="#2A3039"/>
+    <SolidColorBrush x:Key="QsmPrimaryText" Color="#F1F3F4"/>
+    <SolidColorBrush x:Key="QsmSecondaryText" Color="#9AA0A6"/>
+    <SolidColorBrush x:Key="QsmAccent" Color="#8AB4F8"/>
+
+    <Style x:Key="QsmCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource QsmCard}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource QsmCardBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="10"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+    </Style>
+
+    <Style x:Key="QsmSectionTitle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource QsmSecondaryText}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,0,0,5"/>
+    </Style>
+
+    <DataTemplate x:Key="QualitySessionMeter_Options">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="12" MaxWidth="760">
+                <TextBlock Text="Quality Session Meter" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                <TextBlock Text="Real-time frame quality control. Rejected files are never deleted." Opacity="0.7" Margin="0,0,0,16"/>
+
+                <GroupBox Header="General" Margin="0,0,0,10">
+                    <StackPanel Margin="10">
+                        <CheckBox Content="Enable QualitySessionMeter" IsChecked="{Binding Settings.Enabled}" Margin="0,3"/>
+                        <CheckBox Content="Monitor only — analyze and report without moving/renaming files" IsChecked="{Binding Settings.MonitorOnly}" Margin="0,3"/>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Baseline window (good frames)" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.BaselineWindow, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                        <Grid Margin="0,5,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Minimum learning frames" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.MinimumLearningFrames, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Guiding" Margin="0,0,0,10">
+                    <StackPanel Margin="10">
+                        <CheckBox Content="Reject on exposure RMS" IsChecked="{Binding Settings.EnableGuideRms}" Margin="0,3"/>
+                        <Grid Margin="20,3,0,5">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Maximum RMS (arcsec)" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.MaxGuideRms, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+
+                        <CheckBox Content="Reject sustained guide excursion" IsChecked="{Binding Settings.EnableSustainedExcursion}" Margin="0,3"/>
+                        <Grid Margin="20,3,0,3">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Excursion threshold (arcsec)" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.ExcursionThreshold, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                        <Grid Margin="20,3,0,5">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Minimum duration (seconds)" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.ExcursionMinimumDuration, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+
+                        <CheckBox Content="Reject hard guide excursion" IsChecked="{Binding Settings.EnableHardExcursion}" Margin="0,3"/>
+                        <Grid Margin="20,3,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Hard excursion (arcsec)" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.HardExcursionThreshold, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Image signal" Margin="0,0,0,10">
+                    <StackPanel Margin="10">
+                        <CheckBox Content="Reject relative star-count loss" IsChecked="{Binding Settings.EnableStarCount}" Margin="0,3"/>
+                        <Grid Margin="20,3,0,8">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Maximum star loss (%)" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.MaxStarLossPercent, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+
+                        <CheckBox Content="Reject background deviation" IsChecked="{Binding Settings.EnableBackground}" Margin="0,3"/>
+                        <Grid Margin="20,3,0,3">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Maximum increase (%)" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.MaxBackgroundIncreasePercent, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                        <Grid Margin="20,3,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Maximum decrease (%)" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.MaxBackgroundDecreasePercent, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Quality score & rejected files">
+                    <StackPanel Margin="10">
+                        <Grid Margin="0,3">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Worst-metric weight (0.50–0.95)" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.WorstMetricWeight, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="230"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Rejected file action" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.RejectedFileActionIndex}">
+                                <ComboBoxItem Content="Keep in place"/>
+                                <ComboBoxItem Content="Prefix BAD_"/>
+                                <ComboBoxItem Content="Move to Rejected subfolder"/>
+                            </ComboBox>
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+    </DataTemplate>
+
+    <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.UI.QualitySessionMeterDockable_Dockable">
+        <Grid Margin="6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="150"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Style="{StaticResource QsmCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="QUALITY" Style="{StaticResource QsmSectionTitle}"/>
+                        <TextBlock Text="{Binding CurrentFrame.QualityText, TargetNullValue=—}" FontSize="38" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
+                        <TextBlock Text="{Binding CurrentFrame.QualityLabel, TargetNullValue=Waiting for frame}" Foreground="{StaticResource QsmAccent}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                        <TextBlock Text="{Binding ModeText}" Style="{StaticResource QsmSectionTitle}"/>
+                        <TextBlock Text="{Binding CurrentFrame.StatusText, TargetNullValue=IDLE}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
+                        <TextBlock Text="{Binding CurrentFrame.ProbableCause, TargetNullValue=Waiting for first LIGHT frame}" Foreground="{StaticResource QsmSecondaryText}" Margin="0,4,0,0"/>
+                        <TextBlock Text="{Binding CurrentFrame.ReasonText}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="1" Style="{StaticResource QsmCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="GUIDE RMS" Style="{StaticResource QsmSectionTitle}"/>
+                        <TextBlock Text="{Binding CurrentFrame.GuideRmsText, TargetNullValue=N/A}" FontSize="16"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="MAX EXCURSION" Style="{StaticResource QsmSectionTitle}"/>
+                        <TextBlock Text="{Binding CurrentFrame.ExcursionText, TargetNullValue=N/A}" FontSize="16"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="STARS" Style="{StaticResource QsmSectionTitle}"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding CurrentFrame.StarsText, TargetNullValue=N/A}" FontSize="16"/>
+                            <TextBlock Text="{Binding CurrentFrame.StarDeltaText}" Margin="6,2,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3">
+                        <TextBlock Text="BACKGROUND" Style="{StaticResource QsmSectionTitle}"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding CurrentFrame.BackgroundText, TargetNullValue=N/A}" FontSize="16"/>
+                            <TextBlock Text="{Binding CurrentFrame.BackgroundDeltaText}" Margin="6,2,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="2" Style="{StaticResource QsmCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0"><TextBlock Text="CAPTURED" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding Captured}" FontSize="16"/></StackPanel>
+                    <StackPanel Grid.Column="1"><TextBlock Text="USABLE" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding Usable}" FontSize="16"/></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="REJECTED" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding Rejected}" FontSize="16"/></StackPanel>
+                    <StackPanel Grid.Column="3"><TextBlock Text="ACCEPTANCE" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding AcceptanceRate, StringFormat={}{0:0.0}%}" FontSize="16"/></StackPanel>
+                    <StackPanel Grid.Column="4"><TextBlock Text="SESSION QUALITY" Style="{StaticResource QsmSectionTitle}"/><TextBlock Text="{Binding SessionQuality, StringFormat={}{0:0}}" FontSize="16"/></StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="3" Style="{StaticResource QsmCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <TextBlock Text="QUALITY TIMELINE — last 160 frames" Style="{StaticResource QsmSectionTitle}"/>
+                    <local:QualityTimelineControl Grid.Row="1" ItemsSource="{Binding Frames}" Margin="0,4,0,0"/>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="4" Style="{StaticResource QsmCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="FRAME HISTORY" Style="{StaticResource QsmSectionTitle}"/>
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding Frames}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/>
+                            <DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="65"/>
+                            <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="90"/>
+                            <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="70"/>
+                            <DataGridTextColumn Header="Stars Δ" Binding="{Binding StarDeltaText}" Width="75"/>
+                            <DataGridTextColumn Header="BG Δ" Binding="{Binding BackgroundDeltaText}" Width="75"/>
+                            <DataGridTextColumn Header="Cause" Binding="{Binding ProbableCause}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <DockPanel Grid.Row="2" Margin="0,8,0,0">
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                            <Button Content="Open session folder" Command="{Binding OpenSessionFolderCommand}" Margin="4,0"/>
+                            <Button Content="Reset session" Command="{Binding ResetSessionCommand}" Margin="4,0"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding SessionFolder}" Foreground="{StaticResource QsmSecondaryText}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                    </DockPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </DataTemplate>
+</ResourceDictionary>
