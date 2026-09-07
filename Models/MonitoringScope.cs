@@ -19,6 +19,8 @@ public sealed class FrameSourceInfo {
     public bool QsmControlled { get; init; }
     public bool MonitoringEligible { get; init; }
     public bool FileActionEligible { get; init; }
+    public string ControlToken { get; init; } = "";
+    public bool ProvenanceFrozen { get; init; }
 
     public string SourceText => Kind switch {
         FrameSourceKind.QsmControlledBlock => "QSM CONTROLLED BLOCK",
