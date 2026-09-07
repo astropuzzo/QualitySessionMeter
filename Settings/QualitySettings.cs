@@ -19,7 +19,10 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     }
 
     public MonitoringScope MonitoringScope {
-        get => (MonitoringScope)Clamp(accessor.GetValueInt32(nameof(MonitoringScope), (int)Models.MonitoringScope.AdvancedSequencerLights), 0, 2);
+        get => (MonitoringScope)Clamp(
+            accessor.GetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights),
+            0,
+            2);
         set {
             accessor.SetValueInt32(nameof(MonitoringScope), Clamp((int)value, 0, 2));
             Raise();
