@@ -1,5 +1,6 @@
 using NINA.Plugin.QualitySessionMeter.Core;
 using NINA.Plugin.QualitySessionMeter.Models;
+using NINA.Plugin.QualitySessionMeter.Sequencer;
 using NINA.Plugin.QualitySessionMeter.Synthetic;
 using System.Text.Json;
 
@@ -83,6 +84,8 @@ foreach (var scenario in scenarios) {
 failures.AddRange(SyntheticEventOracle.RunDeterministicGroupingCases());
 failures.AddRange(SyntheticGuidePatternOracle.Run());
 failures.AddRange(SyntheticTrendOracle.Run());
+RunV3ValidTargetOracle(failures);
+RunV3SourcePolicyOracle(failures);
 await ValidateFileActions(outputRoot, failures);
 
 var verdict = failures.Count == 0 ? "PASS" : "FAIL";
@@ -100,36 +103,26 @@ await File.WriteAllLinesAsync(
         $"VERDICT: {verdict}",
         $"Profiles: {scenarios.Count}",
         $"Frames exercised: {totalFrames}",
-        $"Failures: {failures.Count}"
+        $"Failures: {failures.Count}",
+        "V3 valid-frame accounting oracle: executed",
+        "V3 source/file-action safety oracle: executed"
     }.Concat(scenarios.Select(x => $"- {x.DisplayName}: {x.ExpectedSummary}"))
      .Concat(failures.Select(x => "FAIL: " + x)));
 
 return failures.Count == 0 ? 0 : 1;
 
-static void Validate(
-    SyntheticSessionDefinition scenario,
-    SyntheticFrameDefinition expected,
-    FrameQualityResult actual,
-    List<string> failures) {
-
+static void Validate(SyntheticSessionDefinition scenario, SyntheticFrameDefinition expected, FrameQualityResult actual, List<string> failures) {
     var prefix = $"{scenario.DisplayName} / frame {actual.FrameIndex} ({expected.Name})";
-
-    if (actual.Status != expected.ExpectedStatus) {
-        failures.Add($"{prefix}: expected status {expected.ExpectedStatus}, got {actual.Status}");
-    }
+    if (actual.Status != expected.ExpectedStatus) failures.Add($"{prefix}: expected status {expected.ExpectedStatus}, got {actual.Status}");
 
     var expectedReasons = expected.ExpectedReasons ?? Array.Empty<string>();
     foreach (var reason in expectedReasons) {
-        if (!actual.RejectReasons.Contains(reason, StringComparer.Ordinal)) {
-            failures.Add($"{prefix}: missing reason {reason}; actual=[{string.Join(", ", actual.RejectReasons)}]");
-        }
+        if (!actual.RejectReasons.Contains(reason, StringComparer.Ordinal)) failures.Add($"{prefix}: missing reason {reason}; actual=[{string.Join(", ", actual.RejectReasons)}]");
     }
 
     if (expected.ExpectedStatus == FrameStatus.Rejected) {
         var unexpected = actual.RejectReasons.Where(x => !expectedReasons.Contains(x, StringComparer.Ordinal)).ToArray();
-        if (unexpected.Length > 0) {
-            failures.Add($"{prefix}: unexpected rejection reason(s): {string.Join(", ", unexpected)}");
-        }
+        if (unexpected.Length > 0) failures.Add($"{prefix}: unexpected rejection reason(s): {string.Join(", ", unexpected)}");
     }
 
     if (!string.IsNullOrWhiteSpace(expected.ExpectedErrorContains) &&
@@ -147,23 +140,15 @@ static void Validate(
         failures.Add($"{prefix}: background baseline expected {expected.ExpectedBackgroundBaseline.Value:0.###}, got {actual.BackgroundBaseline:0.###}");
     }
 
-    if (expected.Name.Contains("single 3 arcsec wind spike", StringComparison.Ordinal) &&
-        actual.SustainedGuideExcursionSeconds != 0) {
+    if (expected.Name.Contains("single 3 arcsec wind spike", StringComparison.Ordinal) && actual.SustainedGuideExcursionSeconds != 0) {
         failures.Add($"{prefix}: single spike must have sustained duration 0, got {actual.SustainedGuideExcursionSeconds:0.###}");
     }
 
     var confidenceProblem = SyntheticConfidenceOracle.Validate(expected, actual);
-    if (!string.IsNullOrWhiteSpace(confidenceProblem)) {
-        failures.Add($"{prefix}: confidence oracle: {confidenceProblem}");
-    }
+    if (!string.IsNullOrWhiteSpace(confidenceProblem)) failures.Add($"{prefix}: confidence oracle: {confidenceProblem}");
 }
 
-static void ValidateArtifacts(
-    SyntheticSessionDefinition scenario,
-    SessionStore store,
-    int expectedFrames,
-    List<string> failures) {
-
+static void ValidateArtifacts(SyntheticSessionDefinition scenario, SessionStore store, int expectedFrames, List<string> failures) {
     var csv = Path.Combine(store.SessionFolder, "frames.csv");
     var eventsCsv = Path.Combine(store.SessionFolder, "events.csv");
     var json = Path.Combine(store.SessionFolder, "session.json");
@@ -171,31 +156,23 @@ static void ValidateArtifacts(
     var html = Path.Combine(store.SessionFolder, "report.html");
 
     foreach (var file in new[] { csv, eventsCsv, json, svg, html }) {
-        if (!File.Exists(file) || new FileInfo(file).Length == 0) {
-            failures.Add($"{scenario.DisplayName}: artifact missing or empty: {file}");
-        }
+        if (!File.Exists(file) || new FileInfo(file).Length == 0) failures.Add($"{scenario.DisplayName}: artifact missing or empty: {file}");
     }
 
     if (File.Exists(csv)) {
         var lines = File.ReadLines(csv).ToArray();
-        if (lines.Length != expectedFrames + 1) {
-            failures.Add($"{scenario.DisplayName}: frames.csv expected {expectedFrames + 1} lines including header, got {lines.Length}");
-        }
+        if (lines.Length != expectedFrames + 1) failures.Add($"{scenario.DisplayName}: frames.csv expected {expectedFrames + 1} lines including header, got {lines.Length}");
         if (lines.Length > 0) {
             var header = lines[0];
             foreach (var required in new[] { "Confidence", "GuidePattern", "StarTrendKind", "BackgroundTrendKind" }) {
-                if (!header.Contains(required, StringComparison.Ordinal)) {
-                    failures.Add($"{scenario.DisplayName}: frames.csv missing V2 field {required}");
-                }
+                if (!header.Contains(required, StringComparison.Ordinal)) failures.Add($"{scenario.DisplayName}: frames.csv missing V2 field {required}");
             }
         }
     }
 
     if (File.Exists(eventsCsv)) {
         var lines = File.ReadLines(eventsCsv).ToArray();
-        if (lines.Length != store.Events.Count + 1) {
-            failures.Add($"{scenario.DisplayName}: events.csv expected {store.Events.Count + 1} lines including header, got {lines.Length}");
-        }
+        if (lines.Length != store.Events.Count + 1) failures.Add($"{scenario.DisplayName}: events.csv expected {store.Events.Count + 1} lines including header, got {lines.Length}");
     }
 
     if (File.Exists(json)) {
@@ -204,22 +181,16 @@ static void ValidateArtifacts(
             var captured = document.RootElement.GetProperty("captured").GetInt32();
             var frames = document.RootElement.GetProperty("frames");
             var frameCount = frames.GetArrayLength();
-            if (captured != expectedFrames || frameCount != expectedFrames) {
-                failures.Add($"{scenario.DisplayName}: session.json expected {expectedFrames} frames, got captured={captured}, frames={frameCount}");
-            }
+            if (captured != expectedFrames || frameCount != expectedFrames) failures.Add($"{scenario.DisplayName}: session.json expected {expectedFrames} frames, got captured={captured}, frames={frameCount}");
             if (frameCount > 0) {
-                foreach (var required in new[] { "ConfidenceScore", "GuidePattern", "StarTrendKind", "BackgroundTrendKind" }) {
-                    if (!frames[0].TryGetProperty(required, out _)) {
-                        failures.Add($"{scenario.DisplayName}: session.json missing frame field {required}");
-                    }
+                foreach (var required in new[] { "ConfidenceScore", "GuidePattern", "StarTrendKind", "BackgroundTrendKind", "SourceKind", "SequenceTitle", "QsmControlled", "FileActionEligible" }) {
+                    if (!frames[0].TryGetProperty(required, out _)) failures.Add($"{scenario.DisplayName}: session.json missing frame field {required}");
                 }
             }
 
             int eventCount = document.RootElement.GetProperty("eventCount").GetInt32();
             int serializedEvents = document.RootElement.GetProperty("events").GetArrayLength();
-            if (eventCount != store.Events.Count || serializedEvents != store.Events.Count) {
-                failures.Add($"{scenario.DisplayName}: session.json event count mismatch, expected {store.Events.Count}, got eventCount={eventCount}, events={serializedEvents}");
-            }
+            if (eventCount != store.Events.Count || serializedEvents != store.Events.Count) failures.Add($"{scenario.DisplayName}: session.json event count mismatch, expected {store.Events.Count}, got eventCount={eventCount}, events={serializedEvents}");
         } catch (Exception ex) {
             failures.Add($"{scenario.DisplayName}: session.json parse failed: {ex.Message}");
         }
@@ -228,11 +199,55 @@ static void ValidateArtifacts(
     if (File.Exists(html)) {
         var body = File.ReadAllText(html);
         foreach (var marker in new[] { "Session events", "Best accepted frames", "Worst accepted frames", "Confidence", "Guide pattern" }) {
-            if (!body.Contains(marker, StringComparison.OrdinalIgnoreCase)) {
-                failures.Add($"{scenario.DisplayName}: report.html missing section/marker '{marker}'");
-            }
+            if (!body.Contains(marker, StringComparison.OrdinalIgnoreCase)) failures.Add($"{scenario.DisplayName}: report.html missing section/marker '{marker}'");
         }
     }
+}
+
+static void RunV3ValidTargetOracle(List<string> failures) {
+    var s = new ValidFrameProgressTracker.Snapshot();
+    int index = 0;
+    FrameQualityResult F(FrameStatus status) => new() { FrameIndex = ++index, Status = status };
+
+    for (int i = 0; i < 4; i++) s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Learning), true);
+    for (int i = 0; i < 5; i++) s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Accepted), true);
+    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Rejected), true);
+    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Rejected), true);
+    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Warning), true);
+    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Rejected), true);
+    for (int i = 0; i < 4; i++) s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Accepted), true);
+
+    if (s.Valid != 10 || s.Captured != 17 || s.Rejected != 3 || s.Learning != 4 || s.Warning != 1) {
+        failures.Add($"V3 valid-target oracle expected 10 valid / 17 captured / 3 rejected / 4 learning / 1 warning, got {s.Valid}/{s.Captured}/{s.Rejected}/{s.Learning}/{s.Warning}.");
+    }
+
+    var duplicate = new FrameQualityResult { FrameIndex = s.LastFrameIndex, Status = FrameStatus.Accepted };
+    var duplicateResult = ValidFrameProgressTracker.Account(s, duplicate, true);
+    if (!duplicateResult.Equals(s)) failures.Add("V3 valid-target oracle double-counted a duplicate frame index.");
+
+    var noWarning = new ValidFrameProgressTracker.Snapshot();
+    noWarning = ValidFrameProgressTracker.Account(noWarning, new FrameQualityResult { FrameIndex = 1, Status = FrameStatus.Warning }, false);
+    if (noWarning.Valid != 0 || noWarning.Warning != 1 || noWarning.Captured != 1) failures.Add("V3 valid-target oracle failed CountWarningsAsValid=false behavior.");
+
+    var error = ValidFrameProgressTracker.Account(noWarning, new FrameQualityResult { FrameIndex = 2, Status = FrameStatus.Error }, false);
+    if (error.Valid != 0 || error.Error != 1 || error.Captured != 2) failures.Add("V3 valid-target oracle incorrectly counted ERROR as valid.");
+}
+
+static void RunV3SourcePolicyOracle(List<string> failures) {
+    var manualDefault = FrameSourcePolicy.Resolve(MonitoringScope.AdvancedSequencerLights, false, "");
+    if (manualDefault.MonitoringEligible || manualDefault.FileActionEligible) failures.Add("V3 source policy must ignore manual/external LIGHTs in default AdvancedSequencerLights scope.");
+
+    var sequenceDefault = FrameSourcePolicy.Resolve(MonitoringScope.AdvancedSequencerLights, false, "M31 Night");
+    if (!sequenceDefault.MonitoringEligible || !sequenceDefault.FileActionEligible || sequenceDefault.Kind != FrameSourceKind.AdvancedSequencer) failures.Add("V3 source policy failed to authorize a known Advanced Sequencer LIGHT.");
+
+    var controlled = FrameSourcePolicy.Resolve(MonitoringScope.ControlledBlocksOnly, true, "");
+    if (!controlled.MonitoringEligible || !controlled.FileActionEligible || controlled.Kind != FrameSourceKind.QsmControlledBlock) failures.Add("V3 source policy failed QSM controlled-block arming.");
+
+    var nonControlledSequence = FrameSourcePolicy.Resolve(MonitoringScope.ControlledBlocksOnly, false, "M31 Night");
+    if (nonControlledSequence.MonitoringEligible) failures.Add("V3 ControlledBlocksOnly scope incorrectly accepted a non-controlled sequencer frame.");
+
+    var manualAll = FrameSourcePolicy.Resolve(MonitoringScope.AllLights, false, "");
+    if (!manualAll.MonitoringEligible || manualAll.FileActionEligible) failures.Add("V3 AllLights should monitor manual LIGHTs but must never authorize their file mutation.");
 }
 
 static async Task ValidateFileActions(string outputRoot, List<string> failures) {
@@ -242,21 +257,23 @@ static async Task ValidateFileActions(string outputRoot, List<string> failures) 
     settings.MonitorOnly = false;
     var service = new RejectedFileService();
 
+    var blockedSource = Path.Combine(root, "blocked_manual_test.fits");
+    await File.WriteAllTextAsync(blockedSource, "synthetic frame");
+    settings.RejectedFileAction = RejectedFileAction.PrefixBad;
+    bool blocked = false;
+    try { _ = await service.ApplyAsync(blockedSource, settings, false); }
+    catch (InvalidOperationException) { blocked = true; }
+    if (!blocked || !File.Exists(blockedSource)) failures.Add("V3 file-action guard failed to block mutation for an ineligible/manual source.");
+
     var prefixSource = Path.Combine(root, "prefix_test.fits");
     await File.WriteAllTextAsync(prefixSource, "synthetic frame");
     settings.RejectedFileAction = RejectedFileAction.PrefixBad;
-    var prefixResult = await service.ApplyAsync(prefixSource, settings);
-    if (!File.Exists(prefixResult) || File.Exists(prefixSource) ||
-        !Path.GetFileName(prefixResult).StartsWith("BAD_", StringComparison.OrdinalIgnoreCase)) {
-        failures.Add("PrefixBad file action failed its isolated temp-file test.");
-    }
+    var prefixResult = await service.ApplyAsync(prefixSource, settings, true);
+    if (!File.Exists(prefixResult) || File.Exists(prefixSource) || !Path.GetFileName(prefixResult).StartsWith("BAD_", StringComparison.OrdinalIgnoreCase)) failures.Add("PrefixBad file action failed its authorized isolated temp-file test.");
 
     var moveSource = Path.Combine(root, "move_test.fits");
     await File.WriteAllTextAsync(moveSource, "synthetic frame");
     settings.RejectedFileAction = RejectedFileAction.MoveToRejectedFolder;
-    var moveResult = await service.ApplyAsync(moveSource, settings);
-    if (!File.Exists(moveResult) || File.Exists(moveSource) ||
-        !string.Equals(Path.GetFileName(Path.GetDirectoryName(moveResult)), "Rejected", StringComparison.OrdinalIgnoreCase)) {
-        failures.Add("MoveToRejectedFolder file action failed its isolated temp-file test.");
-    }
+    var moveResult = await service.ApplyAsync(moveSource, settings, true);
+    if (!File.Exists(moveResult) || File.Exists(moveSource) || !string.Equals(Path.GetFileName(Path.GetDirectoryName(moveResult)), "Rejected", StringComparison.OrdinalIgnoreCase)) failures.Add("MoveToRejectedFolder file action failed its authorized isolated temp-file test.");
 }

@@ -6,6 +6,7 @@ using NINA.Plugin.QualitySessionMeter.Models;
 using NINA.Plugin.QualitySessionMeter.Settings;
 using NINA.Plugin.QualitySessionMeter.Synthetic;
 using NINA.Profile.Interfaces;
+using NINA.Sequencer.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
@@ -20,15 +21,25 @@ namespace NINA.Plugin.QualitySessionMeter.Core;
 public sealed class QualitySessionRuntime : IDisposable {
     private readonly IProfileService profileService;
     private readonly IImageSaveMediator imageSaveMediator;
+    private readonly ISequenceMediator sequenceMediator;
     private readonly QualitySettings settings;
     private readonly BaselineEngine baseline = new();
     private readonly GuideCollector guideCollector;
     private readonly QualityEngine qualityEngine = new();
     private readonly RejectedFileService rejectedFileService = new();
+    private readonly CalibrationSuggestionEngine calibrationEngine = new();
+    private readonly PredictiveDegradationEngine predictiveEngine = new();
+    private readonly EnvironmentalCorrelationService environmentalService = new();
     private readonly SessionStore sessionStore = new();
     private readonly SemaphoreSlim processingLock = new(1, 1);
+    private readonly object controlSync = new();
+    private readonly HashSet<string> controlTokens = new(StringComparer.Ordinal);
+    private readonly HashSet<string> appliedCalibrationContexts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> ignoredCalibrationContexts = new(StringComparer.OrdinalIgnoreCase);
+    private IWeatherDataMediator weatherDataMediator;
     private int frameIndex;
     private bool disposed;
+    private CalibrationSuggestion currentCalibrationSuggestion = new();
 
     private CancellationTokenSource syntheticCts;
     private BaselineEngine syntheticBaseline;
@@ -44,9 +55,11 @@ public sealed class QualitySessionRuntime : IDisposable {
 
     public event EventHandler<FrameQualityResult> FrameProcessed;
     public event EventHandler SyntheticStateChanged;
+    public event EventHandler CalibrationSuggestionChanged;
 
     public QualitySettings Settings => settings;
     public SessionStore Store => sessionStore;
+    public CalibrationSuggestion CurrentCalibrationSuggestion => currentCalibrationSuggestion;
     public bool IsSyntheticMode { get; private set; }
     public bool IsSyntheticRunning { get; private set; }
     public int SyntheticProcessed => syntheticProcessed;
@@ -59,15 +72,18 @@ public sealed class QualitySessionRuntime : IDisposable {
     public string ActiveSessionFolder => IsSyntheticMode
         ? syntheticSessionStore?.SessionFolder ?? ""
         : sessionStore.SessionFolder;
+    public bool IsSequencerControlArmed { get { lock (controlSync) return controlTokens.Count > 0; } }
 
     public QualitySessionRuntime(
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
         IGuiderMediator guiderMediator,
+        ISequenceMediator sequenceMediator,
         QualitySettings settings) {
 
         this.profileService = profileService;
         this.imageSaveMediator = imageSaveMediator;
+        this.sequenceMediator = sequenceMediator;
         this.settings = settings;
         guideCollector = new GuideCollector(guiderMediator);
 
@@ -75,10 +91,66 @@ public sealed class QualitySessionRuntime : IDisposable {
         imageSaveMediator.ImageSaved += ImageSaved;
     }
 
+    public void AttachWeatherMediator(IWeatherDataMediator mediator) => weatherDataMediator = mediator;
+
+    public string ArmSequencerControl() {
+        if (!settings.Enabled || IsSyntheticMode) return "";
+        var token = Guid.NewGuid().ToString("N");
+        lock (controlSync) controlTokens.Add(token);
+        Logger.Info($"QualitySessionMeter V3: armed controlled sequencer block {token[..8]}.");
+        return token;
+    }
+
+    public void DisarmSequencerControl(string token) {
+        if (string.IsNullOrWhiteSpace(token)) return;
+        lock (controlSync) controlTokens.Remove(token);
+    }
+
+    public GuideExposureMetrics GetRecentGuideMetrics(double lookbackSeconds = 10) =>
+        guideCollector.GetRecentMetrics(lookbackSeconds, settings.ExcursionThreshold);
+
+    public bool HasPersistentControlledDegradation() {
+        int required = settings.SmartPauseRejectStreak;
+        var recent = sessionStore.Results.Where(x => x.QsmControlled).TakeLast(required).ToArray();
+        return recent.Length == required && recent.All(x => x.Status is FrameStatus.Rejected or FrameStatus.Error);
+    }
+
+    public void ApplyCurrentCalibrationSuggestion() {
+        var suggestion = currentCalibrationSuggestion;
+        if (suggestion?.Available != true) return;
+        ApplySuggestion(suggestion);
+        appliedCalibrationContexts.Add(suggestion.Context ?? "");
+        Logger.Info($"QualitySessionMeter V3 calibration applied for {suggestion.Context}: RMS {settings.MaxGuideRms:0.00}, excursion {settings.ExcursionThreshold:0.00}, hard {settings.HardExcursionThreshold:0.00}, star loss {settings.MaxStarLossPercent:0.0}%, bg +{settings.MaxBackgroundIncreasePercent:0.0}/-{settings.MaxBackgroundDecreasePercent:0.0}%.");
+        CalibrationSuggestionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void IgnoreCurrentCalibrationSuggestion() {
+        if (!string.IsNullOrWhiteSpace(currentCalibrationSuggestion?.Context)) {
+            ignoredCalibrationContexts.Add(currentCalibrationSuggestion.Context);
+        }
+        currentCalibrationSuggestion = new CalibrationSuggestion();
+        CalibrationSuggestionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ApplySuggestion(CalibrationSuggestion s) {
+        if (Finite(s.SuggestedMaxGuideRms)) settings.MaxGuideRms = Math.Min(s.SuggestedMaxGuideRms, settings.AutoSafetyMaxGuideRms);
+        if (Finite(s.SuggestedExcursionThreshold)) settings.ExcursionThreshold = Math.Min(s.SuggestedExcursionThreshold, settings.AutoSafetyMaxExcursion);
+        if (Finite(s.SuggestedHardExcursionThreshold)) settings.HardExcursionThreshold = Math.Min(s.SuggestedHardExcursionThreshold, settings.AutoSafetyMaxHardExcursion);
+        if (Finite(s.SuggestedMaxStarLossPercent)) settings.MaxStarLossPercent = Math.Min(s.SuggestedMaxStarLossPercent, settings.AutoSafetyMaxStarLossPercent);
+        if (Finite(s.SuggestedBackgroundIncreasePercent)) settings.MaxBackgroundIncreasePercent = Math.Min(s.SuggestedBackgroundIncreasePercent, settings.AutoSafetyMaxBackgroundPercent);
+        if (Finite(s.SuggestedBackgroundDecreasePercent)) settings.MaxBackgroundDecreasePercent = Math.Min(s.SuggestedBackgroundDecreasePercent, settings.AutoSafetyMaxBackgroundPercent);
+    }
+
+    private FrameSourceInfo ResolveSource(string sequenceTitle) =>
+        FrameSourcePolicy.Resolve(settings.MonitoringScope, IsSequencerControlArmed, sequenceTitle);
+
     private async Task BeforeFinalizeImageSaved(object sender, BeforeFinalizeImageSavedEventArgs e) {
         if (IsSyntheticMode) return;
         if (!settings.Enabled || e?.Image?.RawImageData?.MetaData?.Image == null) return;
         if (e.Image.RawImageData.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
+
+        var source = ResolveSource(e.Image.RawImageData.MetaData.Sequence?.Title ?? "");
+        if (!source.MonitoringEligible) return;
 
         try {
             var analysis = e.Image.RawImageData.StarDetectionAnalysis;
@@ -104,13 +176,19 @@ public sealed class QualitySessionRuntime : IDisposable {
         if (IsSyntheticMode) return;
         if (!settings.Enabled || e?.MetaData?.Image == null) return;
         if (e.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
-        _ = ProcessImageAsync(e);
+
+        var source = ResolveSource(e.MetaData.Sequence?.Title ?? "");
+        if (!source.MonitoringEligible) {
+            Logger.Debug($"QualitySessionMeter ignored LIGHT from {source.SourceText}; scope={settings.MonitoringScope}.");
+            return;
+        }
+        _ = ProcessImageAsync(e, source);
     }
 
-    private async Task ProcessImageAsync(ImageSavedEventArgs e) {
+    private async Task ProcessImageAsync(ImageSavedEventArgs e, FrameSourceInfo source) {
         await processingLock.WaitAsync();
 
-        if (IsSyntheticMode) {
+        if (IsSyntheticMode || !settings.Enabled) {
             processingLock.Release();
             return;
         }
@@ -153,6 +231,28 @@ public sealed class QualitySessionRuntime : IDisposable {
             };
 
             var result = qualityEngine.Evaluate(input, settings);
+            result.SourceKind = source.Kind;
+            result.SequenceTitle = source.SequenceTitle;
+            result.QsmControlled = source.QsmControlled;
+            result.FileActionEligible = source.FileActionEligible;
+
+            var prediction = predictiveEngine.Evaluate(sessionStore.Results, result, settings);
+            result.PredictiveWarning = prediction.Warning;
+            result.PredictiveConfidence = prediction.Confidence;
+            result.PredictiveChannel = prediction.Channel;
+            result.PredictiveMessage = prediction.Message;
+            result.PredictiveFramesToThreshold = prediction.EstimatedFramesToThreshold;
+
+            var environment = environmentalService.Capture(weatherDataMediator, result, settings);
+            result.EnvironmentAvailable = environment.Available;
+            result.CloudCover = environment.CloudCover;
+            result.Humidity = environment.Humidity;
+            result.WindSpeed = environment.WindSpeed;
+            result.WindGust = environment.WindGust;
+            result.SkyQuality = environment.SkyQuality;
+            result.AmbientTemperature = environment.Temperature;
+            result.DewPoint = environment.DewPoint;
+            result.EnvironmentalHint = environment.CorrelationHint;
 
             if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
                 baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow);
@@ -160,7 +260,7 @@ public sealed class QualitySessionRuntime : IDisposable {
 
             if (result.Status == FrameStatus.Rejected && !settings.MonitorOnly) {
                 try {
-                    result.FinalPath = await rejectedFileService.ApplyAsync(result.OriginalPath, settings);
+                    result.FinalPath = await rejectedFileService.ApplyAsync(result.OriginalPath, settings, result.FileActionEligible);
                 } catch (Exception ex) {
                     result.ErrorMessage = $"Rejected-file action failed: {ex.Message}";
                     Logger.Warning($"QualitySessionMeter rejected-file action failed: {ex.Message}");
@@ -168,6 +268,7 @@ public sealed class QualitySessionRuntime : IDisposable {
             }
 
             await sessionStore.AppendAsync(result);
+            UpdateCalibrationSuggestion();
             FrameProcessed?.Invoke(this, result);
         } catch (Exception ex) {
             Logger.Error(ex);
@@ -176,6 +277,10 @@ public sealed class QualitySessionRuntime : IDisposable {
                 TimestampUtc = frameTimestampUtc,
                 OriginalPath = e.PathToImage?.IsFile == true ? e.PathToImage.LocalPath : e.PathToImage?.ToString(),
                 FinalPath = e.PathToImage?.IsFile == true ? e.PathToImage.LocalPath : e.PathToImage?.ToString(),
+                SourceKind = source.Kind,
+                SequenceTitle = source.SequenceTitle,
+                QsmControlled = source.QsmControlled,
+                FileActionEligible = source.FileActionEligible,
                 Status = FrameStatus.Error,
                 OverallQuality = 0,
                 ErrorMessage = ex.Message,
@@ -189,14 +294,32 @@ public sealed class QualitySessionRuntime : IDisposable {
         }
     }
 
+    private void UpdateCalibrationSuggestion() {
+        if (settings.AdaptiveThresholdMode == AdaptiveThresholdMode.Off) {
+            if (currentCalibrationSuggestion.Available) {
+                currentCalibrationSuggestion = new CalibrationSuggestion();
+                CalibrationSuggestionChanged?.Invoke(this, EventArgs.Empty);
+            }
+            return;
+        }
+
+        var suggestion = calibrationEngine.Evaluate(sessionStore.Results, settings);
+        if (suggestion.Available && ignoredCalibrationContexts.Contains(suggestion.Context)) suggestion = new CalibrationSuggestion();
+        currentCalibrationSuggestion = suggestion;
+        CalibrationSuggestionChanged?.Invoke(this, EventArgs.Empty);
+
+        if (settings.AdaptiveThresholdMode == AdaptiveThresholdMode.Automatic &&
+            suggestion.Available &&
+            !appliedCalibrationContexts.Contains(suggestion.Context)) {
+            ApplySuggestion(suggestion);
+            appliedCalibrationContexts.Add(suggestion.Context);
+            Logger.Info($"QualitySessionMeter V3 automatically applied bounded calibration for {suggestion.Context}.");
+        }
+    }
+
     public Task RunCanonicalSyntheticSessionAsync(int frameDelayMs = 150) =>
         RunSyntheticSessionAsync(SyntheticSessionGenerator.CanonicalScenarioId, frameDelayMs);
 
-    /// <summary>
-    /// Runs one deterministic synthetic whole-night profile entirely inside the plugin. It does not
-    /// access the camera, consume real ImageSaved events, touch live baselines or invoke file actions.
-    /// Production QualityEngine, BaselineEngine, GuideMetricsCalculator and SessionStore code paths are used.
-    /// </summary>
     public async Task RunSyntheticSessionAsync(string scenarioId, int frameDelayMs = 150) {
         if (disposed || IsSyntheticRunning) return;
 
@@ -256,11 +379,7 @@ public sealed class QualitySessionRuntime : IDisposable {
                 var snapshot = syntheticBaseline.GetSnapshot(key, syntheticSettings.MinimumLearningFrames);
                 var guideSamples = definition.GuideFactory?.Invoke(start, definition.ExposureSeconds)
                     ?? Array.Empty<GuideSample>();
-                var guide = GuideMetricsCalculator.Calculate(
-                    guideSamples,
-                    start,
-                    definition.ExposureSeconds,
-                    syntheticSettings.ExcursionThreshold);
+                var guide = GuideMetricsCalculator.Calculate(guideSamples, start, definition.ExposureSeconds, syntheticSettings.ExcursionThreshold);
 
                 var input = new FrameQualityInput {
                     FrameIndex = i + 1,
@@ -283,11 +402,7 @@ public sealed class QualitySessionRuntime : IDisposable {
                 result.MonitorOnly = true;
 
                 if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
-                    syntheticBaseline.AddAccepted(
-                        key,
-                        input.StarCount,
-                        input.BackgroundMedian,
-                        syntheticSettings.BaselineWindow);
+                    syntheticBaseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, syntheticSettings.BaselineWindow);
                 }
 
                 string mismatch = ValidateSyntheticResult(definition, result);
@@ -301,9 +416,7 @@ public sealed class QualitySessionRuntime : IDisposable {
                 FrameProcessed?.Invoke(this, result);
                 RaiseSyntheticStateChanged();
 
-                if (frameDelayMs > 0) {
-                    await Task.Delay(Math.Clamp(frameDelayMs, 0, 5000), token);
-                }
+                if (frameDelayMs > 0) await Task.Delay(Math.Clamp(frameDelayMs, 0, 5000), token);
             }
 
             syntheticFailureSummary = failures.Count == 0
@@ -327,9 +440,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         }
     }
 
-    public void StopSyntheticSession() {
-        syntheticCts?.Cancel();
-    }
+    public void StopSyntheticSession() => syntheticCts?.Cancel();
 
     public void ExitSyntheticMode() {
         syntheticCts?.Cancel();
@@ -342,10 +453,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         RaiseSyntheticStateChanged();
     }
 
-    private async Task WriteSyntheticVerdictAsync(
-        SyntheticSessionDefinition scenario,
-        IReadOnlyList<string> failures) {
-
+    private async Task WriteSyntheticVerdictAsync(SyntheticSessionDefinition scenario, IReadOnlyList<string> failures) {
         if (syntheticSessionStore == null || string.IsNullOrWhiteSpace(syntheticSessionStore.SessionFolder)) return;
 
         var sb = new StringBuilder();
@@ -366,29 +474,20 @@ public sealed class QualitySessionRuntime : IDisposable {
             foreach (var failure in failures) sb.AppendLine("- " + failure);
         }
 
-        await File.WriteAllTextAsync(
-            Path.Combine(syntheticSessionStore.SessionFolder, "SYNTHETIC_VERDICT.md"),
-            sb.ToString());
+        await File.WriteAllTextAsync(Path.Combine(syntheticSessionStore.SessionFolder, "SYNTHETIC_VERDICT.md"), sb.ToString());
     }
 
     private static string ValidateSyntheticResult(SyntheticFrameDefinition expected, FrameQualityResult actual) {
         var problems = new List<string>();
-
-        if (actual.Status != expected.ExpectedStatus) {
-            problems.Add($"expected {expected.ExpectedStatus}, got {actual.Status}");
-        }
+        if (actual.Status != expected.ExpectedStatus) problems.Add($"expected {expected.ExpectedStatus}, got {actual.Status}");
 
         var expectedReasons = expected.ExpectedReasons ?? Array.Empty<string>();
         foreach (var reason in expectedReasons) {
-            if (!actual.RejectReasons.Contains(reason, StringComparer.Ordinal)) {
-                problems.Add($"missing reason {reason}");
-            }
+            if (!actual.RejectReasons.Contains(reason, StringComparer.Ordinal)) problems.Add($"missing reason {reason}");
         }
 
         if (expected.ExpectedStatus == FrameStatus.Rejected) {
-            var extra = actual.RejectReasons
-                .Where(x => !expectedReasons.Contains(x, StringComparer.Ordinal))
-                .ToArray();
+            var extra = actual.RejectReasons.Where(x => !expectedReasons.Contains(x, StringComparer.Ordinal)).ToArray();
             if (extra.Length > 0) problems.Add("unexpected reason(s): " + string.Join(", ", extra));
         }
 
@@ -424,9 +523,13 @@ public sealed class QualitySessionRuntime : IDisposable {
             baseline.Clear();
             sessionStore.Reset();
             Interlocked.Exchange(ref frameIndex, 0);
+            appliedCalibrationContexts.Clear();
+            ignoredCalibrationContexts.Clear();
+            currentCalibrationSuggestion = new CalibrationSuggestion();
         } finally {
             processingLock.Release();
         }
+        CalibrationSuggestionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private static DateTime NormalizeUtc(DateTime value) {
@@ -438,6 +541,8 @@ public sealed class QualitySessionRuntime : IDisposable {
         };
     }
 
+    private static bool Finite(double x) => !double.IsNaN(x) && !double.IsInfinity(x);
+
     public void Dispose() {
         if (disposed) return;
         disposed = true;
@@ -446,6 +551,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         imageSaveMediator.BeforeFinalizeImageSaved -= BeforeFinalizeImageSaved;
         imageSaveMediator.ImageSaved -= ImageSaved;
         guideCollector.Dispose();
+        lock (controlSync) controlTokens.Clear();
         processingLock.Dispose();
     }
 }
@@ -458,16 +564,15 @@ public static class QualitySessionRuntimeRegistry {
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
         IGuiderMediator guiderMediator,
+        ISequenceMediator sequenceMediator,
         QualitySettings settings) {
         lock (Sync) {
-            instance ??= new QualitySessionRuntime(profileService, imageSaveMediator, guiderMediator, settings);
+            instance ??= new QualitySessionRuntime(profileService, imageSaveMediator, guiderMediator, sequenceMediator, settings);
             return instance;
         }
     }
 
-    public static QualitySessionRuntime Current {
-        get { lock (Sync) return instance; }
-    }
+    public static QualitySessionRuntime Current { get { lock (Sync) return instance; } }
 
     public static void DisposeCurrent() {
         lock (Sync) {

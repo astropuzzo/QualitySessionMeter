@@ -6,8 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
-  build:
+  build-test-package:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -18,42 +21,107 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Read plugin version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content QualitySessionMeter.csproj
+          $version = ($project.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "Plugin version not found" }
+          "QSM_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "QSM_TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Restore plugin
         run: dotnet restore QualitySessionMeter.csproj
 
-      - name: Build plugin Release
-        run: dotnet build QualitySessionMeter.csproj -c Release --no-restore
+      - name: Gate production vs field-test source sets
+        shell: pwsh
+        run: |
+          $prodCompile = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=false -getItem:Compile
+          $prodPage = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=false -getItem:Page
+          if (($prodCompile -join "`n") -match 'SyntheticLabDockable\.cs|SyntheticResources\.xaml\.cs' -or ($prodPage -join "`n") -match 'SyntheticResources\.xaml') {
+            throw "Production source set still contains Synthetic Lab UI."
+          }
+
+          $devCompile = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=true -getItem:Compile
+          $devPage = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=true -getItem:Page
+          if (($devCompile -join "`n") -notmatch 'SyntheticLabDockable\.cs' -or ($devPage -join "`n") -notmatch 'SyntheticResources\.xaml') {
+            throw "Field-test source set does not contain Synthetic Lab UI."
+          }
+
+      - name: Build production plugin
+        run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=false
+
+      - name: Package production plugin
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/production | Out-Null
+          Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.dll" "artifacts/production/QualitySessionMeter.dll" -Force
+          if (Test-Path "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb") {
+            Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb" "artifacts/production/QualitySessionMeter.pdb" -Force
+          }
+          Copy-Item README.md, CHANGELOG.md, LICENSE "artifacts/production/" -Force
+
+      - name: Build field-test plugin with Synthetic Lab
+        run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=true
+
+      - name: Package field-test plugin
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/field-test | Out-Null
+          Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.dll" "artifacts/field-test/QualitySessionMeter.dll" -Force
+          if (Test-Path "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb") {
+            Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb" "artifacts/field-test/QualitySessionMeter.pdb" -Force
+          }
+          Copy-Item README.md, CHANGELOG.md, LICENSE "artifacts/field-test/" -Force
 
       - name: Restore synthetic checker
         run: dotnet restore QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj
 
-      - name: Run full synthetic regression
+      - name: Run full V1/V2/V3 synthetic regression
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/synthetic-check | Out-Null
           dotnet run --project QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj -c Release --no-restore -- "$PWD/artifacts/synthetic-check"
 
-      - name: Prepare clean plugin package
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts/plugin | Out-Null
-          Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.dll" "artifacts/plugin/QualitySessionMeter.dll" -Force
-          if (Test-Path "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb") {
-            Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb" "artifacts/plugin/QualitySessionMeter.pdb" -Force
-          }
-
-      - name: Upload V2 field-test plugin
+      - name: Upload production plugin
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: QualitySessionMeter-v0.2.0.1-field-test-nina-3.3-nightly-057
-          path: artifacts/plugin/
+          name: QualitySessionMeter-v${{ env.QSM_VERSION }}-production-nina-3.3-nightly-057
+          path: artifacts/production/
+          if-no-files-found: error
+
+      - name: Upload field-test plugin
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: QualitySessionMeter-v${{ env.QSM_VERSION }}-field-test-nina-3.3-nightly-057
+          path: artifacts/field-test/
           if-no-files-found: error
 
       - name: Upload synthetic-check report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: QualitySessionMeter-v0.2.0.1-synthetic-report
+          name: QualitySessionMeter-v${{ env.QSM_VERSION }}-synthetic-report
           path: artifacts/synthetic-check/
           if-no-files-found: warn
+
+      - name: Create public production release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = "QualitySessionMeter-$env:QSM_VERSION-production-nina-3.3-nightly-057.zip"
+          Compress-Archive -Path artifacts/production/* -DestinationPath $zip -Force
+          if (gh release view "$env:QSM_TAG" --repo "${{ github.repository }}" *> $null) {
+            Write-Host "Release $env:QSM_TAG already exists; leaving it unchanged."
+          } else {
+            gh release create "$env:QSM_TAG" $zip `
+              --repo "${{ github.repository }}" `
+              --target "$env:GITHUB_SHA" `
+              --title "QualitySessionMeter $env:QSM_VERSION" `
+              --generate-notes `
+              --latest
+          }

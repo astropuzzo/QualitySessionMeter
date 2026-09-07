@@ -17,6 +17,14 @@ public sealed class FrameQualityResult {
     public int BinY { get; set; }
     public string Camera { get; set; }
 
+    public FrameSourceKind SourceKind { get; set; } = FrameSourceKind.Unknown;
+    public string SequenceTitle { get; set; } = "";
+    public bool QsmControlled { get; set; }
+    public bool FileActionEligible { get; set; }
+    public bool ProvenanceFrozen { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string QsmControlToken { get; set; } = "";
+
     public int StarCount { get; set; } = -1;
     public double StarBaseline { get; set; } = double.NaN;
     public double StarDeviationPercent { get; set; } = double.NaN;
@@ -25,7 +33,6 @@ public sealed class FrameQualityResult {
     public double BackgroundBaseline { get; set; } = double.NaN;
     public double BackgroundDeviationPercent { get; set; } = double.NaN;
 
-    // V2 slow-trend diagnostics. Hard V1 rejection still uses the robust rolling median.
     public bool StarTrendUsable { get; set; }
     public double StarTrendExpected { get; set; } = double.NaN;
     public double StarTrendPercentPerFrame { get; set; } = double.NaN;
@@ -45,7 +52,6 @@ public sealed class FrameQualityResult {
     public double MaxGuideExcursionArcsec { get; set; } = double.NaN;
     public double SustainedGuideExcursionSeconds { get; set; } = double.NaN;
 
-    // V2 diagnostic guide-pattern analysis. These labels never change the V1 hard decision.
     public GuidePatternKind GuidePattern { get; set; } = GuidePatternKind.Unavailable;
     public double GuidePatternConfidence { get; set; } = double.NaN;
     public double GuideDriftArcsecPerMinute { get; set; } = double.NaN;
@@ -60,13 +66,30 @@ public sealed class FrameQualityResult {
     public double? BackgroundQuality { get; set; }
     public double OverallQuality { get; set; }
 
-    // V2: confidence is intentionally separate from Quality and ACCEPT/REJECT.
     public double ConfidenceScore { get; set; } = double.NaN;
     public double ConfidenceDataCompleteness { get; set; } = double.NaN;
     public double ConfidenceBaselineMaturity { get; set; } = double.NaN;
     public double ConfidenceThresholdSeparation { get; set; } = double.NaN;
     public double ConfidenceAgreement { get; set; } = double.NaN;
     public string ConfidenceReason { get; set; } = "";
+
+    // V3 predictive diagnostics. These never create a hard rejection by themselves.
+    public bool PredictiveWarning { get; set; }
+    public double PredictiveConfidence { get; set; } = double.NaN;
+    public string PredictiveChannel { get; set; } = "";
+    public string PredictiveMessage { get; set; } = "";
+    public double PredictiveFramesToThreshold { get; set; } = double.NaN;
+
+    // V3 optional weather/environmental correlation. Diagnostic only unless a future explicit control rule says otherwise.
+    public bool EnvironmentAvailable { get; set; }
+    public double CloudCover { get; set; } = double.NaN;
+    public double Humidity { get; set; } = double.NaN;
+    public double WindSpeed { get; set; } = double.NaN;
+    public double WindGust { get; set; } = double.NaN;
+    public double SkyQuality { get; set; } = double.NaN;
+    public double AmbientTemperature { get; set; } = double.NaN;
+    public double DewPoint { get; set; } = double.NaN;
+    public string EnvironmentalHint { get; set; } = "";
 
     public FrameStatus Status { get; set; }
     public List<string> RejectReasons { get; set; } = new();
@@ -76,9 +99,6 @@ public sealed class FrameQualityResult {
 
     public bool IsUsable => Status is FrameStatus.Accepted or FrameStatus.Warning;
 
-    // The internal score remains available for persistence/regression, but a frame without a mature
-    // adaptive reference must not be presented to the user as "100 / EXCELLENT". Likewise an
-    // analysis-error frame is unassessed, not a perfect-quality frame.
     public string QualityLabel {
         get {
             if (Status == FrameStatus.Learning) return "LEARNING";
@@ -109,6 +129,17 @@ public sealed class FrameQualityResult {
         FrameStatus.Rejected => "REJECTED",
         _ => "ERROR"
     };
+
+    public string SourceText => SourceKind switch {
+        FrameSourceKind.QsmControlledBlock => "QSM CONTROLLED BLOCK",
+        FrameSourceKind.AdvancedSequencer => "ADVANCED SEQUENCER",
+        FrameSourceKind.ManualOrExternalLight => "MANUAL / EXTERNAL LIGHT",
+        _ => "UNKNOWN"
+    };
+
+    public string PredictionText => PredictiveWarning
+        ? $"{PredictiveChannel}: {PredictiveMessage} ({PredictiveConfidence:0}% conf.)"
+        : "—";
 
     public string ReasonText {
         get {
@@ -161,9 +192,6 @@ public sealed class FrameQualityResult {
     public string BackgroundDeltaText => FormatPercent(BackgroundDeviationPercent);
     public string BackgroundTrendResidualText => FormatPercent(BackgroundTrendResidualPercent);
 
-    private static string FormatArcsec(double value) =>
-        double.IsNaN(value) ? "N/A" : value.ToString("0.00", CultureInfo.InvariantCulture) + "\"";
-
-    private static string FormatPercent(double value) =>
-        double.IsNaN(value) ? "N/A" : value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "%";
+    private static string FormatArcsec(double value) => double.IsNaN(value) ? "N/A" : value.ToString("0.00", CultureInfo.InvariantCulture) + "\"";
+    private static string FormatPercent(double value) => double.IsNaN(value) ? "N/A" : value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "%";
 }

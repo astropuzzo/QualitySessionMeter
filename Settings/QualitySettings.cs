@@ -8,25 +8,87 @@ namespace NINA.Plugin.QualitySessionMeter.Settings;
 public sealed class QualitySettings : INotifyPropertyChanged {
     private readonly IPluginOptionsAccessor accessor;
 
-    public QualitySettings(IPluginOptionsAccessor accessor) {
-        this.accessor = accessor;
-    }
+    public QualitySettings(IPluginOptionsAccessor accessor) { this.accessor = accessor; }
 
     public bool Enabled {
-        get => accessor.GetValueBoolean(nameof(Enabled), true);
+        get => accessor.GetValueBoolean(nameof(Enabled), false);
         set { accessor.SetValueBoolean(nameof(Enabled), value); Raise(); }
     }
+
+    public MonitoringScope MonitoringScope {
+        get => (MonitoringScope)Clamp(accessor.GetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights), 0, 2);
+        set { accessor.SetValueInt32(nameof(MonitoringScope), Clamp((int)value, 0, 2)); Raise(); Raise(nameof(MonitoringScopeIndex)); }
+    }
+    public int MonitoringScopeIndex { get => (int)MonitoringScope; set => MonitoringScope = (MonitoringScope)Clamp(value, 0, 2); }
 
     public bool MonitorOnly {
         get => accessor.GetValueBoolean(nameof(MonitorOnly), true);
         set { accessor.SetValueBoolean(nameof(MonitorOnly), value); Raise(); }
     }
 
+    public AdaptiveThresholdMode AdaptiveThresholdMode {
+        get => (AdaptiveThresholdMode)Clamp(accessor.GetValueInt32(nameof(AdaptiveThresholdMode), (int)NINA.Plugin.QualitySessionMeter.Models.AdaptiveThresholdMode.SuggestOnly), 0, 2);
+        set { accessor.SetValueInt32(nameof(AdaptiveThresholdMode), Clamp((int)value, 0, 2)); Raise(); Raise(nameof(AdaptiveThresholdModeIndex)); }
+    }
+    public int AdaptiveThresholdModeIndex { get => (int)AdaptiveThresholdMode; set => AdaptiveThresholdMode = (AdaptiveThresholdMode)Clamp(value, 0, 2); }
+
+    public int CalibrationWindow {
+        get => Clamp(accessor.GetValueInt32(nameof(CalibrationWindow), 12), 8, 50);
+        set { accessor.SetValueInt32(nameof(CalibrationWindow), Clamp(value, 8, 50)); Raise(); }
+    }
+
+    public double AutoSafetyMaxGuideRms {
+        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxGuideRms), 2.50), 0.5, 10);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxGuideRms), Clamp(value, 0.5, 10)); Raise(); }
+    }
+    public double AutoSafetyMaxExcursion {
+        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxExcursion), 4.0), 1, 20);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxExcursion), Clamp(value, 1, 20)); Raise(); }
+    }
+    public double AutoSafetyMaxHardExcursion {
+        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxHardExcursion), 8.0), AutoSafetyMaxExcursion, 30);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxHardExcursion), Clamp(value, AutoSafetyMaxExcursion, 30)); Raise(); }
+    }
+    public double AutoSafetyMaxStarLossPercent {
+        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxStarLossPercent), 45.0), 10, 80);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxStarLossPercent), Clamp(value, 10, 80)); Raise(); }
+    }
+    public double AutoSafetyMaxBackgroundPercent {
+        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxBackgroundPercent), 45.0), 10, 100);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxBackgroundPercent), Clamp(value, 10, 100)); Raise(); }
+    }
+
+    public bool PredictiveWarningsEnabled {
+        get => accessor.GetValueBoolean(nameof(PredictiveWarningsEnabled), true);
+        set { accessor.SetValueBoolean(nameof(PredictiveWarningsEnabled), value); Raise(); }
+    }
+
+    public bool EnvironmentalCorrelationEnabled {
+        get => accessor.GetValueBoolean(nameof(EnvironmentalCorrelationEnabled), true);
+        set { accessor.SetValueBoolean(nameof(EnvironmentalCorrelationEnabled), value); Raise(); }
+    }
+
+    public bool SmartPauseEnabled {
+        get => accessor.GetValueBoolean(nameof(SmartPauseEnabled), false);
+        set { accessor.SetValueBoolean(nameof(SmartPauseEnabled), value); Raise(); }
+    }
+    public int SmartPauseRejectStreak {
+        get => Clamp(accessor.GetValueInt32(nameof(SmartPauseRejectStreak), 3), 2, 10);
+        set { accessor.SetValueInt32(nameof(SmartPauseRejectStreak), Clamp(value, 2, 10)); Raise(); }
+    }
+    public int SmartPauseSeconds {
+        get => Clamp(accessor.GetValueInt32(nameof(SmartPauseSeconds), 120), 10, 1800);
+        set { accessor.SetValueInt32(nameof(SmartPauseSeconds), Clamp(value, 10, 1800)); Raise(); }
+    }
+    public int SmartResumeHealthyGuideChecks {
+        get => Clamp(accessor.GetValueInt32(nameof(SmartResumeHealthyGuideChecks), 3), 1, 10);
+        set { accessor.SetValueInt32(nameof(SmartResumeHealthyGuideChecks), Clamp(value, 1, 10)); Raise(); }
+    }
+
     public bool EnableGuideRms {
         get => accessor.GetValueBoolean(nameof(EnableGuideRms), true);
         set { accessor.SetValueBoolean(nameof(EnableGuideRms), value); Raise(); }
     }
-
     public double MaxGuideRms {
         get => accessor.GetValueDouble(nameof(MaxGuideRms), 1.50);
         set { accessor.SetValueDouble(nameof(MaxGuideRms), Clamp(value, 0.05, 20)); Raise(); }
@@ -36,7 +98,6 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         get => accessor.GetValueBoolean(nameof(EnableSustainedExcursion), true);
         set { accessor.SetValueBoolean(nameof(EnableSustainedExcursion), value); Raise(); }
     }
-
     public double ExcursionThreshold {
         get => accessor.GetValueDouble(nameof(ExcursionThreshold), 2.00);
         set {
@@ -49,7 +110,6 @@ public sealed class QualitySettings : INotifyPropertyChanged {
             Raise();
         }
     }
-
     public double ExcursionMinimumDuration {
         get => accessor.GetValueDouble(nameof(ExcursionMinimumDuration), 2.0);
         set { accessor.SetValueDouble(nameof(ExcursionMinimumDuration), Clamp(value, 0.1, 60)); Raise(); }
@@ -59,7 +119,6 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         get => accessor.GetValueBoolean(nameof(EnableHardExcursion), true);
         set { accessor.SetValueBoolean(nameof(EnableHardExcursion), value); Raise(); }
     }
-
     public double HardExcursionThreshold {
         get => accessor.GetValueDouble(nameof(HardExcursionThreshold), 5.0);
         set { accessor.SetValueDouble(nameof(HardExcursionThreshold), Clamp(value, ExcursionThreshold, 100)); Raise(); }
@@ -69,7 +128,6 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         get => accessor.GetValueBoolean(nameof(EnableStarCount), true);
         set { accessor.SetValueBoolean(nameof(EnableStarCount), value); Raise(); }
     }
-
     public double MaxStarLossPercent {
         get => accessor.GetValueDouble(nameof(MaxStarLossPercent), 35.0);
         set { accessor.SetValueDouble(nameof(MaxStarLossPercent), Clamp(value, 1, 95)); Raise(); }
@@ -79,12 +137,10 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         get => accessor.GetValueBoolean(nameof(EnableBackground), true);
         set { accessor.SetValueBoolean(nameof(EnableBackground), value); Raise(); }
     }
-
     public double MaxBackgroundIncreasePercent {
         get => accessor.GetValueDouble(nameof(MaxBackgroundIncreasePercent), 30.0);
         set { accessor.SetValueDouble(nameof(MaxBackgroundIncreasePercent), Clamp(value, 1, 500)); Raise(); }
     }
-
     public double MaxBackgroundDecreasePercent {
         get => accessor.GetValueDouble(nameof(MaxBackgroundDecreasePercent), 30.0);
         set { accessor.SetValueDouble(nameof(MaxBackgroundDecreasePercent), Clamp(value, 1, 95)); Raise(); }
@@ -103,7 +159,6 @@ public sealed class QualitySettings : INotifyPropertyChanged {
             Raise();
         }
     }
-
     public int MinimumLearningFrames {
         get => Clamp(accessor.GetValueInt32(nameof(MinimumLearningFrames), 4), 2, BaselineWindow);
         set { accessor.SetValueInt32(nameof(MinimumLearningFrames), Clamp(value, 2, BaselineWindow)); Raise(); }
@@ -118,17 +173,11 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         get => (RejectedFileAction)Clamp(accessor.GetValueInt32(nameof(RejectedFileAction), 0), 0, 2);
         set { accessor.SetValueInt32(nameof(RejectedFileAction), Clamp((int)value, 0, 2)); Raise(); Raise(nameof(RejectedFileActionIndex)); }
     }
-
-    public int RejectedFileActionIndex {
-        get => (int)RejectedFileAction;
-        set => RejectedFileAction = (RejectedFileAction)Clamp(value, 0, 2);
-    }
+    public int RejectedFileActionIndex { get => (int)RejectedFileAction; set => RejectedFileAction = (RejectedFileAction)Clamp(value, 0, 2); }
 
     public void NotifyProfileChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
-
     public event PropertyChangedEventHandler PropertyChanged;
     private void Raise([CallerMemberName] string name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-
     private static int Clamp(int value, int min, int max) => value < min ? min : value > max ? max : value;
     private static double Clamp(double value, double min, double max) => value < min ? min : value > max ? max : value;
 }

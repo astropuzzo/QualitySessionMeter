@@ -5,6 +5,7 @@ using NINA.Plugin.QualitySessionMeter.Core;
 using NINA.Plugin.QualitySessionMeter.Settings;
 using NINA.Profile;
 using NINA.Profile.Interfaces;
+using NINA.Sequencer.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.Mediator;
 using System;
 using System.ComponentModel;
@@ -24,17 +25,21 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
     public QualitySessionMeterPlugin(
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
-        IGuiderMediator guiderMediator) {
+        IGuiderMediator guiderMediator,
+        ISequenceMediator sequenceMediator,
+        IWeatherDataMediator weatherDataMediator) {
 
         this.profileService = profileService;
         PluginSettings = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         Settings = new QualitySettings(PluginSettings);
 
-        QualitySessionRuntimeRegistry.GetOrCreate(
+        var runtime = QualitySessionRuntimeRegistry.GetOrCreate(
             profileService,
             imageSaveMediator,
             guiderMediator,
+            sequenceMediator,
             Settings);
+        runtime.AttachWeatherMediator(weatherDataMediator);
 
         profileService.ProfileChanged += ProfileChanged;
     }

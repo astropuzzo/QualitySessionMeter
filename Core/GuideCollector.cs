@@ -21,10 +21,7 @@ public sealed class GuideCollector : IDisposable {
         if (step == null || disposed) return;
 
         double scale = double.NaN;
-        try {
-            scale = guiderMediator.GetInfo()?.PixelScale ?? double.NaN;
-        } catch {
-        }
+        try { scale = guiderMediator.GetInfo()?.PixelScale ?? double.NaN; } catch { }
 
         var sample = new GuideSample {
             TimestampUtc = DateTime.UtcNow,
@@ -48,9 +45,13 @@ public sealed class GuideCollector : IDisposable {
         return GuideMetricsCalculator.Calculate(snapshot, exposureStartUtc, durationSeconds, excursionThresholdArcsec);
     }
 
-    public void Clear() {
-        lock (sync) samples.Clear();
+    public GuideExposureMetrics GetRecentMetrics(double lookbackSeconds, double excursionThresholdArcsec) {
+        var duration = Math.Clamp(lookbackSeconds, 2, 120);
+        var end = DateTime.UtcNow;
+        return GetExposureMetrics(end.AddSeconds(-duration), duration, excursionThresholdArcsec);
     }
+
+    public void Clear() { lock (sync) samples.Clear(); }
 
     public void Dispose() {
         if (disposed) return;

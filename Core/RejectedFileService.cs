@@ -7,8 +7,11 @@ using System.Threading.Tasks;
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
 public sealed class RejectedFileService {
-    public async Task<string> ApplyAsync(string path, QualitySettings settings) {
+    public async Task<string> ApplyAsync(string path, QualitySettings settings, bool sourceAuthorized) {
         if (settings.MonitorOnly || settings.RejectedFileAction == RejectedFileAction.KeepInPlace) return path;
+        if (!sourceAuthorized) {
+            throw new InvalidOperationException("Rejected-file action blocked because the frame source is not an eligible sequencer source.");
+        }
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Rejected frame path is empty.", nameof(path));
         if (!File.Exists(path)) throw new FileNotFoundException("Rejected frame file does not exist when file action was requested.", path);
 
