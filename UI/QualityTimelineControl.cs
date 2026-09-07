@@ -57,7 +57,6 @@ public sealed class QualityTimelineControl : FrameworkElement {
         var textBrush = FrozenBrush(154, 160, 166);
         var qualityPen = FrozenPen(138, 180, 248, 1.8);
         var confidencePen = FrozenPen(197, 138, 249, 1.4);
-        confidencePen.DashStyle = DashStyles.Dash;
         var guidePen = FrozenPen(129, 201, 149, 1.6);
         var starsPen = FrozenPen(253, 214, 99, 1.5);
         var backgroundPen = FrozenPen(242, 139, 130, 1.5);
