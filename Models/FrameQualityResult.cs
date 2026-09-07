@@ -21,6 +21,9 @@ public sealed class FrameQualityResult {
     public string SequenceTitle { get; set; } = "";
     public bool QsmControlled { get; set; }
     public bool FileActionEligible { get; set; }
+    public bool ProvenanceFrozen { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string QsmControlToken { get; set; } = "";
 
     public int StarCount { get; set; } = -1;
     public double StarBaseline { get; set; } = double.NaN;
