@@ -27,7 +27,7 @@ jobs:
       - name: Restore synthetic checker
         run: dotnet restore QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj
 
-      - name: Run canonical synthetic night
+      - name: Run full synthetic regression
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts/synthetic-check | Out-Null
@@ -42,11 +42,11 @@ jobs:
             Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb" "artifacts/plugin/QualitySessionMeter.pdb" -Force
           }
 
-      - name: Upload field-test plugin
+      - name: Upload V2 field-test plugin
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: QualitySessionMeter-v1-field-test-nina-3.3-nightly-057
+          name: QualitySessionMeter-v0.2.0.0-field-test-nina-3.3-nightly-057
           path: artifacts/plugin/
           if-no-files-found: error
 
@@ -54,6 +54,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: QualitySessionMeter-synthetic-report
+          name: QualitySessionMeter-v0.2.0.0-synthetic-report
           path: artifacts/synthetic-check/
           if-no-files-found: warn
