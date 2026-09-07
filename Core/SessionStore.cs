@@ -16,8 +16,13 @@ public sealed class SessionStore {
     private readonly object sync = new();
     private readonly List<FrameQualityResult> results = new();
     private readonly SemaphoreSlim ioLock = new(1, 1);
+    private readonly string baseDirectoryOverride;
     private string sessionFolder;
     private DateTime sessionCreatedUtc;
+
+    public SessionStore(string baseDirectoryOverride = null) {
+        this.baseDirectoryOverride = baseDirectoryOverride;
+    }
 
     public string SessionFolder {
         get { lock (sync) return sessionFolder ?? ""; }
@@ -53,11 +58,14 @@ public sealed class SessionStore {
         lock (sync) {
             if (!string.IsNullOrWhiteSpace(sessionFolder)) return;
 
-            var baseDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "NINA",
-                "QualitySessionMeter",
-                "Sessions");
+            var baseDir = string.IsNullOrWhiteSpace(baseDirectoryOverride)
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "NINA",
+                    "QualitySessionMeter",
+                    "Sessions")
+                : baseDirectoryOverride;
+
             Directory.CreateDirectory(baseDir);
 
             sessionCreatedUtc = DateTime.UtcNow;
