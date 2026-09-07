@@ -155,7 +155,11 @@ public sealed class SessionStore {
 
         var options = new JsonSerializerOptions { WriteIndented = true };
         options.Converters.Add(new JsonStringEnumConverter());
-        await File.WriteAllTextAsync(Path.Combine(SessionFolder, "session.json"), JsonSerializer.Serialize(summary, options), new UTF8Encoding(false));
+        options.Converters.Add(new FiniteDoubleJsonConverter());
+        await File.WriteAllTextAsync(
+            Path.Combine(SessionFolder, "session.json"),
+            JsonSerializer.Serialize(summary, options),
+            new UTF8Encoding(false));
     }
 
     private async Task WriteSvgAsync() {
@@ -217,5 +221,26 @@ public sealed class SessionStore {
     private static string Csv(string value) {
         value ??= "";
         return "\"" + value.Replace("\"", "\"\"") + "\"";
+    }
+
+    /// <summary>
+    /// Keeps session.json standards-compliant: unavailable numeric metrics are written as JSON null
+    /// instead of non-standard NaN/Infinity tokens. Null reads back as NaN if future tooling deserializes
+    /// directly into the runtime model.
+    /// </summary>
+    private sealed class FiniteDoubleJsonConverter : JsonConverter<double> {
+        public override double Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
+            if (reader.TokenType == JsonTokenType.Null) return double.NaN;
+            if (reader.TokenType == JsonTokenType.Number) return reader.GetDouble();
+            throw new JsonException($"Unexpected token {reader.TokenType} for double value.");
+        }
+
+        public override void Write(Utf8JsonWriter writer, double value, JsonSerializerOptions options) {
+            if (double.IsNaN(value) || double.IsInfinity(value)) {
+                writer.WriteNullValue();
+            } else {
+                writer.WriteNumberValue(value);
+            }
+        }
     }
 }
