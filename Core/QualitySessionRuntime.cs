@@ -108,6 +108,15 @@ public sealed class QualitySessionRuntime : IDisposable {
 
     private async Task ProcessImageAsync(ImageSavedEventArgs e) {
         await processingLock.WaitAsync();
+
+        // A real ImageSaved callback may already have been queued just before Synthetic Lab starts.
+        // Re-check after acquiring the processing lock so that callback is dropped rather than mixed
+        // into the isolated synthetic session.
+        if (IsSyntheticMode) {
+            processingLock.Release();
+            return;
+        }
+
         int assignedFrameIndex = Interlocked.Increment(ref frameIndex);
         DateTime frameTimestampUtc = DateTime.UtcNow;
 
