@@ -30,6 +30,15 @@ public sealed class FrameQualityResult {
     public double MaxGuideExcursionArcsec { get; set; } = double.NaN;
     public double SustainedGuideExcursionSeconds { get; set; } = double.NaN;
 
+    // V2 diagnostic guide-pattern analysis. These labels never change the V1 hard decision.
+    public GuidePatternKind GuidePattern { get; set; } = GuidePatternKind.Unavailable;
+    public double GuidePatternConfidence { get; set; } = double.NaN;
+    public double GuideDriftArcsecPerMinute { get; set; } = double.NaN;
+    public double GuideOscillationRangeArcsec { get; set; } = double.NaN;
+    public int GuidePatternSignChanges { get; set; }
+    public double GuidePatternBurstiness { get; set; } = double.NaN;
+    public string GuidePatternDetail { get; set; } = "";
+
     public double? GuidingQuality { get; set; }
     public double? StabilityQuality { get; set; }
     public double? TransparencyQuality { get; set; }
@@ -96,6 +105,19 @@ public sealed class FrameQualityResult {
         : ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + "%";
     public string GuideRmsText => FormatArcsec(GuideRmsArcsec);
     public string ExcursionText => FormatArcsec(MaxGuideExcursionArcsec);
+    public string GuidePatternText => GuidePattern switch {
+        GuidePatternKind.Unavailable => "N/A",
+        GuidePatternKind.Stable => "STABLE",
+        GuidePatternKind.IsolatedSpike => "ISOLATED SPIKE",
+        GuidePatternKind.SustainedExcursion => "SUSTAINED",
+        GuidePatternKind.Oscillation => "OSCILLATION",
+        GuidePatternKind.Drift => "DRIFT",
+        GuidePatternKind.WindLike => "WIND-LIKE",
+        _ => "IRREGULAR"
+    };
+    public string GuidePatternConfidenceText => double.IsNaN(GuidePatternConfidence)
+        ? "N/A"
+        : GuidePatternConfidence.ToString("0", CultureInfo.InvariantCulture) + "%";
     public string StarsText => StarCount >= 0 ? StarCount.ToString(CultureInfo.InvariantCulture) : "N/A";
     public string StarDeltaText => FormatPercent(StarDeviationPercent);
     public string BackgroundText => double.IsNaN(BackgroundMedian) ? "N/A" : BackgroundMedian.ToString("0.##", CultureInfo.InvariantCulture);
