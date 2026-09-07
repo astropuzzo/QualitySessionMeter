@@ -61,6 +61,9 @@ public static class RejectionVisual {
         value?.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
 
     private static void AddDistinct(List<string> icons, string icon) {
-        if (!icons.Contains(icon, StringComparer.Ordinal)) icons.Add(icon);
+        foreach (var existing in icons) {
+            if (string.Equals(existing, icon, StringComparison.Ordinal)) return;
+        }
+        icons.Add(icon);
     }
 }
