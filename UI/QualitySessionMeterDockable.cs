@@ -80,11 +80,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         IGuiderMediator guiderMediator) : base(profileService) {
 
         Title = PluginConstants.DisplayName;
-
-        var dict = new ResourceDictionary();
-        dict.Source = new Uri("QualitySessionMeter;component/UI/Resources.xaml", UriKind.RelativeOrAbsolute);
-        ImageGeometry = (System.Windows.Media.GeometryGroup)dict["QSM_MeterSVG"];
-        ImageGeometry.Freeze();
+        ImageGeometry = PluginIcon.CreateMeterGeometry();
 
         var accessor = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         var settings = new QualitySettings(accessor);
