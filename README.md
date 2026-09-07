@@ -336,7 +336,8 @@ The last item is a planned V3 capability. In V3 the acquisition goal becomes **N
 - [Architecture](docs/ARCHITECTURE.md)
 - [Quality algorithm](docs/QUALITY_ALGORITHM.md)
 - [Full project specification](docs/PROJECT_SPEC.md)
+- [V1 real-night validation plan](docs/REAL_NIGHT_TEST_PLAN.md)
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE).
