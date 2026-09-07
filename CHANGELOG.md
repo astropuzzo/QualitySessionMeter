@@ -2,6 +2,36 @@
 
 All notable changes to QualitySessionMeter are documented here.
 
+## [1.0.0.0] - 2026-09-07
+
+### V3 — Quality-Controlled Acquisition
+
+- Added explicit global QSM OFF/ON behavior. OFF means no analysis, no valid-frame control and no file action.
+- Added acquisition source scoping with safe defaults for QSM-controlled blocks, Advanced Sequencer LIGHTs and opt-in All LIGHT monitoring.
+- File mutation is stricter than monitoring: manual/external LIGHTs are never renamed/moved, and transient sequencer-running evidence alone cannot authorize mutation.
+- Added native Advanced Sequencer `QSM Valid Frame Target` without altering N.I.N.A.'s built-in `Take Exposure` counter.
+- `ACCEPTED` advances valid progress; `WARNING` advances by default but is configurable; `REJECTED`, `ERROR` and `LEARNING` do not advance it.
+- Missing classification stops the controlled loop fail-safe instead of capturing indefinitely.
+- Added deterministic valid-frame accounting, duplicate-frame protection, persisted condition progress and source/file-action regression oracles.
+- Added adaptive calibration modes: OFF, Suggest Only and bounded Automatic with explicit safety ceilings.
+- Added predictive degradation warnings as a diagnostic channel separate from hard rejection.
+- Added optional N.I.N.A. weather/environment correlation for cloud cover, humidity, wind, SQM, temperature and dew point when available.
+- Added opt-in `QSM Smart Recovery Gate`, which acts only between exposures after persistent degradation and never aborts an active shutter.
+- Added production `QSM Control Center` for activation, scope, adaptive calibration, prediction/environment and Smart Recovery settings.
+- Added explicit production vs field-test packaging: production excludes the in-host Synthetic Lab dockable/resources; field-test retains them.
+- CI now builds both package variants, runs the full V1/V2/V3 synthetic regression and creates the public production release from `main`.
+- Bumped plugin version to `1.0.0.0` for N.I.N.A. `3.3 NIGHTLY #057`, `.NET 10`.
+
+### Pre-release validation
+
+- Local production build: PASS / 0 errors.
+- Local field-test build: PASS / 0 errors.
+- Local SyntheticCheck project build: PASS / 0 errors.
+- Final Windows GitHub Actions build/regression/package gate is required before merge and public release.
+- Known non-blocking nightly warning remains `NU1603` because `NINA.Image 3.3.0.1057-nightly` requests `NINA.Accord.Imaging >= 3.5.3-alpha` and NuGet resolves `3.5.3`.
+
+---
+
 ## [0.2.0.1] - 2026-09-07
 
 ### Rejected-frame timeline visibility
@@ -178,7 +208,3 @@ These metrics were excluded after real-world observations showed they can remain
 ### Validation
 
 The initial V1 compiled successfully on GitHub Actions Windows against `NINA.Plugin 3.2.0.9001`. Current field-test development has moved to N.I.N.A. 3.3 NIGHTLY #057 as documented above and in `ROADMAP.md`.
-
-### Field validation strategy
-
-Continue to use Monitor Only for first real-sky validation. Synthetic testing reduces software risk but does not replace hardware/sky validation of guide sample timing, star detection behavior, threshold realism, or real N.I.N.A. save/file-action interactions.
