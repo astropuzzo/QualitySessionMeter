@@ -49,7 +49,8 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
 
         // Optional read-only LAN/Tailscale bridge for OpenAstro Control or another trusted companion.
         // It remains disabled unless QSM_REMOTE_TOKEN is present in the N.I.N.A. process environment.
-        httpBridge = new QualitySessionHttpBridge();
+        // The image-save mediator supplies an in-memory, downscaled JPEG preview without re-reading FITS files.
+        httpBridge = new QualitySessionHttpBridge(imageSaveMediator);
 
         profileService.ProfileChanged += ProfileChanged;
     }
