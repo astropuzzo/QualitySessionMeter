@@ -2,7 +2,7 @@
 
 QualitySessionMeter is developed in three product stages: **V1** real-time quality monitoring, **V2** temporal/session intelligence, and **V3** quality-controlled acquisition through the N.I.N.A. Advanced Sequencer.
 
-This file is the operational handoff/source of truth.
+This file is the operational handoff/source of truth. Material code/UI changes must update this state in the same development cycle.
 
 ---
 
@@ -22,25 +22,22 @@ Windows: x64
 
 ```text
 main
-  V1 + V2 validated baseline
-  V2 merge: 9d8185c5080bac5cd856f5c130d09cdae8b70705
+  V1 + V2 + V3 merged
+  V3 merge commit: 0623f837ac034435bd9c67e0ab4d89e11b9a0018
 
-active branch
-  v3-quality-controlled-acquisition
+public release
+  v1.0.0.0 — published
+  production ZIP published by GitHub Actions
+  final main CI: PASS
 
-active PR
-  #3 — V3 — Quality-Controlled Acquisition
+active hotfix branch
+  hotfix-v1.0.0.1-ui-polish
 
-V3 version
-  1.0.0.0
+hotfix version
+  1.0.0.1
 
-V3 status
-  RELEASE CANDIDATE
-  implementation complete
-  local production build: PASS / 0 errors
-  local field-test build: PASS / 0 errors
-  local SyntheticCheck build: PASS / 0 errors
-  final Windows GitHub Actions regression/package gate required before merge/release
+hotfix purpose
+  graphical/readability/accessibility fixes discovered during immediate N.I.N.A. host test
 ```
 
 Known non-blocking dependency warning:
@@ -83,14 +80,12 @@ Implemented and validated:
 - conservative slow-trend diagnostics;
 - multichannel timeline;
 - Best/Worst accepted-frame ranking;
-- rejected-frame timeline markers and shared cause visuals;
+- rejected-frame timeline markers and cause visualization;
 - `frames.csv`, `events.csv`, `session.json`, `quality.svg`, self-contained `report.html`.
 
 Final V2 regression:
 
 ```text
-Candidate: 0.2.0.1
-CI: PASS
 Canonical regression       PASS 29/29
 Excellent night            PASS 17/17
 Average night              PASS 15/15
@@ -103,15 +98,15 @@ Failures: 0
 
 ---
 
-# V3 — QUALITY-CONTROLLED ACQUISITION
+# V3 — CLOSED / RELEASED
 
-**Status: IMPLEMENTED — FINAL RELEASE GATE.**
+Release: **1.0.0.0**.
 
 V3 answers:
 
 > How many genuinely valid exposures have I acquired, and can N.I.N.A. keep acquiring until the valid-frame target is complete?
 
-## 1. Explicit OFF / ON and source scoping
+## Explicit OFF / ON and source scoping
 
 Implemented:
 
@@ -120,24 +115,20 @@ Implemented:
   - `QSM controlled blocks only`;
   - `Advanced Sequencer LIGHTs` — recommended/default scope;
   - `All LIGHTs` — opt-in compatibility mode;
-- `ImageType == LIGHT` remains mandatory;
+- `ImageType == LIGHT` is mandatory;
 - sequence metadata and QSM arm state establish acquisition provenance;
-- transient Advanced Sequencer evidence may authorize monitoring but **never by itself authorizes file mutation**;
-- manual/external LIGHTs can be monitored in `All LIGHTs` but cannot be renamed/moved;
+- transient sequencer-running evidence may authorize monitoring but never by itself authorizes file mutation;
+- manual/external LIGHTs may be monitored in `All LIGHTs` but cannot be renamed/moved without safe provenance;
 - snapshots / plate-solving frames remain outside QSM LIGHT processing.
 
-File mutation remains stricter than monitoring. Rejected-file handling never becomes the source of truth for the quality decision.
+## QSM Valid Frame Target
 
-## 2. QSM Valid Frame Target
-
-Implemented as a native Advanced Sequencer condition.
-
-Do **not** decrement or patch N.I.N.A.'s normal `Take Exposure` counter. QSM owns separate persistent valid progress.
+Implemented as a native Advanced Sequencer condition. QSM never decrements or patches N.I.N.A.'s normal `Take Exposure` counter.
 
 ```text
 while ValidCount < RequestedValidFrames:
     capture eligible LIGHT
-    wait for QSM classification
+    wait for matching QSM classification
     CapturedCount++
 
     ACCEPTED -> ValidCount++
@@ -147,26 +138,14 @@ while ValidCount < RequestedValidFrames:
     LEARNING -> ValidCount unchanged
 ```
 
-Example:
-
-```text
-Requested valid: 10
-Learning:         4
-Rejected:         3
-Warning:          1
-Accepted:         9
-Captured:        17
-Valid:           10 / 10
-```
-
 Safety semantics:
 
-- missing classification times out and stops the controlled loop fail-safe;
-- duplicate checks cannot double-count the same `FrameIndex`;
-- progress is resettable and persisted by the condition;
-- first production design assumes one eligible LIGHT per controlled block iteration.
+- classification is correlated to the controlled acquisition rather than consuming an arbitrary later frame;
+- missing classification times out and stops fail-safe;
+- duplicate checks cannot double-count the same frame;
+- first field design assumes one eligible LIGHT per controlled repeated iteration.
 
-## 3. Adaptive calibration / thresholds
+## Adaptive calibration / thresholds
 
 Implemented modes:
 
@@ -176,57 +155,86 @@ Suggest Only   <- recommended default
 Automatic      <- bounded by explicit safety ceilings
 ```
 
-Behavior:
-
-- suggestions use stable accepted same-context frames;
-- `Suggest Only` never changes thresholds automatically;
-- user can Apply or Ignore a suggestion;
+- stable accepted same-context data drives suggestions;
+- Suggest Only never changes thresholds automatically;
+- Apply / Ignore actions are explicit;
 - Automatic remains bounded by safety ceilings;
-- rejected/bad-weather evidence is not normalized into the baseline.
+- bad/rejected evidence is not normalized into a clean baseline.
 
-## 4. Predictive degradation
+## Predictive degradation
 
-Implemented as a diagnostic channel separate from hard rejection.
+Implemented as diagnostic evidence only. Prediction does not create a hard rejection by itself.
 
-- uses recent V2 trend evidence;
-- reports channel, confidence, message and estimated frames-to-threshold where available;
-- prediction by itself does not create a reject.
+## Environmental correlation
 
-## 5. Environmental correlation
+Implemented as optional diagnostic correlation using available N.I.N.A. weather/environment data. It remains diagnostic only in V3 production.
 
-Implemented as optional diagnostic correlation using connected N.I.N.A. weather data when available:
+## Smart Recovery Gate
 
-- cloud cover;
-- humidity;
-- wind speed / gust;
-- SQM;
-- temperature;
-- dew point.
+Implemented as opt-in Advanced Sequencer behavior:
 
-Environmental correlation is diagnostic only in V3 production.
-
-## 6. Smart Recovery Gate
-
-Implemented as opt-in `QSM Smart Recovery Gate`.
-
-- reacts only **between** exposures;
+- acts only between exposures;
 - never aborts an active shutter;
-- only engages after a persistent controlled reject/error streak;
-- waits a bounded cooldown;
-- optionally requires consecutive healthy guider samples;
-- safety timeout allows a probe frame instead of waiting indefinitely.
+- requires persistent controlled reject/error evidence;
+- bounded cooldown and optional consecutive healthy guide checks;
+- fail-safe behavior prevents indefinite waiting.
 
-## 7. Production Control Center
+## Production Control Center
 
-Implemented production dockable exposing:
+Implemented for global activation, source scope, Monitor Only, calibration, predictive/environment status and Smart Recovery settings.
 
-- global activation;
-- monitoring scope;
-- Monitor Only / active file handling state;
-- adaptive calibration mode and suggestion controls;
-- predictive status;
-- environment status;
-- Smart Recovery settings.
+---
+
+# 1.0.0.1 UI / USABILITY HOTFIX — IN PROGRESS
+
+Immediate host testing of 1.0.0.0 exposed presentation defects that automated logic tests could not detect. These are treated as real release-quality bugs, not cosmetic preferences.
+
+Observed in N.I.N.A. screenshots:
+
+- N.I.N.A.'s toggle `CheckBox` template rendered `ON/OFF` switches while swallowing the `Content` labels, leaving unexplained switches in both Plugin Options and the QSM Control Center;
+- the Control Center stretched controls across a very wide host panel and produced poor visual hierarchy;
+- timeline rejection/event badges used emoji glyphs whose Windows font metrics produced inconsistent/misaligned rendering;
+- event badges could look detached from their vertical frame marker;
+- user-facing controls lacked enough contextual explanation for somebody who did not already know the internal QSM model.
+
+Hotfix implementation completed so far:
+
+- Control Center switches converted to explicit two-column rows: text/help on the left, switch on the right; no dependency on `CheckBox.Content` rendering;
+- Control Center width/hierarchy tightened;
+- detailed tooltips added for:
+  - global QSM enable/disable;
+  - Monitor Only;
+  - monitoring/source scope and every scope choice;
+  - adaptive calibration modes, sample window, proposal status and Apply/Ignore actions;
+  - predictive degradation;
+  - environmental correlation;
+  - Smart Recovery enable, reject streak, cooldown and healthy-resume checks;
+- Plugin Options now uses a replacement labeled/help-rich template, again avoiding `CheckBox.Content` for toggle labels;
+- Plugin Options tooltips explain every user-editable setting, including what it measures, what a stricter value means, and whether it affects Quality score or hard rejection;
+- V3 Advanced Sequencer `QSM Valid Frame Target` now has explicit labels/tooltips for valid target, warning counting, progress semantics and fail-safe behavior;
+- V3 `QSM Smart Recovery Gate` now explains its between-exposure behavior and relationship to Control Center settings;
+- live timeline emoji badges replaced with deterministic text cause codes:
+  - `G` = guiding/tracking;
+  - `S` = stars/transparency/cloud;
+  - `B` = background/haze/sky brightness;
+  - `!` = analysis error;
+- event badge is centered on the exact same X coordinate as its vertical frame marker;
+- dense timelines suppress overlapping badge text while retaining every event line;
+- hovering an event line exposes exact frame/cause/raw reason; hovering the rest of the timeline explains all channels and marker codes.
+
+Remaining 1.0.0.1 gate:
+
+```text
+Windows CI compile
+→ production + field-test packaging
+→ full V1/V2/V3 synthetic regression unchanged
+→ merge hotfix
+→ main CI
+→ publish v1.0.0.1
+→ host screenshot verification
+```
+
+Do not claim the graphical hotfix verified until the rebuilt package is opened in the real N.I.N.A. host and visually checked.
 
 ---
 
@@ -250,36 +258,7 @@ Synthetic Lab dockable/resources excluded
 Production QSM functionality only
 ```
 
-Headless SyntheticCheck remains permanent CI coverage in both release workflows.
-
-CI now produces separate artifacts:
-
-- `QualitySessionMeter-v1.0.0.0-production-nina-3.3-nightly-057`;
-- `QualitySessionMeter-v1.0.0.0-field-test-nina-3.3-nightly-057`;
-- `QualitySessionMeter-v1.0.0.0-synthetic-report`.
-
-A successful push to `main` creates GitHub release tag `v1.0.0.0` with the production ZIP.
-
----
-
-# V3 RELEASE GATES
-
-Mandatory before merge/public release:
-
-1. production build against `.NET 10` + `NINA.Plugin 3.3.0.1057-nightly`;
-2. field-test build with Synthetic Lab;
-3. production source-set gate proves Synthetic Lab dockable/resources are excluded;
-4. field-test source-set gate proves Synthetic Lab is included;
-5. all V1/V2 synthetic whole-night profiles remain unchanged: 6 profiles / 108 frames;
-6. V3 valid-frame oracle passes;
-7. V3 source/file-action safety oracle passes;
-8. file-action tests prove ineligible sources cannot be mutated;
-9. CSV/JSON/SVG/HTML persistence passes;
-10. GitHub Actions Windows job is green;
-11. PR #3 is merged only after the green gate;
-12. release `v1.0.0.0` and production ZIP are verified after the `main` workflow.
-
-For the first real-sky V3 test, use **Monitor Only** first. Enable rename/move only after verifying source/count behavior in the actual N.I.N.A. sequence.
+Headless SyntheticCheck remains permanent CI coverage.
 
 ---
 
@@ -314,7 +293,7 @@ Synthetic Lab is intentionally omitted from the production feature matrix.
 
 ---
 
-# ARCHITECTURAL CONSTRAINTS
+# ARCHITECTURAL / UX CONSTRAINTS
 
 1. Never refactor the Quality Engine in a way that breaks valid-frame counting.
 2. Keep Quality/decision state independent from filesystem actions.
@@ -327,18 +306,12 @@ Synthetic Lab is intentionally omitted from the production feature matrix.
 9. The V3 loop must fail safe on missing classification; never capture indefinitely because of a synchronization fault.
 10. Never infer file eligibility merely from extension/path.
 11. Never rename/move an ineligible manual/external frame.
+12. User-facing switches must not depend on N.I.N.A. `CheckBox.Content` being visible; label switches explicitly in layout.
+13. Every non-obvious user control must have contextual help explaining meaning, effect, safe/default use and whether it influences hard rejection.
+14. Avoid emoji as precision chart glyphs; use deterministic vector/text rendering whose alignment is controlled by QSM.
 
 ---
 
 # NEXT STEP
 
-The only remaining release action is operational rather than feature development:
-
-```text
-Windows CI green
-→ mark PR #3 ready
-→ merge to main
-→ main CI green
-→ verify GitHub release v1.0.0.0
-→ field-test artifact handed to user for immediate N.I.N.A. test
-```
+Finish the **1.0.0.1 UI/usability hotfix** through Windows CI, merge/release it, then obtain a fresh real-host screenshot before considering the presentation layer closed.
