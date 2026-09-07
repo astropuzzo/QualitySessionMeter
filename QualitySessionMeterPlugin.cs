@@ -33,13 +33,13 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
         PluginSettings = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         Settings = new QualitySettings(PluginSettings);
 
-        QualitySessionRuntimeRegistry.GetOrCreate(
+        var runtime = QualitySessionRuntimeRegistry.GetOrCreate(
             profileService,
             imageSaveMediator,
             guiderMediator,
             sequenceMediator,
-            weatherDataMediator,
             Settings);
+        runtime.AttachWeatherMediator(weatherDataMediator);
 
         profileService.ProfileChanged += ProfileChanged;
     }
