@@ -57,18 +57,19 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
         }
 
         var settings = runtime.Settings;
-        var frames = runtime.Store?.Results?.TakeLast(DefaultRecentFrames).ToArray() ?? Array.Empty<FrameQualityResult>();
-        var current = frames.LastOrDefault();
+        var allFrames = runtime.Store?.Results?.ToArray() ?? Array.Empty<FrameQualityResult>();
+        var recentFrames = allFrames.TakeLast(DefaultRecentFrames).ToArray();
+        var current = allFrames.LastOrDefault();
 
-        int accepted = frames.Count(x => x.Status == FrameStatus.Accepted);
-        int warnings = frames.Count(x => x.Status == FrameStatus.Warning);
-        int rejected = frames.Count(x => x.Status == FrameStatus.Rejected);
-        int learning = frames.Count(x => x.Status == FrameStatus.Learning);
-        int errors = frames.Count(x => x.Status == FrameStatus.Error);
+        int accepted = allFrames.Count(x => x.Status == FrameStatus.Accepted);
+        int warnings = allFrames.Count(x => x.Status == FrameStatus.Warning);
+        int rejected = allFrames.Count(x => x.Status == FrameStatus.Rejected);
+        int learning = allFrames.Count(x => x.Status == FrameStatus.Learning);
+        int errors = allFrames.Count(x => x.Status == FrameStatus.Error);
         int usable = accepted + warnings;
         double acceptanceRate = usable + rejected == 0 ? 0 : usable * 100.0 / (usable + rejected);
-        double sessionQuality = frames.Where(x => x.IsUsable).Select(x => x.OverallQuality).DefaultIfEmpty(0).Average();
-        double sessionConfidence = frames.Where(x => x.IsUsable && Finite(x.ConfidenceScore))
+        double sessionQuality = allFrames.Where(x => x.IsUsable).Select(x => x.OverallQuality).DefaultIfEmpty(0).Average();
+        double sessionConfidence = allFrames.Where(x => x.IsUsable && Finite(x.ConfidenceScore))
             .Select(x => x.ConfidenceScore).DefaultIfEmpty(0).Average();
 
         var result = new Dictionary<string, object> {
@@ -84,7 +85,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
                 ["syntheticRunning"] = runtime.IsSyntheticRunning
             },
             ["summary"] = new Dictionary<string, object> {
-                ["captured"] = frames.Length,
+                ["captured"] = allFrames.Length,
                 ["accepted"] = accepted,
                 ["usable"] = usable,
                 ["warning"] = warnings,
@@ -122,7 +123,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
                 ["backgroundDelta"] = Series("Background Δ", "#F28B82", "% vs rolling baseline", "positive = brighter than baseline; negative = darker")
             },
             ["currentFrame"] = current == null ? null : MobileFrame(current),
-            ["frames"] = frames.Select(x => (object)MobileFrame(x)).ToList()
+            ["frames"] = recentFrames.Select(x => (object)MobileFrame(x)).ToList()
         };
 
         return result;
