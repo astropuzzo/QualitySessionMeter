@@ -66,8 +66,8 @@ foreach (var scenario in scenarios) {
 
         Console.WriteLine(
             $"{i + 1,2}. {d.Name,-42} expected={d.ExpectedStatus,-8} actual={result.Status,-8} " +
-            $"Q={result.OverallQuality,5:0.0} C={result.ConfidenceScore,5:0.0} RMS={Fmt(result.GuideRmsArcsec),6} " +
-            $"Peak={Fmt(result.MaxGuideExcursionArcsec),6} Sustain={Fmt(result.SustainedGuideExcursionSeconds),5} reasons={result.ReasonText}");
+            $"Q={result.OverallQuality,5:0.0} C={result.ConfidenceScore,5:0.0} pattern={result.GuidePattern,-18} " +
+            $"trend={result.TrendText,-7} reasons={result.ReasonText}");
     }
 
     failures.AddRange(SyntheticEventOracle.ValidateWholeNight(scenario, store.Results, store.Events));
@@ -81,6 +81,8 @@ foreach (var scenario in scenarios) {
 }
 
 failures.AddRange(SyntheticEventOracle.RunDeterministicGroupingCases());
+failures.AddRange(SyntheticGuidePatternOracle.Run());
+failures.AddRange(SyntheticTrendOracle.Run());
 await ValidateFileActions(outputRoot, failures);
 
 var verdict = failures.Count == 0 ? "PASS" : "FAIL";
@@ -166,8 +168,9 @@ static void ValidateArtifacts(
     var eventsCsv = Path.Combine(store.SessionFolder, "events.csv");
     var json = Path.Combine(store.SessionFolder, "session.json");
     var svg = Path.Combine(store.SessionFolder, "quality.svg");
+    var html = Path.Combine(store.SessionFolder, "report.html");
 
-    foreach (var file in new[] { csv, eventsCsv, json, svg }) {
+    foreach (var file in new[] { csv, eventsCsv, json, svg, html }) {
         if (!File.Exists(file) || new FileInfo(file).Length == 0) {
             failures.Add($"{scenario.DisplayName}: artifact missing or empty: {file}");
         }
@@ -178,8 +181,13 @@ static void ValidateArtifacts(
         if (lines.Length != expectedFrames + 1) {
             failures.Add($"{scenario.DisplayName}: frames.csv expected {expectedFrames + 1} lines including header, got {lines.Length}");
         }
-        if (lines.Length > 0 && !lines[0].Contains("Confidence", StringComparison.Ordinal)) {
-            failures.Add($"{scenario.DisplayName}: frames.csv does not persist V2 confidence fields");
+        if (lines.Length > 0) {
+            var header = lines[0];
+            foreach (var required in new[] { "Confidence", "GuidePattern", "StarTrendKind", "BackgroundTrendKind" }) {
+                if (!header.Contains(required, StringComparison.Ordinal)) {
+                    failures.Add($"{scenario.DisplayName}: frames.csv missing V2 field {required}");
+                }
+            }
         }
     }
 
@@ -199,8 +207,12 @@ static void ValidateArtifacts(
             if (captured != expectedFrames || frameCount != expectedFrames) {
                 failures.Add($"{scenario.DisplayName}: session.json expected {expectedFrames} frames, got captured={captured}, frames={frameCount}");
             }
-            if (frameCount > 0 && !frames[0].TryGetProperty("ConfidenceScore", out _)) {
-                failures.Add($"{scenario.DisplayName}: session.json does not persist ConfidenceScore");
+            if (frameCount > 0) {
+                foreach (var required in new[] { "ConfidenceScore", "GuidePattern", "StarTrendKind", "BackgroundTrendKind" }) {
+                    if (!frames[0].TryGetProperty(required, out _)) {
+                        failures.Add($"{scenario.DisplayName}: session.json missing frame field {required}");
+                    }
+                }
             }
 
             int eventCount = document.RootElement.GetProperty("eventCount").GetInt32();
@@ -210,6 +222,15 @@ static void ValidateArtifacts(
             }
         } catch (Exception ex) {
             failures.Add($"{scenario.DisplayName}: session.json parse failed: {ex.Message}");
+        }
+    }
+
+    if (File.Exists(html)) {
+        var body = File.ReadAllText(html);
+        foreach (var marker in new[] { "Session events", "Best accepted frames", "Worst accepted frames", "Confidence", "Guide pattern" }) {
+            if (!body.Contains(marker, StringComparison.OrdinalIgnoreCase)) {
+                failures.Add($"{scenario.DisplayName}: report.html missing section/marker '{marker}'");
+            }
         }
     }
 }
@@ -239,5 +260,3 @@ static async Task ValidateFileActions(string outputRoot, List<string> failures) 
         failures.Add("MoveToRejectedFolder file action failed its isolated temp-file test.");
     }
 }
-
-static string Fmt(double value) => double.IsNaN(value) ? "N/A" : value.ToString("0.00");
