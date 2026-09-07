@@ -50,6 +50,7 @@ All notable changes to QualitySessionMeter are documented here.
 - Enabled quality metrics with unavailable data now produce an explicit `ERROR` / unassessed frame instead of being silently treated as a perfect or accepted measurement.
 - `MinimumLearningFrames` can no longer exceed the rolling baseline window.
 - The hard guide-excursion threshold can no longer be configured below the normal excursion threshold.
+- Sustained guide duration now requires consecutive confirmed above-threshold samples; a single guide spike has `0 s` sustained duration and cannot trigger the duration rule by itself.
 - Session reset is serialized against frame processing and no longer clears guide samples belonging to a potentially active exposure.
 - A physical frame receives one stable frame index even if analysis throws; error logging no longer skips an index.
 - Frame timestamps now use the exposure-start timestamp where available.
@@ -57,7 +58,8 @@ All notable changes to QualitySessionMeter are documented here.
 - CSV now persists analysis/file-action error messages.
 - Rejected-file move/prefix failures are no longer silent after retries; the failure is recorded while the original frame remains preserved.
 - SVG timelines explicitly distinguish analysis-error frames.
-- Repository/package licensing metadata aligned with the existing Apache-2.0 license.
+- Analysis and file-action error details are surfaced in the dashboard reason text.
+- Repository, package and plugin assembly licensing metadata aligned with the existing Apache-2.0 license.
 
 #### Deliberately excluded from rejection logic
 
@@ -69,7 +71,7 @@ These metrics were excluded after real-world observations showed they can remain
 
 ### Validation
 
-V1 compiled successfully on a GitHub Actions Windows runner against `NINA.Plugin 3.2.0.9001` before the hardening pass. The hardening commit is independently validated by CI before field testing.
+V1 compiled successfully on GitHub Actions Windows against `NINA.Plugin 3.2.0.9001` before and after the main runtime-hardening pass. The final candidate commit is independently validated by CI before field testing.
 
 ### Next validation stage
 

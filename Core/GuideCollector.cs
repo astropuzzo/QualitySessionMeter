@@ -54,6 +54,7 @@ public sealed class GuideCollector : IDisposable {
             window = samples
                 .Where(x => x.TimestampUtc >= exposureStartUtc && x.TimestampUtc <= end)
                 .Where(x => x.HasScale && !double.IsNaN(x.TotalArcsec))
+                .OrderBy(x => x.TimestampUtc)
                 .ToArray();
         }
 
@@ -76,21 +77,36 @@ public sealed class GuideCollector : IDisposable {
             }
         }
 
-        double currentRun = 0;
+        // Sustained duration is based only on confirmed consecutive samples above
+        // threshold. A single spike therefore has a duration of 0 seconds and
+        // cannot satisfy a duration-based rejection rule by itself.
         double longestRun = 0;
+        DateTime? runStart = null;
+        DateTime? runLast = null;
+        double maxAllowedGap = typicalCadence > 0
+            ? Math.Max(1.0, typicalCadence * 2.5)
+            : 30.0;
+
         for (int i = 0; i < window.Length; i++) {
             if (errors[i] > excursionThresholdArcsec) {
-                double dt;
-                if (i + 1 < window.Length) {
-                    dt = (window[i + 1].TimestampUtc - window[i].TimestampUtc).TotalSeconds;
-                    if (dt < 0 || dt > 30) dt = typicalCadence;
+                var timestamp = window[i].TimestampUtc;
+
+                if (!runStart.HasValue) {
+                    runStart = timestamp;
+                    runLast = timestamp;
                 } else {
-                    dt = typicalCadence;
+                    var gap = (timestamp - runLast.Value).TotalSeconds;
+                    if (gap <= 0 || gap > maxAllowedGap) {
+                        runStart = timestamp;
+                        runLast = timestamp;
+                    } else {
+                        runLast = timestamp;
+                        longestRun = Math.Max(longestRun, (runLast.Value - runStart.Value).TotalSeconds);
+                    }
                 }
-                currentRun += Math.Max(0, dt);
-                longestRun = Math.Max(longestRun, currentRun);
             } else {
-                currentRun = 0;
+                runStart = null;
+                runLast = null;
             }
         }
 
