@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,8 +14,8 @@ using System.Windows.Media;
 namespace NINA.Plugin.QualitySessionMeter.UI;
 
 /// <summary>
-/// Compact three-band timeline: Quality/Confidence, Guide RMS, and image-signal deviations.
-/// Rejected/warning/error markers are presentation-only and never participate in quality decisions.
+/// Three-band live timeline: Quality/Confidence, Guide RMS, and image-signal deviations.
+/// Presentation-only: it never participates in quality decisions.
 /// </summary>
 public sealed class QualityTimelineControl : FrameworkElement {
     public static readonly DependencyProperty ItemsSourceProperty =
@@ -24,12 +25,39 @@ public sealed class QualityTimelineControl : FrameworkElement {
             typeof(QualityTimelineControl),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnItemsSourceChanged));
 
+    public static readonly DependencyProperty MaxGuideRmsProperty =
+        DependencyProperty.Register(nameof(MaxGuideRms), typeof(double), typeof(QualityTimelineControl),
+            new FrameworkPropertyMetadata(1.5, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty MaxStarLossPercentProperty =
+        DependencyProperty.Register(nameof(MaxStarLossPercent), typeof(double), typeof(QualityTimelineControl),
+            new FrameworkPropertyMetadata(35.0, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty MaxBackgroundIncreasePercentProperty =
+        DependencyProperty.Register(nameof(MaxBackgroundIncreasePercent), typeof(double), typeof(QualityTimelineControl),
+            new FrameworkPropertyMetadata(30.0, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty MaxBackgroundDecreasePercentProperty =
+        DependencyProperty.Register(nameof(MaxBackgroundDecreasePercent), typeof(double), typeof(QualityTimelineControl),
+            new FrameworkPropertyMetadata(30.0, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty EnableGuideRmsProperty =
+        DependencyProperty.Register(nameof(EnableGuideRms), typeof(bool), typeof(QualityTimelineControl),
+            new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty EnableStarCountProperty =
+        DependencyProperty.Register(nameof(EnableStarCount), typeof(bool), typeof(QualityTimelineControl),
+            new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty EnableBackgroundProperty =
+        DependencyProperty.Register(nameof(EnableBackground), typeof(bool), typeof(QualityTimelineControl),
+            new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
+
     private const string TimelineHelp =
-        "QSM multichannel timeline. Top band: blue = Quality score, purple = Confidence. " +
-        "Middle band: green = exposure Guide RMS. Bottom band: yellow = star-count deviation, salmon = background deviation. " +
-        "Vertical red lines mark REJECTED frames, amber lines mark WARNING frames and red ! marks analysis errors. " +
-        "Cause codes: G = guiding/tracking, S = stars/transparency/cloud, B = background/haze/sky brightness. " +
-        "Hover an event line for the exact frame, cause and raw rejection reason.";
+        "QSM timeline. Blue = Quality (0–100), purple = Confidence (0–100), green = Guide RMS in arcseconds. " +
+        "Yellow Stars Δ and salmon Background Δ are percentages RELATIVE TO the rolling clean-frame baseline; the dashed 0% line is that baseline. " +
+        "Dashed colored lines show active reject limits. Red vertical lines mark REJECTED frames, amber lines mark WARNING frames, and ! marks analysis errors. " +
+        "G = guiding/tracking, S = stars/transparency/cloud, B = background/haze/sky brightness. Hover the graph for exact frame values, baseline values and limits.";
 
     private sealed class MarkerHit {
         public Rect Area { get; init; }
@@ -39,10 +67,16 @@ public sealed class QualityTimelineControl : FrameworkElement {
     private readonly List<MarkerHit> markerHits = new();
     private INotifyCollectionChanged observed;
     private string activeToolTip = TimelineHelp;
+    private FrameQualityResult[] renderedFrames = Array.Empty<FrameQualityResult>();
+    private double renderedLeft;
+    private double renderedPlotWidth;
+    private double renderedMarkerLane;
+    private double renderedBandHeight;
+    private double renderedGap;
 
     public QualityTimelineControl() {
         ToolTipService.SetShowDuration(this, 30000);
-        ToolTipService.SetInitialShowDelay(this, 250);
+        ToolTipService.SetInitialShowDelay(this, 150);
         ToolTipService.SetToolTip(this, TimelineHelp);
     }
 
@@ -50,6 +84,14 @@ public sealed class QualityTimelineControl : FrameworkElement {
         get => (IEnumerable)GetValue(ItemsSourceProperty);
         set => SetValue(ItemsSourceProperty, value);
     }
+
+    public double MaxGuideRms { get => (double)GetValue(MaxGuideRmsProperty); set => SetValue(MaxGuideRmsProperty, value); }
+    public double MaxStarLossPercent { get => (double)GetValue(MaxStarLossPercentProperty); set => SetValue(MaxStarLossPercentProperty, value); }
+    public double MaxBackgroundIncreasePercent { get => (double)GetValue(MaxBackgroundIncreasePercentProperty); set => SetValue(MaxBackgroundIncreasePercentProperty, value); }
+    public double MaxBackgroundDecreasePercent { get => (double)GetValue(MaxBackgroundDecreasePercentProperty); set => SetValue(MaxBackgroundDecreasePercentProperty, value); }
+    public bool EnableGuideRms { get => (bool)GetValue(EnableGuideRmsProperty); set => SetValue(EnableGuideRmsProperty, value); }
+    public bool EnableStarCount { get => (bool)GetValue(EnableStarCountProperty); set => SetValue(EnableStarCountProperty, value); }
+    public bool EnableBackground { get => (bool)GetValue(EnableBackgroundProperty); set => SetValue(EnableBackgroundProperty, value); }
 
     private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) {
         var control = (QualityTimelineControl)d;
@@ -64,7 +106,17 @@ public sealed class QualityTimelineControl : FrameworkElement {
     protected override void OnMouseMove(MouseEventArgs e) {
         base.OnMouseMove(e);
         var p = e.GetPosition(this);
-        string text = markerHits.FirstOrDefault(x => x.Area.Contains(p))?.Text ?? TimelineHelp;
+
+        string text = markerHits.FirstOrDefault(x => x.Area.Contains(p))?.Text;
+        if (text == null && renderedFrames.Length > 0 && p.X >= renderedLeft && p.X <= renderedLeft + renderedPlotWidth && p.Y >= renderedMarkerLane) {
+            int i = renderedFrames.Length == 1
+                ? 0
+                : (int)Math.Round((p.X - renderedLeft) / Math.Max(1, renderedPlotWidth) * (renderedFrames.Length - 1));
+            i = Math.Clamp(i, 0, renderedFrames.Length - 1);
+            text = BuildFrameTooltip(renderedFrames[i], p.Y);
+        }
+        text ??= TimelineHelp;
+
         if (string.Equals(text, activeToolTip, StringComparison.Ordinal)) return;
         activeToolTip = text;
         ToolTipService.SetToolTip(this, text);
@@ -83,62 +135,153 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
         double w = ActualWidth;
         double h = ActualHeight;
-        if (w <= 40 || h <= 70) return;
+        if (w <= 80 || h <= 100) return;
 
         var frames = ItemsSource?.Cast<object>().OfType<FrameQualityResult>().TakeLast(160).ToArray()
             ?? Array.Empty<FrameQualityResult>();
 
-        const double labelWidth = 108;
-        const double markerLane = 34;
-        const double gap = 5;
+        const double labelWidth = 154;
+        const double markerLane = 38;
+        const double gap = 6;
         double plotW = Math.Max(1, w - labelWidth - 1);
-        double bandH = Math.Max(18, (h - markerLane - gap * 2 - 1) / 3.0);
+        double bandH = Math.Max(22, (h - markerLane - gap * 2 - 1) / 3.0);
+
+        renderedFrames = frames;
+        renderedLeft = labelWidth;
+        renderedPlotWidth = plotW;
+        renderedMarkerLane = markerLane;
+        renderedBandHeight = bandH;
+        renderedGap = gap;
 
         var background = FrozenBrush(18, 22, 28);
         var borderPen = FrozenPen(48, 54, 61, 1);
+        var gridPen = FrozenPen(56, 62, 70, 0.8);
         var textBrush = FrozenBrush(154, 160, 166);
+        var secondaryText = FrozenBrush(118, 125, 134);
+        var qualityBrush = FrozenBrush(138, 180, 248);
+        var confidenceBrush = FrozenBrush(197, 138, 249);
+        var guideBrush = FrozenBrush(129, 201, 149);
+        var starsBrush = FrozenBrush(253, 214, 99);
+        var backgroundBrush = FrozenBrush(242, 139, 130);
         var qualityPen = FrozenPen(138, 180, 248, 1.8);
-        var confidencePen = FrozenPen(197, 138, 249, 1.4);
-        var guidePen = FrozenPen(129, 201, 149, 1.6);
-        var starsPen = FrozenPen(253, 214, 99, 1.5);
-        var backgroundPen = FrozenPen(242, 139, 130, 1.5);
+        var confidencePen = FrozenPen(197, 138, 249, 1.5);
+        var guidePen = FrozenPen(129, 201, 149, 1.7);
+        var starsPen = FrozenPen(253, 214, 99, 1.6);
+        var backgroundPen = FrozenPen(242, 139, 130, 1.6);
 
         DrawEventLaneLabel(dc, textBrush);
 
         for (int b = 0; b < 3; b++) {
             double y = markerLane + b * (bandH + gap);
             dc.DrawRectangle(background, borderPen, new Rect(labelWidth, y, plotW, bandH));
-            dc.DrawLine(borderPen, new Point(labelWidth, y + bandH / 2), new Point(labelWidth + plotW, y + bandH / 2));
+            dc.DrawLine(gridPen, new Point(labelWidth, y + bandH / 2), new Point(labelWidth + plotW, y + bandH / 2));
         }
 
-        DrawLabel(dc, "Q / CONF", markerLane + 2, textBrush);
-        DrawLabel(dc, "RMS", markerLane + bandH + gap + 2, textBrush);
-        DrawLabel(dc, "IMG DELTA", markerLane + 2 * (bandH + gap) + 2, textBrush);
+        double topBand = markerLane;
+        double rmsBand = markerLane + bandH + gap;
+        double imgBand = markerLane + 2 * (bandH + gap);
 
-        if (frames.Length == 0) return;
+        DrawLegendItem(dc, 3, topBand + 5, qualityBrush, "Quality", "0–100");
+        DrawLegendItem(dc, 3, topBand + 22, confidenceBrush, "Confidence", "0–100");
+        DrawLegendItem(dc, 3, rmsBand + 6, guideBrush, "Guide RMS", "arcsec · lower is better");
+        DrawLegendItem(dc, 3, imgBand + 4, starsBrush, "Stars Δ", EnableStarCount ? $"% vs baseline · reject < -{MaxStarLossPercent:0.#}%" : "% vs baseline · disabled");
+        DrawLegendItem(dc, 3, imgBand + 23, backgroundBrush, "Background Δ", EnableBackground ? $"% vs baseline · limits -{MaxBackgroundDecreasePercent:0.#}/+{MaxBackgroundIncreasePercent:0.#}%" : "% vs baseline · disabled");
 
-        DrawSeries(dc, frames, labelWidth, markerLane, plotW, bandH, f => f.OverallQuality, 0, 100, qualityPen);
-        DrawSeries(dc, frames, labelWidth, markerLane, plotW, bandH, f => f.ConfidenceScore, 0, 100, confidencePen);
+        DrawScaleHint(dc, labelWidth + plotW - 29, topBand + 2, "100", secondaryText);
+        DrawScaleHint(dc, labelWidth + plotW - 18, topBand + bandH - 13, "0", secondaryText);
 
-        double maxRms = Math.Max(2.0,
-            frames.Where(f => Finite(f.GuideRmsArcsec)).Select(f => f.GuideRmsArcsec).DefaultIfEmpty(2).Max() * 1.10);
-        DrawSeries(dc, frames, labelWidth, markerLane + bandH + gap, plotW, bandH, f => f.GuideRmsArcsec, 0, maxRms, guidePen);
+        if (frames.Length == 0) {
+            DrawCenteredMessage(dc, labelWidth, markerLane, plotW, h - markerLane, "Waiting for assessed LIGHT frames", secondaryText);
+            return;
+        }
 
-        double imgTop = markerLane + 2 * (bandH + gap);
-        DrawSeries(dc, frames, labelWidth, imgTop, plotW, bandH, f => f.StarDeviationPercent, -50, 50, starsPen);
-        DrawSeries(dc, frames, labelWidth, imgTop, plotW, bandH, f => f.BackgroundDeviationPercent, -50, 50, backgroundPen);
+        DrawSeries(dc, frames, labelWidth, topBand, plotW, bandH, f => f.OverallQuality, 0, 100, qualityPen);
+        DrawSeries(dc, frames, labelWidth, topBand, plotW, bandH, f => f.ConfidenceScore, 0, 100, confidencePen);
+
+        double maxObservedRms = frames.Where(f => Finite(f.GuideRmsArcsec)).Select(f => f.GuideRmsArcsec).DefaultIfEmpty(0).Max();
+        double maxRms = Math.Max(2.0, maxObservedRms * 1.15);
+        if (EnableGuideRms && Finite(MaxGuideRms) && MaxGuideRms > 0) maxRms = Math.Max(maxRms, MaxGuideRms * 1.30);
+        DrawSeries(dc, frames, labelWidth, rmsBand, plotW, bandH, f => f.GuideRmsArcsec, 0, maxRms, guidePen);
+
+        if (EnableGuideRms && Finite(MaxGuideRms) && MaxGuideRms > 0) {
+            double y = ValueToY(MaxGuideRms, 0, maxRms, rmsBand, bandH);
+            DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(129, 201, 149, 1.0), $"RMS limit {MaxGuideRms:0.00}\"", guideBrush);
+        }
+        DrawScaleHint(dc, labelWidth + 4, rmsBand + 2, $"0–{maxRms:0.0}\"", secondaryText);
+
+        double observedAbs = frames.SelectMany(f => new[] { Math.AbsFinite(f.StarDeviationPercent), Math.AbsFinite(f.BackgroundDeviationPercent) }).DefaultIfEmpty(0).Max();
+        double thresholdAbs = Math.Max(MaxStarLossPercent, Math.Max(MaxBackgroundIncreasePercent, MaxBackgroundDecreasePercent));
+        double imgAbsMax = Math.Max(50.0, Math.Max(observedAbs * 1.15, thresholdAbs * 1.25));
+        imgAbsMax = Math.Min(500.0, imgAbsMax);
+
+        DrawSeries(dc, frames, labelWidth, imgBand, plotW, bandH, f => f.StarDeviationPercent, -imgAbsMax, imgAbsMax, starsPen);
+        DrawSeries(dc, frames, labelWidth, imgBand, plotW, bandH, f => f.BackgroundDeviationPercent, -imgAbsMax, imgAbsMax, backgroundPen);
+
+        double zeroY = ValueToY(0, -imgAbsMax, imgAbsMax, imgBand, bandH);
+        DrawReferenceLine(dc, labelWidth, plotW, zeroY, FrozenDashedPen(120, 128, 138, 1.1), "0% rolling baseline", textBrush);
+
+        if (EnableStarCount && MaxStarLossPercent > 0) {
+            double y = ValueToY(-MaxStarLossPercent, -imgAbsMax, imgAbsMax, imgBand, bandH);
+            DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(253, 214, 99, 0.9), null, starsBrush);
+        }
+        if (EnableBackground) {
+            if (MaxBackgroundIncreasePercent > 0) {
+                double y = ValueToY(MaxBackgroundIncreasePercent, -imgAbsMax, imgAbsMax, imgBand, bandH);
+                DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(242, 139, 130, 0.9), null, backgroundBrush);
+            }
+            if (MaxBackgroundDecreasePercent > 0) {
+                double y = ValueToY(-MaxBackgroundDecreasePercent, -imgAbsMax, imgAbsMax, imgBand, bandH);
+                DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(242, 139, 130, 0.9), null, backgroundBrush);
+            }
+        }
+        DrawScaleHint(dc, labelWidth + 4, imgBand + 2, $"±{imgAbsMax:0}%", secondaryText);
 
         DrawStatusMarkers(dc, frames, labelWidth, plotW, markerLane, h - 1);
     }
 
-    private void DrawStatusMarkers(
-        DrawingContext dc,
-        FrameQualityResult[] frames,
-        double left,
-        double plotW,
-        double markerLane,
-        double height) {
+    private string BuildFrameTooltip(FrameQualityResult frame, double y) {
+        string band = "FRAME";
+        if (y >= renderedMarkerLane && y < renderedMarkerLane + renderedBandHeight) band = "QUALITY / CONFIDENCE";
+        else if (y < renderedMarkerLane + 2 * renderedBandHeight + renderedGap) band = "GUIDE RMS";
+        else band = "IMAGE DELTA vs ROLLING BASELINE";
 
+        var sb = new StringBuilder();
+        sb.Append("Frame #").Append(frame.FrameIndex).Append(" · ").Append(frame.StatusText).Append(" · ").AppendLine(band);
+        sb.Append("Quality ").Append(FormatValue(frame.OverallQuality, "0")).Append(" / 100 · Confidence ").Append(double.IsNaN(frame.ConfidenceScore) ? "N/A" : frame.ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + "%").AppendLine();
+        sb.Append("Guide RMS ").Append(FormatArcsec(frame.GuideRmsArcsec));
+        if (EnableGuideRms) sb.Append(" · limit ").Append(MaxGuideRms.ToString("0.00", CultureInfo.InvariantCulture)).Append('"');
+        sb.AppendLine();
+
+        if (frame.StarCount >= 0) {
+            sb.Append("Stars ").Append(frame.StarCount.ToString(CultureInfo.InvariantCulture));
+            if (Finite(frame.StarBaseline) && frame.StarBaseline > 0) {
+                sb.Append(" · baseline ").Append(frame.StarBaseline.ToString("0", CultureInfo.InvariantCulture))
+                  .Append(" · Δ ").Append(FormatPercent(frame.StarDeviationPercent));
+                if (EnableStarCount) sb.Append(" · reject below -").Append(MaxStarLossPercent.ToString("0.#", CultureInfo.InvariantCulture)).Append('%');
+            } else {
+                sb.Append(" · baseline learning/not ready");
+            }
+            sb.AppendLine();
+        }
+
+        if (Finite(frame.BackgroundMedian)) {
+            sb.Append("Background ").Append(frame.BackgroundMedian.ToString("0.##", CultureInfo.InvariantCulture));
+            if (Finite(frame.BackgroundBaseline) && frame.BackgroundBaseline > 0) {
+                sb.Append(" · baseline ").Append(frame.BackgroundBaseline.ToString("0.##", CultureInfo.InvariantCulture))
+                  .Append(" · Δ ").Append(FormatPercent(frame.BackgroundDeviationPercent));
+                if (EnableBackground) sb.Append(" · limits -").Append(MaxBackgroundDecreasePercent.ToString("0.#", CultureInfo.InvariantCulture)).Append("/+").Append(MaxBackgroundIncreasePercent.ToString("0.#", CultureInfo.InvariantCulture)).Append('%');
+            } else {
+                sb.Append(" · baseline learning/not ready");
+            }
+            sb.AppendLine();
+        }
+
+        if (!string.IsNullOrWhiteSpace(frame.ProbableCause)) sb.Append("Cause: ").Append(frame.ProbableCause);
+        if (!string.IsNullOrWhiteSpace(frame.ReasonText) && frame.ReasonText != "—") sb.Append(" · ").Append(frame.ReasonText);
+        return sb.ToString();
+    }
+
+    private void DrawStatusMarkers(DrawingContext dc, FrameQualityResult[] frames, double left, double plotW, double markerLane, double height) {
         var rejectedPen = FrozenPen(255, 110, 105, 1.5);
         var warningPen = FrozenPen(253, 214, 99, 1.0);
         var errorPen = FrozenPen(255, 120, 120, 1.4);
@@ -156,11 +299,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
             if (frame.Status == FrameStatus.Rejected) {
                 dc.DrawRectangle(rejectedBand, null, new Rect(x - 2.5, markerLane, 5, Math.Max(0, height - markerLane)));
                 dc.DrawLine(rejectedPen, new Point(x, markerLane), new Point(x, height));
-                markerHits.Add(new MarkerHit {
-                    Area = new Rect(x - 6, 0, 12, Math.Max(1, height)),
-                    Text = RejectionVisual.GetTooltip(frame)
-                });
-
+                markerHits.Add(new MarkerHit { Area = new Rect(x - 6, 0, 12, Math.Max(1, height)), Text = RejectionVisual.GetTooltip(frame) });
                 var rect = MeasureCauseBadge(RejectionVisual.GetIcons(frame), x, badgeText);
                 if (rect.Left > lastBadgeRight + 3) {
                     DrawCauseBadge(dc, RejectionVisual.GetIcons(frame), rect, badgeFill, badgeBorder, badgeText);
@@ -171,20 +310,13 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
             if (frame.Status == FrameStatus.Warning) {
                 dc.DrawLine(warningPen, new Point(x, markerLane), new Point(x, height));
-                markerHits.Add(new MarkerHit {
-                    Area = new Rect(x - 5, markerLane, 10, Math.Max(1, height - markerLane)),
-                    Text = $"Frame #{frame.FrameIndex} · WARNING · {frame.ProbableCause} · {frame.ReasonText}"
-                });
+                markerHits.Add(new MarkerHit { Area = new Rect(x - 5, markerLane, 10, Math.Max(1, height - markerLane)), Text = $"Frame #{frame.FrameIndex} · WARNING · {frame.ProbableCause} · {frame.ReasonText}" });
                 continue;
             }
 
             if (frame.Status == FrameStatus.Error) {
                 dc.DrawLine(errorPen, new Point(x, markerLane), new Point(x, height));
-                markerHits.Add(new MarkerHit {
-                    Area = new Rect(x - 6, 0, 12, Math.Max(1, height)),
-                    Text = RejectionVisual.GetTooltip(frame)
-                });
-
+                markerHits.Add(new MarkerHit { Area = new Rect(x - 6, 0, 12, Math.Max(1, height)), Text = RejectionVisual.GetTooltip(frame) });
                 var rect = MeasureCauseBadge(RejectionVisual.ErrorIcon, x, badgeText);
                 if (rect.Left > lastBadgeRight + 3) {
                     DrawCauseBadge(dc, RejectionVisual.ErrorIcon, rect, badgeFill, badgeBorder, badgeText);
@@ -202,14 +334,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
         return new Rect(x - badgeWidth / 2, 3, badgeWidth, badgeHeight);
     }
 
-    private static void DrawCauseBadge(
-        DrawingContext dc,
-        string codes,
-        Rect rect,
-        Brush fill,
-        Pen border,
-        Brush textBrush) {
-
+    private static void DrawCauseBadge(DrawingContext dc, string codes, Rect rect, Brush fill, Pen border, Brush textBrush) {
         if (string.IsNullOrWhiteSpace(codes) || rect.IsEmpty) return;
         var text = Format(codes, 9.5, textBrush, FontWeights.SemiBold);
         dc.DrawRoundedRectangle(fill, border, rect, 4, 4);
@@ -217,49 +342,58 @@ public sealed class QualityTimelineControl : FrameworkElement {
     }
 
     private static void DrawEventLaneLabel(DrawingContext dc, Brush brush) {
-        dc.DrawText(Format("EVENTS", 8.5, brush, FontWeights.SemiBold), new Point(2, 2));
-        dc.DrawText(Format("G guide  S sky  B bg  ! error", 8.2, brush, FontWeights.Normal), new Point(2, 15));
+        dc.DrawText(Format("EVENTS", 8.5, brush, FontWeights.SemiBold), new Point(3, 2));
+        dc.DrawText(Format("G guide · S sky · B background · ! error", 8.1, brush, FontWeights.Normal), new Point(3, 16));
     }
 
-    private static void DrawSeries(
-        DrawingContext dc,
-        FrameQualityResult[] frames,
-        double left,
-        double top,
-        double width,
-        double height,
-        Func<FrameQualityResult, double> selector,
-        double min,
-        double max,
-        Pen pen) {
+    private static void DrawLegendItem(DrawingContext dc, double x, double y, Brush color, string name, string detail) {
+        dc.DrawEllipse(color, null, new Point(x + 5, y + 6), 3.2, 3.2);
+        dc.DrawText(Format(name, 9.1, color, FontWeights.SemiBold), new Point(x + 13, y));
+        var nameText = Format(name, 9.1, color, FontWeights.SemiBold);
+        dc.DrawText(Format(detail, 7.8, FrozenBrush(132, 139, 148), FontWeights.Normal), new Point(x + 16 + nameText.Width, y + 1));
+    }
 
+    private static void DrawReferenceLine(DrawingContext dc, double left, double width, double y, Pen pen, string label, Brush labelBrush) {
+        dc.DrawLine(pen, new Point(left, y), new Point(left + width, y));
+        if (string.IsNullOrWhiteSpace(label)) return;
+        var text = Format(label, 8.0, labelBrush, FontWeights.SemiBold);
+        dc.DrawText(text, new Point(left + width - text.Width - 5, y - text.Height - 1));
+    }
+
+    private static void DrawScaleHint(DrawingContext dc, double x, double y, string text, Brush brush) =>
+        dc.DrawText(Format(text, 7.6, brush, FontWeights.Normal), new Point(x, y));
+
+    private static void DrawCenteredMessage(DrawingContext dc, double left, double top, double width, double height, string text, Brush brush) {
+        var ft = Format(text, 10, brush, FontWeights.Normal);
+        dc.DrawText(ft, new Point(left + (width - ft.Width) / 2, top + (height - ft.Height) / 2));
+    }
+
+    private static void DrawSeries(DrawingContext dc, FrameQualityResult[] frames, double left, double top, double width, double height, Func<FrameQualityResult, double> selector, double min, double max, Pen pen) {
         Point? previous = null;
         for (int i = 0; i < frames.Length; i++) {
-            double value = selector(frames[i]);
-            if (!Finite(value)) { previous = null; continue; }
-            value = Math.Clamp(value, min, max);
+            double raw = selector(frames[i]);
+            if (!Finite(raw)) { previous = null; continue; }
+            double value = Math.Clamp(raw, min, max);
             double x = frames.Length == 1 ? left + width / 2 : left + i * width / (frames.Length - 1.0);
-            double y = top + height * (1.0 - (value - min) / Math.Max(0.000001, max - min));
+            double y = ValueToY(value, min, max, top, height);
             var point = new Point(x, y);
             if (previous.HasValue) dc.DrawLine(pen, previous.Value, point);
             previous = point;
         }
     }
 
-    private static void DrawLabel(DrawingContext dc, string text, double y, Brush brush) =>
-        dc.DrawText(Format(text, 9, brush, FontWeights.Normal), new Point(2, y));
+    private static double ValueToY(double value, double min, double max, double top, double height) =>
+        top + height * (1.0 - (Math.Clamp(value, min, max) - min) / Math.Max(0.000001, max - min));
 
     private static FormattedText Format(string text, double size, Brush brush, FontWeight weight) =>
-        new(
-            text,
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, weight, FontStretches.Normal),
-            size,
-            brush,
-            1.0);
+        new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, weight, FontStretches.Normal), size, brush, 1.0);
 
+    private static string FormatValue(double value, string format) => Finite(value) ? value.ToString(format, CultureInfo.InvariantCulture) : "N/A";
+    private static string FormatArcsec(double value) => Finite(value) ? value.ToString("0.00", CultureInfo.InvariantCulture) + "\"" : "N/A";
+    private static string FormatPercent(double value) => Finite(value) ? value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "%" : "N/A";
     private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
+    private static double AbsFinite(this double value) => Finite(value) ? Math.Abs(value) : 0;
 
     private static SolidColorBrush FrozenBrush(byte r, byte g, byte b) {
         var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
@@ -275,6 +409,12 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
     private static Pen FrozenPen(byte r, byte g, byte b, double thickness) {
         var pen = new Pen(FrozenBrush(r, g, b), thickness);
+        if (pen.CanFreeze) pen.Freeze();
+        return pen;
+    }
+
+    private static Pen FrozenDashedPen(byte r, byte g, byte b, double thickness) {
+        var pen = new Pen(FrozenBrush(r, g, b), thickness) { DashStyle = DashStyles.Dash };
         if (pen.CanFreeze) pen.Freeze();
         return pen;
     }
