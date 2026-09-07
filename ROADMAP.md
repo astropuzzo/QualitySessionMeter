@@ -28,6 +28,10 @@ main
 active branch
   v3-quality-controlled-acquisition
 
+active PR
+  #3 — V3 — Quality-Controlled Acquisition
+  draft
+
 V2 final field-test line
   0.2.0.1
   CI #82: PASS
@@ -35,22 +39,57 @@ V2 final field-test line
 
 current V3 status
   IN PROGRESS
+  initial QSM Valid Frame Target condition compiles (CI #87 PASS)
 ```
 
 The user explicitly approved moving to V3 on 2026-09-07 and wants a **field-test candidate usable tonight**. Do not reopen V2 design work unless a regression is found.
 
+## Critical V3 safety requirement discovered before field test: acquisition source scoping
+
+The V1/V2 runtime currently filters on `ImageType == LIGHT`, and `Enabled` defaults to true while `MonitorOnly` defaults to true. That is safe from file mutation by default, but it is not sufficient for final V3 because a generic/manual exposure explicitly tagged as `LIGHT` could still be analyzed when QSM is enabled.
+
+N.I.N.A. ordinary Imaging snapshots and plate-solving exposures are normally tagged `SNAPSHOT`, so they are already excluded by the LIGHT filter. However, V3 must make provenance explicit and auditable rather than relying on this alone.
+
+Before any real-sky V3 field test implement all of the following:
+
+1. **Global activation control** remains explicit: QSM can be OFF or ON; OFF means no frame analysis and V3 sequence control refuses to operate.
+2. Add a **frame-source scope** with safe defaults:
+   - `Advanced Sequencer LIGHTs` — default monitoring scope;
+   - `QSM controlled blocks only` — strict V3 control scope;
+   - `All LIGHTs` — advanced opt-in compatibility mode only.
+3. Determine source using stable evidence from N.I.N.A.:
+   - `ImageType == LIGHT` is mandatory;
+   - `ISequenceMediator.IsAdvancedSequenceRunning()` / current running items where applicable;
+   - N.I.N.A. sequence metadata (`MetaData.Sequence.Title`) written by `TakeExposure`;
+   - explicit runtime **QSM controlled-block arm token** set by `QSM Valid Frame Target` while its parent block is executing.
+4. The V3 condition must arm the runtime before the controlled LIGHT is captured and keep that arm active until the matching `FrameProcessed` result is consumed.
+5. **File rename/move actions must never apply to snapshots, plate-solve frames, or unrelated manual/test exposures.** For the first production-safe V3 implementation, filesystem mutation is permitted only for an explicitly scoped eligible LIGHT; the safest/default control path is a QSM-armed Advanced Sequencer block.
+6. Record provenance in each frame result/log so a user can audit why QSM touched a file:
+   - source kind;
+   - sequence title when available;
+   - QSM-controlled yes/no;
+   - original path;
+   - final path after optional file action.
+7. Source determination must be captured before/as the image is finalized, not inferred later only from whether a sequence happens to still be running, because N.I.N.A. image saving is asynchronous.
+8. The first real-sky V3 test remains `Monitor Only`; rename/move is tested only after acquisition-source scoping is verified locally.
+
+### File-action lifecycle fact already verified
+
+In current N.I.N.A., `ImageSaved` is raised after `SaveToDisk(...)` has successfully returned the actual saved path. Therefore QSM receives the concrete path of the file that was just written. `RejectedFileService` operates on that exact path with collision-safe `File.Move`. This makes rename/move technically viable, but provenance scoping above is mandatory before enabling it on sky.
+
 ## Immediate V3 field-test priority
 
-1. Implement Advanced Sequencer **QSM Valid Frame Target**.
-2. Never modify/decrement N.I.N.A.'s built-in `Take Exposure` counter.
-3. The sequencer loop must wait for the QSM result belonging to the just-finished LIGHT before deciding whether the target progressed.
-4. `REJECTED` and `ERROR` never advance valid progress.
-5. `ACCEPTED` advances valid progress.
-6. `WARNING` counts as valid by default because it is not rejected; expose a setting so this can be disabled.
-7. `LEARNING` does **not** count toward the valid target in the first V3 implementation because relative image-quality evidence is not mature yet.
-8. A missing QSM result must fail safe: stop/finish the quality-controlled loop rather than capture indefinitely.
-9. Add deterministic V3 regression proving examples such as `13 captured / 3 rejected = 10 / 10 valid`.
-10. Produce two packaging modes:
+1. Finish acquisition-source scoping / explicit activation safety above.
+2. Complete Advanced Sequencer **QSM Valid Frame Target**.
+3. Never modify/decrement N.I.N.A.'s built-in `Take Exposure` counter.
+4. The sequencer loop must wait for the QSM result belonging to the just-finished eligible LIGHT before deciding whether the target progressed.
+5. `REJECTED` and `ERROR` never advance valid progress.
+6. `ACCEPTED` advances valid progress.
+7. `WARNING` counts as valid by default because it is not rejected; expose a setting so this can be disabled.
+8. `LEARNING` does **not** count toward the valid target in the first V3 implementation because relative image-quality evidence is not mature yet.
+9. A missing QSM result must fail safe: stop/finish the quality-controlled loop rather than capture indefinitely.
+10. Add deterministic V3 regression proving examples such as `13 captured / 3 rejected = 10 / 10 valid` plus source-scope rejection tests.
+11. Produce two packaging modes:
     - development/field-test package may retain Synthetic Lab;
     - production package must exclude the Synthetic Lab dockable.
 
@@ -181,8 +220,8 @@ The intended loop semantics are:
 
 ```text
 while ValidCount < RequestedValidFrames:
-    capture LIGHT
-    wait for QSM classification of that LIGHT
+    capture eligible LIGHT
+    wait for QSM classification of that exact LIGHT
     CapturedCount++
 
     ACCEPTED -> ValidCount++
@@ -205,7 +244,7 @@ Total captured:  321   # example also includes learning/error if any
 
 Do **not** decrement or patch N.I.N.A.'s standard `Take Exposure` iteration counter.
 
-Implement a native plugin sequence condition named approximately:
+A native plugin sequence condition is being implemented as:
 
 ```text
 QSM Valid Frame Target
@@ -215,7 +254,7 @@ It is attached to the repeated Advanced Sequencer container. It owns persistent 
 
 - target valid frames;
 - valid frames;
-- captured frames observed while active;
+- captured eligible frames observed while active;
 - rejected frames;
 - warning frames;
 - learning frames;
@@ -224,7 +263,9 @@ It is attached to the repeated Advanced Sequencer container. It owns persistent 
 - last status/cause;
 - timeout/fail-safe state.
 
-The condition must synchronise with `QualitySessionRuntime.FrameProcessed` so N.I.N.A. cannot begin the next loop decision before QSM finishes classifying the exposure.
+The condition synchronises with `QualitySessionRuntime.FrameProcessed` so N.I.N.A. cannot begin the next loop decision before QSM finishes classifying the exposure.
+
+For the first field-test implementation, the parent controlled container should produce exactly one eligible LIGHT per iteration. This avoids ambiguous mapping and will be relaxed only after a multi-exposure correlation design is explicitly tested.
 
 ### Multiple filters
 
@@ -252,7 +293,7 @@ A pure captured-exposure mode may be exposed for comparison/debugging but is not
 
 ## 3. Auto calibration
 
-Planned after the valid-target gate is stable:
+Planned after the valid-target + source-scope gate is stable:
 
 - derive suggestions from a stable early-session window;
 - never silently alter limits in default mode;
@@ -306,7 +347,14 @@ Before asking the user to try V3 on sky:
 
 1. plugin builds against `.NET 10` + `NINA.Plugin 3.3.0.1057-nightly`;
 2. all existing 108 V1/V2 synthetic frames still pass unchanged;
-3. add deterministic valid-target tests, including at minimum:
+3. source-scoping tests prove:
+   - `SNAPSHOT` ignored;
+   - plate-solve snapshot ignored;
+   - manual/test LIGHT outside selected sequence scope ignored by safe default;
+   - eligible Advanced Sequencer LIGHT accepted;
+   - QSM controlled-block LIGHT marked controlled;
+   - file action never runs for ineligible source;
+4. add deterministic valid-target tests, including at minimum:
    - all-good run reaches target with captured == valid + learning;
    - `10 valid` with `3 rejected` finishes at `10/10 valid` and `13+ learning captured` as expected;
    - warning counts as valid by default;
@@ -317,10 +365,10 @@ Before asking the user to try V3 on sky:
    - reset clears condition progress;
    - persisted counters survive serialization/clone path where applicable;
    - missing QSM result times out and stops safely rather than looping forever;
-4. Advanced Sequencer condition appears and renders correctly in N.I.N.A.;
-5. development field-test package can include Synthetic Lab for offline validation;
-6. production package build excludes Synthetic Lab UI;
-7. roadmap/changelog version metadata updated before artifact handoff.
+5. Advanced Sequencer condition appears and renders correctly in N.I.N.A.;
+6. development field-test package can include Synthetic Lab for offline validation;
+7. production package build excludes Synthetic Lab UI;
+8. roadmap/changelog/version metadata updated before artifact handoff.
 
 For the **first real-sky V3 test**, keep QSM file handling in `Monitor Only` so sequence-count behavior is tested independently from rename/move actions.
 
@@ -345,6 +393,8 @@ For the **first real-sky V3 test**, keep QSM file handling in `Monitor Only` so 
 | Rejected-frame cause markers |  | ✅ | ✅ |
 | Frame ranking |  | ✅ | ✅ |
 | Interactive HTML report |  | ✅ | ✅ |
+| Explicit ON/OFF activation | ✅ | ✅ | 🚧 hardening |
+| Acquisition source scoping |  |  | 🚧 |
 | Auto calibration |  |  | ⏳ |
 | Adaptive threshold suggestions |  |  | ⏳ |
 | Environmental correlation |  |  | ⏳ |
@@ -369,6 +419,8 @@ Synthetic Lab is intentionally omitted from the production feature matrix becaus
 8. HFR/FWHM/eccentricity remain excluded from core reject logic unless the user explicitly changes that decision.
 9. Rejection marker icons are presentation only; raw reject reason codes remain authoritative.
 10. The V3 loop must fail safe if classification is missing or ambiguous; never capture indefinitely because of a plugin synchronization fault.
+11. Never infer file eligibility merely from extension/path. Acquisition provenance must be established from N.I.N.A. image type + sequence/runtime evidence.
+12. Never rename/move an ineligible or provenance-unknown frame.
 
 ---
 
