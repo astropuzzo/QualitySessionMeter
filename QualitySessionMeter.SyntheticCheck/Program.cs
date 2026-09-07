@@ -70,14 +70,17 @@ foreach (var scenario in scenarios) {
             $"Peak={Fmt(result.MaxGuideExcursionArcsec),6} Sustain={Fmt(result.SustainedGuideExcursionSeconds),5} reasons={result.ReasonText}");
     }
 
+    failures.AddRange(SyntheticEventOracle.ValidateWholeNight(scenario, store.Results, store.Events));
     ValidateArtifacts(scenario, store, scenario.Frames.Count, failures);
     int scenarioFailures = failures.Count - failuresBefore;
+    Console.WriteLine($"Events grouped: {store.Events.Count}");
     Console.WriteLine(scenarioFailures == 0
         ? $"PROFILE VERDICT: PASS {scenario.Frames.Count}/{scenario.Frames.Count}"
         : $"PROFILE VERDICT: FAIL ({scenarioFailures} mismatch/error records)");
     Console.WriteLine();
 }
 
+failures.AddRange(SyntheticEventOracle.RunDeterministicGroupingCases());
 await ValidateFileActions(outputRoot, failures);
 
 var verdict = failures.Count == 0 ? "PASS" : "FAIL";
@@ -160,10 +163,11 @@ static void ValidateArtifacts(
     List<string> failures) {
 
     var csv = Path.Combine(store.SessionFolder, "frames.csv");
+    var eventsCsv = Path.Combine(store.SessionFolder, "events.csv");
     var json = Path.Combine(store.SessionFolder, "session.json");
     var svg = Path.Combine(store.SessionFolder, "quality.svg");
 
-    foreach (var file in new[] { csv, json, svg }) {
+    foreach (var file in new[] { csv, eventsCsv, json, svg }) {
         if (!File.Exists(file) || new FileInfo(file).Length == 0) {
             failures.Add($"{scenario.DisplayName}: artifact missing or empty: {file}");
         }
@@ -179,6 +183,13 @@ static void ValidateArtifacts(
         }
     }
 
+    if (File.Exists(eventsCsv)) {
+        var lines = File.ReadLines(eventsCsv).ToArray();
+        if (lines.Length != store.Events.Count + 1) {
+            failures.Add($"{scenario.DisplayName}: events.csv expected {store.Events.Count + 1} lines including header, got {lines.Length}");
+        }
+    }
+
     if (File.Exists(json)) {
         try {
             using var document = JsonDocument.Parse(File.ReadAllText(json));
@@ -190,6 +201,12 @@ static void ValidateArtifacts(
             }
             if (frameCount > 0 && !frames[0].TryGetProperty("ConfidenceScore", out _)) {
                 failures.Add($"{scenario.DisplayName}: session.json does not persist ConfidenceScore");
+            }
+
+            int eventCount = document.RootElement.GetProperty("eventCount").GetInt32();
+            int serializedEvents = document.RootElement.GetProperty("events").GetArrayLength();
+            if (eventCount != store.Events.Count || serializedEvents != store.Events.Count) {
+                failures.Add($"{scenario.DisplayName}: session.json event count mismatch, expected {store.Events.Count}, got eventCount={eventCount}, events={serializedEvents}");
             }
         } catch (Exception ex) {
             failures.Add($"{scenario.DisplayName}: session.json parse failed: {ex.Message}");
