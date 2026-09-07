@@ -1,0 +1,56 @@
+<ResourceDictionary
+    x:Class="NINA.Plugin.QualitySessionMeter.UI.SequencerResources"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:seq="clr-namespace:NINA.Plugin.QualitySessionMeter.Sequencer"
+    xmlns:nina="clr-namespace:NINA.View.Sequencer;assembly=NINA.Sequencer"
+    xmlns:mini="clr-namespace:NINA.View.Sequencer.MiniSequencer;assembly=NINA.Sequencer">
+
+    <GeometryGroup x:Key="QSM_ValidTargetSVG">
+        <EllipseGeometry Center="32,32" RadiusX="27" RadiusY="27"/>
+        <PathGeometry Figures="M 16,33 L 27,44 L 49,20"/>
+        <PathGeometry Figures="M 13,51 L 51,51"/>
+    </GeometryGroup>
+
+    <DataTemplate DataType="{x:Type seq:QsmValidFrameTargetCondition}">
+        <nina:SequenceBlockView>
+            <nina:SequenceBlockView.SequenceItemContent>
+                <Grid MinWidth="520">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="78"/>
+                        <ColumnDefinition Width="18"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Valid target"/>
+                    <TextBox Grid.Row="0" Grid.Column="1" Margin="6,0,0,0" Text="{Binding TargetValidFrames, UpdateSourceTrigger=LostFocus}" TextAlignment="Right"/>
+
+                    <CheckBox Grid.Row="0" Grid.Column="3" VerticalAlignment="Center" IsChecked="{Binding CountWarningsAsValid}" Content="Warnings count as valid"/>
+                    <StackPanel Grid.Row="0" Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding ProgressText}"/>
+                        <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" Opacity="0.72" Text="{Binding LastStatus}"/>
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Margin="0,6,0,0" Opacity="0.72" Text="{Binding BreakdownText}"/>
+                </Grid>
+            </nina:SequenceBlockView.SequenceItemContent>
+        </nina:SequenceBlockView>
+    </DataTemplate>
+
+    <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.Sequencer.QsmValidFrameTargetCondition_Mini">
+        <mini:MiniSequenceItem>
+            <mini:MiniSequenceItem.SequenceItemContent>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding ProgressText}"/>
+                    <TextBlock Margin="8,0,0,0" Opacity="0.72" Text="{Binding LastStatus}"/>
+                </StackPanel>
+            </mini:MiniSequenceItem.SequenceItemContent>
+        </mini:MiniSequenceItem>
+    </DataTemplate>
+</ResourceDictionary>
