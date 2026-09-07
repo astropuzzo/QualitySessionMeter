@@ -2,13 +2,50 @@
 
 All notable changes to QualitySessionMeter are documented here.
 
+## [0.1.0.1] - 2026-09-07
+
+### N.I.N.A. 3.3 NIGHTLY #057 field-test compatibility
+
+- Retargeted the current field-test build to `.NET 10` and `NINA.Plugin 3.3.0.1057-nightly` for N.I.N.A. `3.3.0.1057`.
+- Fixed plugin startup failure caused by manually re-loading an already exported WPF `ResourceDictionary` from both dockable constructors (`Cannot re-initialize ResourceDictionary instance`). Dockable icons are now created directly in code.
+- Aligned `MinimumApplicationVersion` metadata with the tested 3.3 nightly build.
+- User verified that build `0.1.0.1` loads successfully inside N.I.N.A. 3.3 NIGHTLY #057.
+
+### Synthetic Lab development harness
+
+- Added an isolated `QSM Synthetic Lab` dockable for deterministic testing inside the real N.I.N.A. host without camera hardware or real image files.
+- Synthetic mode ignores live `ImageSaved` callbacks, uses its own baseline/session store and never invokes real rejected-file actions.
+- Added a frame-level PASS/FAIL oracle using the same production `QualityEngine`, `BaselineEngine`, `GuideMetricsCalculator` and `SessionStore` code paths.
+- User executed the original canonical in-host suite successfully: `PASS 29/29`.
+- Synthetic testing exposed and fixed a real persistence bug: `session.json` could fail on `NaN` values during LEARNING. Unavailable floating-point values are now serialized as JSON `null`.
+- Added isolated CI tests for `BAD_` prefix and `Rejected` subfolder actions using temporary fake files.
+
+### Multi-profile synthetic expansion
+
+The development harness is being expanded beyond isolated edge cases to whole-night quality profiles:
+
+- Canonical regression;
+- Excellent night;
+- Average night;
+- Poor night;
+- Severe / disaster night;
+- Deterioration + recovery.
+
+CI now exercises every profile and fails if any frame does not match its expected state/rejection reasons.
+
+### Release policy
+
+The Synthetic Lab is a **development/pre-release harness**. It must not be exposed as a normal feature in the final public V3 package. Automated headless synthetic regression remains part of CI even when the public release artifact excludes the Synthetic Lab UI.
+
+---
+
 ## [0.1.0] - 2026-09-07
 
 ### V1 — initial implementation
 
 #### Added
 
-- N.I.N.A. plugin bootstrap targeting `.NET 8` and `NINA.Plugin 3.2.0.9001`.
+- Initial N.I.N.A. plugin bootstrap, originally developed against `.NET 8` and `NINA.Plugin 3.2.0.9001` before the current 3.3 nightly field target was adopted.
 - Dockable Quality Session Meter panel for the Imaging workspace.
 - Real-time **Quality Score 0–100** for every LIGHT exposure.
 - Independent sub-scores for:
@@ -71,8 +108,8 @@ These metrics were excluded after real-world observations showed they can remain
 
 ### Validation
 
-V1 compiled successfully on GitHub Actions Windows against `NINA.Plugin 3.2.0.9001` before and after the main runtime-hardening pass. The final candidate commit is independently validated by CI before field testing.
+The initial V1 compiled successfully on GitHub Actions Windows against `NINA.Plugin 3.2.0.9001`. Current field-test development has moved to N.I.N.A. 3.3 NIGHTLY #057 as documented above and in `ROADMAP.md`.
 
-### Next validation stage
+### Field validation strategy
 
-Real-night Monitor Only testing is required to tune practical thresholds across different mounts, focal lengths, filters, guide cadences and sky conditions before an official public plugin-store release. See `docs/REAL_NIGHT_TEST_PLAN.md`.
+Continue to use Monitor Only for first real-sky validation. Synthetic testing reduces software risk but does not replace hardware/sky validation of guide sample timing, star detection behavior, threshold realism, or real N.I.N.A. save/file-action interactions.
