@@ -22,6 +22,7 @@ namespace NINA.Plugin.QualitySessionMeter.UI;
 [Export(typeof(IDockableVM))]
 public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     private readonly QualitySessionRuntime runtime;
+    private bool lastSyntheticMode;
 
     public override bool IsTool { get; } = true;
 
@@ -88,6 +89,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         var accessor = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         var settings = new QualitySettings(accessor);
         runtime = QualitySessionRuntimeRegistry.GetOrCreate(profileService, imageSaveMediator, guiderMediator, settings);
+        lastSyntheticMode = runtime.IsSyntheticMode;
 
         ReloadLiveFrames();
 
@@ -103,17 +105,16 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     }
 
     private async Task RunSyntheticSessionAsync() {
-        Frames.Clear();
-        CurrentFrame = null;
-        RaiseAllSummary();
+        if (!runtime.IsSyntheticMode) {
+            Frames.Clear();
+            CurrentFrame = null;
+            RaiseAllSummary();
+        }
         await runtime.RunCanonicalSyntheticSessionAsync(SyntheticDelayMs);
         RaiseAllSummary();
     }
 
-    private void ReturnToLive() {
-        runtime.ExitSyntheticMode();
-        ReloadLiveFrames();
-    }
+    private void ReturnToLive() => runtime.ExitSyntheticMode();
 
     private void ReloadLiveFrames() {
         Frames.Clear();
@@ -137,6 +138,18 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
 
     private void RuntimeSyntheticStateChanged(object sender, EventArgs e) {
         void Apply() {
+            bool nowSynthetic = runtime.IsSyntheticMode;
+
+            if (nowSynthetic && !lastSyntheticMode) {
+                Frames.Clear();
+                CurrentFrame = null;
+            } else if (!nowSynthetic && lastSyntheticMode) {
+                lastSyntheticMode = false;
+                ReloadLiveFrames();
+                return;
+            }
+
+            lastSyntheticMode = nowSynthetic;
             RaisePropertyChanged(nameof(IsSyntheticMode));
             RaisePropertyChanged(nameof(IsSyntheticRunning));
             RaisePropertyChanged(nameof(IsLiveMode));
@@ -146,6 +159,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
             RaisePropertyChanged(nameof(SyntheticFailureSummary));
             RaisePropertyChanged(nameof(SessionFolder));
             RaisePropertyChanged(nameof(ModeText));
+            RaiseAllSummary();
         }
 
         var dispatcher = Application.Current?.Dispatcher;
