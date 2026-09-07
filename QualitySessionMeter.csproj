@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
     <OutputType>Library</OutputType>
     <RootNamespace>NINA.Plugin.QualitySessionMeter</RootNamespace>
     <AssemblyName>QualitySessionMeter</AssemblyName>
@@ -30,6 +30,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="NINA.Plugin" Version="3.2.0.9001" />
+    <PackageReference Include="NINA.Plugin" Version="3.3.0.1057-nightly" />
   </ItemGroup>
 </Project>
