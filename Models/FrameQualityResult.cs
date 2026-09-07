@@ -36,6 +36,15 @@ public sealed class FrameQualityResult {
     public double? BackgroundQuality { get; set; }
     public double OverallQuality { get; set; }
 
+    // V2: confidence is intentionally separate from Quality and ACCEPT/REJECT.
+    // The component values make the score auditable in CSV/JSON and later reports.
+    public double ConfidenceScore { get; set; } = double.NaN;
+    public double ConfidenceDataCompleteness { get; set; } = double.NaN;
+    public double ConfidenceBaselineMaturity { get; set; } = double.NaN;
+    public double ConfidenceThresholdSeparation { get; set; } = double.NaN;
+    public double ConfidenceAgreement { get; set; } = double.NaN;
+    public string ConfidenceReason { get; set; } = "";
+
     public FrameStatus Status { get; set; }
     public List<string> RejectReasons { get; set; } = new();
     public string ProbableCause { get; set; } = "";
@@ -49,6 +58,14 @@ public sealed class FrameQualityResult {
         >= 65 => "FAIR",
         >= 50 => "POOR",
         _ => "BAD"
+    };
+
+    public string ConfidenceLabel => double.IsNaN(ConfidenceScore) ? "N/A" : ConfidenceScore switch {
+        >= 95 => "VERY HIGH",
+        >= 80 => "HIGH",
+        >= 65 => "MODERATE",
+        >= 45 => "LOW",
+        _ => "VERY LOW"
     };
 
     public string StatusText => Status switch {
@@ -74,6 +91,9 @@ public sealed class FrameQualityResult {
         : System.IO.Path.GetFileName(FinalPath ?? OriginalPath);
 
     public string QualityText => OverallQuality.ToString("0", CultureInfo.InvariantCulture);
+    public string ConfidenceText => double.IsNaN(ConfidenceScore)
+        ? "N/A"
+        : ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + "%";
     public string GuideRmsText => FormatArcsec(GuideRmsArcsec);
     public string ExcursionText => FormatArcsec(MaxGuideExcursionArcsec);
     public string StarsText => StarCount >= 0 ? StarCount.ToString(CultureInfo.InvariantCulture) : "N/A";
