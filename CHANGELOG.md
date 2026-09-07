@@ -2,6 +2,49 @@
 
 All notable changes to QualitySessionMeter are documented here.
 
+## [0.2.0.0] - 2026-09-07
+
+### V2 — Smart Quality Analysis field-test candidate
+
+- Added per-frame **Confidence Score** independent from Quality and hard ACCEPT/REJECT decisions.
+- Confidence is derived from data completeness, baseline maturity, threshold separation and independent-channel agreement.
+- Missing analysis data now produces zero confidence in the quality judgment; LEARNING confidence is capped until the adaptive reference matures.
+- Added **Session Event Grouping** with event type, start/end, affected frames, severity, mean/peak confidence and primary cause.
+- Added `events.csv` and event persistence inside `session.json`.
+- Added **Guide Pattern Analysis** with diagnostic classes including stable, isolated spike, sustained excursion, oscillation, drift, wind-like and irregular behavior.
+- Guide-pattern diagnostics include confidence, drift rate, oscillation range, sign changes, burstiness and explanatory detail.
+- Added conservative **Slow Trend Analysis** for star/background behavior with expected value, rate, R² and residual diagnostics.
+- Hard V1 star/background rejection still uses the robust rolling reference; trend analysis does not normalize away a slowly worsening cloud event.
+- Added a V2 **multichannel timeline** covering Quality, Confidence, Guide RMS, stars and background deviations.
+- Added accepted-frame **Best / Worst ranking**.
+- Added self-contained interactive `report.html` with session summary, timeline, events, cause distribution, ranking and frame history.
+- Expanded the main N.I.N.A. dockable into a scrollable V2 dashboard so new diagnostics remain readable.
+- Synthetic Lab now exposes selectable whole-night profiles for Canonical, Excellent, Average, Poor, Severe/Disaster and Deterioration + Recovery sessions.
+- Added deterministic CI oracles for Confidence, Event Grouping, Guide Patterns and Slow Trend behavior on top of the existing 108-frame whole-night regression.
+- Fixed misleading presentation during adaptive learning: LEARNING frames now display `Quality — / LEARNING` instead of `100 / EXCELLENT`; analysis errors display `Quality — / UNASSESSED`.
+- Bumped field-test version to `0.2.0.0` for N.I.N.A. `3.3 NIGHTLY #057` / `NINA.Plugin 3.3.0.1057-nightly` / `.NET 10`.
+
+### Validation before host test
+
+The latest pre-version-bump V2 CI gate passed with:
+
+- plugin build;
+- 6 whole-night profiles / 108 frames / 0 failures;
+- Confidence oracle;
+- Event Grouping oracle;
+- Guide Pattern oracle;
+- Trend oracle;
+- CSV/JSON/SVG/HTML persistence;
+- isolated `BAD_` and move-to-`Rejected` file-action tests.
+
+The final `0.2.0.0` candidate must pass the same gate before user-local N.I.N.A. validation and before PR #2 is merged.
+
+### Release policy
+
+Synthetic Lab remains a development/pre-release harness. It is intentionally present in V2 field-test builds but **must not ship as a normal production feature in the final public V3 package**. Headless synthetic regression remains permanent CI coverage.
+
+---
+
 ## [0.1.0.1] - 2026-09-07
 
 ### N.I.N.A. 3.3 NIGHTLY #057 field-test compatibility
@@ -22,7 +65,7 @@ All notable changes to QualitySessionMeter are documented here.
 
 ### Multi-profile synthetic expansion
 
-The development harness is being expanded beyond isolated edge cases to whole-night quality profiles:
+The development harness was expanded beyond isolated edge cases to whole-night quality profiles:
 
 - Canonical regression;
 - Excellent night;
@@ -31,7 +74,7 @@ The development harness is being expanded beyond isolated edge cases to whole-ni
 - Severe / disaster night;
 - Deterioration + recovery.
 
-CI now exercises every profile and fails if any frame does not match its expected state/rejection reasons.
+CI exercises every profile and fails if any frame does not match its expected state/rejection reasons.
 
 ### Release policy
 
