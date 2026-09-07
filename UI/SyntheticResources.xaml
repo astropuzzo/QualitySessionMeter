@@ -26,10 +26,24 @@
                 <Border Style="{StaticResource LabCardStyle}">
                     <StackPanel>
                         <TextBlock Text="QSM SYNTHETIC LAB" FontSize="19" FontWeight="SemiBold" Foreground="{StaticResource LabText}"/>
-                        <TextBlock Text="Local deterministic test session inside N.I.N.A." Foreground="{StaticResource LabMuted}" Margin="0,3,0,10"/>
+                        <TextBlock Text="Development / pre-release test harness inside N.I.N.A." Foreground="{StaticResource LabMuted}" Margin="0,3,0,10"/>
                         <Border Background="#10251A" BorderBrush="#285A3A" BorderThickness="1" CornerRadius="6" Padding="8">
                             <TextBlock Text="{Binding SafetyText}" Foreground="{StaticResource LabSafe}" TextWrapping="Wrap" FontWeight="SemiBold"/>
                         </Border>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource LabCardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="SYNTHETIC NIGHT PROFILE" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource LabMuted}"/>
+                        <ComboBox ItemsSource="{Binding Scenarios}"
+                                  SelectedItem="{Binding SelectedScenario}"
+                                  DisplayMemberPath="DisplayName"
+                                  IsEnabled="{Binding CanRun}"
+                                  Margin="0,6,0,8"
+                                  MinWidth="260"/>
+                        <TextBlock Text="{Binding ScenarioDescription}" Foreground="{StaticResource LabText}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding ScenarioExpectedSummary}" Foreground="{StaticResource LabAccent}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     </StackPanel>
                 </Border>
 
@@ -54,7 +68,9 @@
 
                 <Border Style="{StaticResource LabCardStyle}">
                     <StackPanel>
-                        <TextBlock Text="CURRENT SCENARIO" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource LabMuted}"/>
+                        <TextBlock Text="RUNNING PROFILE" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource LabMuted}"/>
+                        <TextBlock Text="{Binding RunningScenario}" FontSize="15" Foreground="{StaticResource LabAccent}" TextWrapping="Wrap" Margin="0,4,0,8"/>
+                        <TextBlock Text="CURRENT FRAME SCENARIO" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource LabMuted}"/>
                         <TextBlock Text="{Binding LastScenario}" FontSize="15" Foreground="{StaticResource LabText}" TextWrapping="Wrap" Margin="0,4,0,8"/>
                         <TextBlock Text="VERDICT DETAILS" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource LabMuted}"/>
                         <TextBlock Text="{Binding FailureSummary}" Foreground="{StaticResource LabText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
@@ -63,22 +79,14 @@
 
                 <Border Style="{StaticResource LabCardStyle}">
                     <StackPanel>
-                        <TextBlock Text="CANONICAL V1 COVERAGE" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource LabMuted}" Margin="0,0,0,6"/>
+                        <TextBlock Text="AVAILABLE PROFILES" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource LabMuted}" Margin="0,0,0,6"/>
                         <TextBlock Foreground="{StaticResource LabText}" TextWrapping="Wrap">
-                            <Run Text="• 4-frame learning phase and rolling baseline&#10;"/>
-                            <Run Text="• normal accepted frame&#10;"/>
-                            <Run Text="• single 3&quot; guide spike that must NOT be rejected&#10;"/>
-                            <Run Text="• sustained wind excursion that MUST be rejected&#10;"/>
-                            <Run Text="• hard 6&quot; guide excursion&#10;"/>
-                            <Run Text="• 40% star-count loss&#10;"/>
-                            <Run Text="• background +40% and -35%&#10;"/>
-                            <Run Text="• combined cloud + bright-background event&#10;"/>
-                            <Run Text="• near-threshold WARNING&#10;"/>
-                            <Run Text="• recovery without rejected-frame baseline contamination&#10;"/>
-                            <Run Text="• independent Ha baseline&#10;"/>
-                            <Run Text="• independent 60 s exposure baseline&#10;"/>
-                            <Run Text="• missing guide/star/background data → ERROR&#10;"/>
-                            <Run Text="• new-target baseline isolation"/>
+                            <Run Text="• Canonical regression — every V1 rule / baseline edge case&#10;"/>
+                            <Run Text="• Excellent night — stable, high-quality sequence&#10;"/>
+                            <Run Text="• Average night — normal variation, warnings and occasional rejects&#10;"/>
+                            <Run Text="• Poor night — frequent wind/cloud/background failures&#10;"/>
+                            <Run Text="• Severe / disaster night — repeated major failures&#10;"/>
+                            <Run Text="• Deterioration + recovery — quality trend down, collapse, recovery"/>
                         </TextBlock>
                     </StackPanel>
                 </Border>
@@ -86,7 +94,7 @@
                 <Border Style="{StaticResource LabCardStyle}">
                     <StackPanel>
                         <WrapPanel HorizontalAlignment="Right">
-                            <Button Content="Run full self-test" Command="{Binding RunCommand}" IsEnabled="{Binding CanRun}" Margin="4" Padding="12,5"/>
+                            <Button Content="Run selected scenario" Command="{Binding RunCommand}" IsEnabled="{Binding CanRun}" Margin="4" Padding="12,5"/>
                             <Button Content="Stop" Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}" Margin="4" Padding="12,5"/>
                             <Button Content="Open synthetic folder" Command="{Binding OpenFolderCommand}" Margin="4" Padding="12,5"/>
                             <Button Content="Return to Live" Command="{Binding ReturnLiveCommand}" IsEnabled="{Binding CanReturnLive}" Margin="4" Padding="12,5"/>
