@@ -25,6 +25,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="QualitySessionMeter.SyntheticCheck\**\*.cs" />
+    <None Remove="QualitySessionMeter.SyntheticCheck\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="NINA.Plugin" Version="3.2.0.9001" />
   </ItemGroup>
 </Project>
