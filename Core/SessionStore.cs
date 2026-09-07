@@ -88,7 +88,7 @@ public sealed class SessionStore {
         await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
 
         if (!exists) {
-            await writer.WriteLineAsync("Frame,TimestampUtc,Filename,Target,Filter,Exposure,Gain,BinX,BinY,Stars,StarsBaseline,StarsDeltaPct,Background,BackgroundBaseline,BackgroundDeltaPct,GuideSamples,GuideRMS,MaxGuideExcursion,SustainedExcursionSeconds,GuidingQuality,StabilityQuality,TransparencyQuality,BackgroundQuality,OverallQuality,Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly");
+            await writer.WriteLineAsync("Frame,TimestampUtc,Filename,Target,Filter,Exposure,Gain,BinX,BinY,Stars,StarsBaseline,StarsDeltaPct,Background,BackgroundBaseline,BackgroundDeltaPct,GuideSamples,GuideRMS,MaxGuideExcursion,SustainedExcursionSeconds,GuidingQuality,StabilityQuality,TransparencyQuality,BackgroundQuality,OverallQuality,Confidence,ConfidenceLabel,ConfidenceDataCompleteness,ConfidenceBaselineMaturity,ConfidenceThresholdSeparation,ConfidenceAgreement,ConfidenceReason,Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly");
         }
 
         string[] fields = {
@@ -116,6 +116,13 @@ public sealed class SessionStore {
             Num(r.TransparencyQuality),
             Num(r.BackgroundQuality),
             Num(r.OverallQuality),
+            Num(r.ConfidenceScore),
+            Csv(r.ConfidenceLabel),
+            Num(r.ConfidenceDataCompleteness),
+            Num(r.ConfidenceBaselineMaturity),
+            Num(r.ConfidenceThresholdSeparation),
+            Num(r.ConfidenceAgreement),
+            Csv(r.ConfidenceReason),
             r.Status.ToString(),
             Csv(r.ReasonText),
             Csv(r.ProbableCause),
@@ -138,6 +145,11 @@ public sealed class SessionStore {
         int learning = copy.Count(x => x.Status == FrameStatus.Learning);
         int errors = copy.Count(x => x.Status == FrameStatus.Error);
         double acceptedQuality = copy.Where(x => x.IsUsable).Select(x => x.OverallQuality).DefaultIfEmpty(0).Average();
+        double acceptedConfidence = copy
+            .Where(x => x.IsUsable && !double.IsNaN(x.ConfidenceScore) && !double.IsInfinity(x.ConfidenceScore))
+            .Select(x => x.ConfidenceScore)
+            .DefaultIfEmpty(0)
+            .Average();
         double acceptanceRate = usable + rejected == 0 ? 0 : usable * 100.0 / (usable + rejected);
 
         var summary = new {
@@ -150,6 +162,7 @@ public sealed class SessionStore {
             errors,
             acceptanceRate,
             acceptedQuality,
+            acceptedConfidence,
             frames = copy
         };
 
