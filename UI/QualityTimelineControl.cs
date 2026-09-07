@@ -209,7 +209,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
         }
         DrawScaleHint(dc, labelWidth + 4, rmsBand + 2, $"0–{maxRms:0.0}\"", secondaryText);
 
-        double observedAbs = frames.SelectMany(f => new[] { Math.AbsFinite(f.StarDeviationPercent), Math.AbsFinite(f.BackgroundDeviationPercent) }).DefaultIfEmpty(0).Max();
+        double observedAbs = frames.SelectMany(f => new[] { AbsFinite(f.StarDeviationPercent), AbsFinite(f.BackgroundDeviationPercent) }).DefaultIfEmpty(0).Max();
         double thresholdAbs = Math.Max(MaxStarLossPercent, Math.Max(MaxBackgroundIncreasePercent, MaxBackgroundDecreasePercent));
         double imgAbsMax = Math.Max(50.0, Math.Max(observedAbs * 1.15, thresholdAbs * 1.25));
         imgAbsMax = Math.Min(500.0, imgAbsMax);
@@ -348,8 +348,8 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
     private static void DrawLegendItem(DrawingContext dc, double x, double y, Brush color, string name, string detail) {
         dc.DrawEllipse(color, null, new Point(x + 5, y + 6), 3.2, 3.2);
-        dc.DrawText(Format(name, 9.1, color, FontWeights.SemiBold), new Point(x + 13, y));
         var nameText = Format(name, 9.1, color, FontWeights.SemiBold);
+        dc.DrawText(nameText, new Point(x + 13, y));
         dc.DrawText(Format(detail, 7.8, FrozenBrush(132, 139, 148), FontWeights.Normal), new Point(x + 16 + nameText.Width, y + 1));
     }
 
@@ -393,7 +393,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
     private static string FormatArcsec(double value) => Finite(value) ? value.ToString("0.00", CultureInfo.InvariantCulture) + "\"" : "N/A";
     private static string FormatPercent(double value) => Finite(value) ? value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "%" : "N/A";
     private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
-    private static double AbsFinite(this double value) => Finite(value) ? Math.Abs(value) : 0;
+    private static double AbsFinite(double value) => Finite(value) ? Math.Abs(value) : 0;
 
     private static SolidColorBrush FrozenBrush(byte r, byte g, byte b) {
         var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
