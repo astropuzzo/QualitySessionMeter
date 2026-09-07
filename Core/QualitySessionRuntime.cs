@@ -4,9 +4,14 @@ using NINA.Equipment.Model;
 using NINA.Image.ImageAnalysis;
 using NINA.Plugin.QualitySessionMeter.Models;
 using NINA.Plugin.QualitySessionMeter.Settings;
+using NINA.Plugin.QualitySessionMeter.Synthetic;
 using NINA.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -25,10 +30,33 @@ public sealed class QualitySessionRuntime : IDisposable {
     private int frameIndex;
     private bool disposed;
 
+    private CancellationTokenSource syntheticCts;
+    private BaselineEngine syntheticBaseline;
+    private SessionStore syntheticSessionStore;
+    private QualitySettings syntheticSettings;
+    private int syntheticProcessed;
+    private int syntheticTotal;
+    private int syntheticFailures;
+    private string syntheticStatus = "OFF";
+    private string syntheticLastScenario = "";
+    private string syntheticFailureSummary = "";
+
     public event EventHandler<FrameQualityResult> FrameProcessed;
+    public event EventHandler SyntheticStateChanged;
 
     public QualitySettings Settings => settings;
     public SessionStore Store => sessionStore;
+    public bool IsSyntheticMode { get; private set; }
+    public bool IsSyntheticRunning { get; private set; }
+    public int SyntheticProcessed => syntheticProcessed;
+    public int SyntheticTotal => syntheticTotal;
+    public int SyntheticFailures => syntheticFailures;
+    public string SyntheticStatus => syntheticStatus;
+    public string SyntheticLastScenario => syntheticLastScenario;
+    public string SyntheticFailureSummary => syntheticFailureSummary;
+    public string ActiveSessionFolder => IsSyntheticMode
+        ? syntheticSessionStore?.SessionFolder ?? ""
+        : sessionStore.SessionFolder;
 
     public QualitySessionRuntime(
         IProfileService profileService,
@@ -46,6 +74,7 @@ public sealed class QualitySessionRuntime : IDisposable {
     }
 
     private async Task BeforeFinalizeImageSaved(object sender, BeforeFinalizeImageSavedEventArgs e) {
+        if (IsSyntheticMode) return;
         if (!settings.Enabled || e?.Image?.RawImageData?.MetaData?.Image == null) return;
         if (e.Image.RawImageData.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
 
@@ -70,6 +99,8 @@ public sealed class QualitySessionRuntime : IDisposable {
     }
 
     private void ImageSaved(object sender, ImageSavedEventArgs e) {
+        // Synthetic Lab is deliberately isolated from real camera/save events.
+        if (IsSyntheticMode) return;
         if (!settings.Enabled || e?.MetaData?.Image == null) return;
         if (e.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
         _ = ProcessImageAsync(e);
@@ -151,6 +182,221 @@ public sealed class QualitySessionRuntime : IDisposable {
         }
     }
 
+    /// <summary>
+    /// Runs a deterministic synthetic night entirely inside the plugin. It does not access the camera,
+    /// does not consume real ImageSaved events, does not touch live baselines and never invokes file actions.
+    /// The same QualityEngine, BaselineEngine, GuideMetricsCalculator and SessionStore classes used by
+    /// production processing are exercised.
+    /// </summary>
+    public async Task RunCanonicalSyntheticSessionAsync(int frameDelayMs = 150) {
+        if (disposed || IsSyntheticRunning) return;
+
+        await processingLock.WaitAsync();
+        try {
+            syntheticCts?.Cancel();
+            syntheticCts?.Dispose();
+            syntheticCts = new CancellationTokenSource();
+            syntheticBaseline = new BaselineEngine();
+            syntheticSettings = SyntheticSessionGenerator.CreateCanonicalSettings();
+
+            var syntheticRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "NINA",
+                "QualitySessionMeter",
+                "SyntheticSessions");
+            syntheticSessionStore = new SessionStore(syntheticRoot);
+
+            syntheticProcessed = 0;
+            syntheticFailures = 0;
+            syntheticFailureSummary = "";
+            syntheticLastScenario = "";
+            syntheticStatus = "RUNNING";
+            IsSyntheticMode = true;
+            IsSyntheticRunning = true;
+            syntheticTotal = SyntheticSessionGenerator.BuildCanonicalNight().Count;
+            RaiseSyntheticStateChanged();
+        } finally {
+            processingLock.Release();
+        }
+
+        var definitions = SyntheticSessionGenerator.BuildCanonicalNight();
+        var failures = new List<string>();
+        var baseTime = new DateTime(2026, 9, 7, 20, 0, 0, DateTimeKind.Utc);
+        var token = syntheticCts.Token;
+
+        try {
+            for (int i = 0; i < definitions.Count; i++) {
+                token.ThrowIfCancellationRequested();
+                var definition = definitions[i];
+                syntheticLastScenario = definition.Name;
+
+                var start = baseTime.AddMinutes(i * 4);
+                var key = new BaselineKey(
+                    definition.Target,
+                    definition.Filter,
+                    definition.ExposureSeconds,
+                    100,
+                    1,
+                    1,
+                    "SyntheticCam");
+
+                var snapshot = syntheticBaseline.GetSnapshot(key, syntheticSettings.MinimumLearningFrames);
+                var guideSamples = definition.GuideFactory?.Invoke(start, definition.ExposureSeconds)
+                    ?? Array.Empty<GuideSample>();
+                var guide = GuideMetricsCalculator.Calculate(
+                    guideSamples,
+                    start,
+                    definition.ExposureSeconds,
+                    syntheticSettings.ExcursionThreshold);
+
+                var input = new FrameQualityInput {
+                    FrameIndex = i + 1,
+                    TimestampUtc = start,
+                    OriginalPath = $"SYNTHETIC://frame_{i + 1:000}_{Sanitize(definition.Name)}.fits",
+                    Target = definition.Target,
+                    Filter = definition.Filter,
+                    ExposureSeconds = definition.ExposureSeconds,
+                    Gain = 100,
+                    BinX = 1,
+                    BinY = 1,
+                    Camera = "SyntheticCam",
+                    StarCount = definition.StarCount,
+                    BackgroundMedian = definition.BackgroundMedian,
+                    Baseline = snapshot,
+                    Guide = guide
+                };
+
+                var result = qualityEngine.Evaluate(input, syntheticSettings);
+                result.MonitorOnly = true;
+
+                if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
+                    syntheticBaseline.AddAccepted(
+                        key,
+                        input.StarCount,
+                        input.BackgroundMedian,
+                        syntheticSettings.BaselineWindow);
+                }
+
+                string mismatch = ValidateSyntheticResult(definition, result);
+                if (!string.IsNullOrWhiteSpace(mismatch)) {
+                    failures.Add($"Frame {i + 1} — {definition.Name}: {mismatch}");
+                    syntheticFailures++;
+                }
+
+                await syntheticSessionStore.AppendAsync(result);
+                syntheticProcessed++;
+                FrameProcessed?.Invoke(this, result);
+                RaiseSyntheticStateChanged();
+
+                if (frameDelayMs > 0) {
+                    await Task.Delay(Math.Clamp(frameDelayMs, 0, 5000), token);
+                }
+            }
+
+            syntheticFailureSummary = failures.Count == 0
+                ? "All canonical scenarios matched the expected result."
+                : string.Join(Environment.NewLine, failures.Take(8)) + (failures.Count > 8 ? Environment.NewLine + "…" : "");
+            syntheticStatus = failures.Count == 0
+                ? $"PASS {syntheticProcessed}/{syntheticTotal}"
+                : $"FAIL {syntheticFailures} of {syntheticTotal}";
+
+            await WriteSyntheticVerdictAsync(failures);
+        } catch (OperationCanceledException) {
+            syntheticStatus = $"STOPPED {syntheticProcessed}/{syntheticTotal}";
+            syntheticFailureSummary = "Synthetic session stopped by user.";
+        } catch (Exception ex) {
+            syntheticStatus = "LAB ERROR";
+            syntheticFailureSummary = ex.Message;
+            Logger.Error(ex);
+        } finally {
+            IsSyntheticRunning = false;
+            RaiseSyntheticStateChanged();
+        }
+    }
+
+    public void StopSyntheticSession() {
+        syntheticCts?.Cancel();
+    }
+
+    public void ExitSyntheticMode() {
+        syntheticCts?.Cancel();
+        IsSyntheticRunning = false;
+        IsSyntheticMode = false;
+        syntheticStatus = "OFF";
+        syntheticLastScenario = "";
+        syntheticFailureSummary = "";
+        RaiseSyntheticStateChanged();
+    }
+
+    private async Task WriteSyntheticVerdictAsync(IReadOnlyList<string> failures) {
+        if (syntheticSessionStore == null || string.IsNullOrWhiteSpace(syntheticSessionStore.SessionFolder)) return;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("# QualitySessionMeter Synthetic Lab verdict");
+        sb.AppendLine();
+        sb.AppendLine(failures.Count == 0 ? "VERDICT: PASS" : "VERDICT: FAIL");
+        sb.AppendLine($"Frames: {syntheticProcessed}/{syntheticTotal}");
+        sb.AppendLine($"Mismatches: {failures.Count}");
+        sb.AppendLine();
+        sb.AppendLine("This session was generated entirely inside QualitySessionMeter. No camera or real image file was used.");
+        if (failures.Count > 0) {
+            sb.AppendLine();
+            sb.AppendLine("Failures:");
+            foreach (var failure in failures) sb.AppendLine("- " + failure);
+        }
+
+        await File.WriteAllTextAsync(
+            Path.Combine(syntheticSessionStore.SessionFolder, "SYNTHETIC_VERDICT.md"),
+            sb.ToString());
+    }
+
+    private static string ValidateSyntheticResult(SyntheticFrameDefinition expected, FrameQualityResult actual) {
+        var problems = new List<string>();
+
+        if (actual.Status != expected.ExpectedStatus) {
+            problems.Add($"expected {expected.ExpectedStatus}, got {actual.Status}");
+        }
+
+        var expectedReasons = expected.ExpectedReasons ?? Array.Empty<string>();
+        foreach (var reason in expectedReasons) {
+            if (!actual.RejectReasons.Contains(reason, StringComparer.Ordinal)) {
+                problems.Add($"missing reason {reason}");
+            }
+        }
+
+        if (expected.ExpectedStatus == FrameStatus.Rejected) {
+            var extra = actual.RejectReasons
+                .Where(x => !expectedReasons.Contains(x, StringComparer.Ordinal))
+                .ToArray();
+            if (extra.Length > 0) problems.Add("unexpected reason(s): " + string.Join(", ", extra));
+        }
+
+        if (!string.IsNullOrWhiteSpace(expected.ExpectedErrorContains) &&
+            (actual.ErrorMessage?.Contains(expected.ExpectedErrorContains, StringComparison.Ordinal) != true)) {
+            problems.Add($"expected error containing {expected.ExpectedErrorContains}, got '{actual.ErrorMessage}'");
+        }
+
+        if (expected.ExpectedStarBaseline.HasValue &&
+            (double.IsNaN(actual.StarBaseline) || Math.Abs(actual.StarBaseline - expected.ExpectedStarBaseline.Value) > 0.001)) {
+            problems.Add($"star baseline expected {expected.ExpectedStarBaseline.Value:0.###}, got {actual.StarBaseline:0.###}");
+        }
+
+        if (expected.ExpectedBackgroundBaseline.HasValue &&
+            (double.IsNaN(actual.BackgroundBaseline) || Math.Abs(actual.BackgroundBaseline - expected.ExpectedBackgroundBaseline.Value) > 0.001)) {
+            problems.Add($"background baseline expected {expected.ExpectedBackgroundBaseline.Value:0.###}, got {actual.BackgroundBaseline:0.###}");
+        }
+
+        return string.Join("; ", problems);
+    }
+
+    private static string Sanitize(string value) {
+        if (string.IsNullOrWhiteSpace(value)) return "scenario";
+        var chars = value.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray();
+        return new string(chars);
+    }
+
+    private void RaiseSyntheticStateChanged() => SyntheticStateChanged?.Invoke(this, EventArgs.Empty);
+
     public void ResetSession() {
         processingLock.Wait();
         try {
@@ -174,6 +420,8 @@ public sealed class QualitySessionRuntime : IDisposable {
     public void Dispose() {
         if (disposed) return;
         disposed = true;
+        syntheticCts?.Cancel();
+        syntheticCts?.Dispose();
         imageSaveMediator.BeforeFinalizeImageSaved -= BeforeFinalizeImageSaved;
         imageSaveMediator.ImageSaved -= ImageSaved;
         guideCollector.Dispose();
