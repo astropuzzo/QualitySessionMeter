@@ -14,15 +14,6 @@ using System.Threading.Tasks;
 
 namespace NINA.Plugin.QualitySessionMeter.Sequencer;
 
-/// <summary>
-/// Repeats the parent Advanced Sequencer container until the requested number of QSM-valid LIGHT
-/// frames has been reached. QSM's FrameQualityResult is the only source of truth; filesystem actions
-/// and N.I.N.A.'s built-in Take Exposure iteration counter are deliberately not modified.
-///
-/// Field-test contract: the parent container should produce exactly one LIGHT per iteration.
-/// The condition waits at end-of-block for QSM to finish classifying that LIGHT before deciding
-/// whether another iteration is required.
-/// </summary>
 [ExportMetadata("Name", "QSM Valid Frame Target")]
 [ExportMetadata("Description", "Repeat this container until QualitySessionMeter has classified the requested number of valid LIGHT frames.")]
 [ExportMetadata("Icon", "QSM_ValidTargetSVG")]
@@ -46,10 +37,9 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
     private string lastCause = "";
     private bool runtimeFault;
     private string runtimeFaultText = "";
-
-    // Runtime-only watermark. Captured at the start of each parent block iteration.
     private int blockStartFrameIndex;
     private bool blockResultConsumed;
+    private string controlToken = "";
 
     [ImportingConstructor]
     public QsmValidFrameTargetCondition() {
@@ -58,101 +48,43 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
     [JsonProperty]
     public int TargetValidFrames {
         get => targetValidFrames;
-        set {
-            targetValidFrames = Math.Max(1, value);
-            RaisePropertyChanged();
-            RaisePropertyChanged(nameof(ProgressText));
-        }
+        set { targetValidFrames = Math.Max(1, value); RaisePropertyChanged(); RaisePropertyChanged(nameof(ProgressText)); }
     }
 
     [JsonProperty]
     public bool CountWarningsAsValid {
         get => countWarningsAsValid;
-        set {
-            countWarningsAsValid = value;
-            RaisePropertyChanged();
-        }
+        set { countWarningsAsValid = value; RaisePropertyChanged(); }
     }
 
     [JsonProperty]
     public int ClassificationTimeoutSeconds {
         get => classificationTimeoutSeconds;
-        set {
-            classificationTimeoutSeconds = Math.Clamp(value, 5, 120);
-            RaisePropertyChanged();
-        }
+        set { classificationTimeoutSeconds = Math.Clamp(value, 5, 120); RaisePropertyChanged(); }
     }
 
     [JsonProperty]
-    public int ValidFrames {
-        get => validFrames;
-        private set {
-            validFrames = Math.Max(0, value);
-            RaisePropertyChanged();
-            RaisePropertyChanged(nameof(ProgressText));
-            RaisePropertyChanged(nameof(IsComplete));
-        }
-    }
-
+    public int ValidFrames { get => validFrames; private set { validFrames = Math.Max(0, value); RaisePropertyChanged(); RaisePropertyChanged(nameof(ProgressText)); RaisePropertyChanged(nameof(IsComplete)); } }
     [JsonProperty]
-    public int CapturedFrames {
-        get => capturedFrames;
-        private set { capturedFrames = Math.Max(0, value); RaisePropertyChanged(); }
-    }
-
+    public int CapturedFrames { get => capturedFrames; private set { capturedFrames = Math.Max(0, value); RaisePropertyChanged(); } }
     [JsonProperty]
-    public int RejectedFrames {
-        get => rejectedFrames;
-        private set { rejectedFrames = Math.Max(0, value); RaisePropertyChanged(); }
-    }
-
+    public int RejectedFrames { get => rejectedFrames; private set { rejectedFrames = Math.Max(0, value); RaisePropertyChanged(); } }
     [JsonProperty]
-    public int WarningFrames {
-        get => warningFrames;
-        private set { warningFrames = Math.Max(0, value); RaisePropertyChanged(); }
-    }
-
+    public int WarningFrames { get => warningFrames; private set { warningFrames = Math.Max(0, value); RaisePropertyChanged(); } }
     [JsonProperty]
-    public int LearningFrames {
-        get => learningFrames;
-        private set { learningFrames = Math.Max(0, value); RaisePropertyChanged(); }
-    }
-
+    public int LearningFrames { get => learningFrames; private set { learningFrames = Math.Max(0, value); RaisePropertyChanged(); } }
     [JsonProperty]
-    public int ErrorFrames {
-        get => errorFrames;
-        private set { errorFrames = Math.Max(0, value); RaisePropertyChanged(); }
-    }
-
+    public int ErrorFrames { get => errorFrames; private set { errorFrames = Math.Max(0, value); RaisePropertyChanged(); } }
     [JsonProperty]
-    public int LastAccountedFrameIndex {
-        get => lastAccountedFrameIndex;
-        private set { lastAccountedFrameIndex = Math.Max(0, value); RaisePropertyChanged(); }
-    }
-
+    public int LastAccountedFrameIndex { get => lastAccountedFrameIndex; private set { lastAccountedFrameIndex = Math.Max(0, value); RaisePropertyChanged(); } }
     [JsonProperty]
-    public string LastStatus {
-        get => lastStatus;
-        private set { lastStatus = value ?? ""; RaisePropertyChanged(); }
-    }
-
+    public string LastStatus { get => lastStatus; private set { lastStatus = value ?? ""; RaisePropertyChanged(); } }
     [JsonProperty]
-    public string LastCause {
-        get => lastCause;
-        private set { lastCause = value ?? ""; RaisePropertyChanged(); }
-    }
-
+    public string LastCause { get => lastCause; private set { lastCause = value ?? ""; RaisePropertyChanged(); } }
     [JsonProperty]
-    public bool RuntimeFault {
-        get => runtimeFault;
-        private set { runtimeFault = value; RaisePropertyChanged(); }
-    }
-
+    public bool RuntimeFault { get => runtimeFault; private set { runtimeFault = value; RaisePropertyChanged(); } }
     [JsonProperty]
-    public string RuntimeFaultText {
-        get => runtimeFaultText;
-        private set { runtimeFaultText = value ?? ""; RaisePropertyChanged(); }
-    }
+    public string RuntimeFaultText { get => runtimeFaultText; private set { runtimeFaultText = value ?? ""; RaisePropertyChanged(); } }
 
     public string ProgressText => $"{ValidFrames} / {TargetValidFrames} valid";
     public string BreakdownText => $"{CapturedFrames} captured · {RejectedFrames} rejected · {WarningFrames} warning · {LearningFrames} learning · {ErrorFrames} error";
@@ -162,16 +94,32 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
     public override void SequenceBlockStarted() {
         base.SequenceBlockStarted();
         var runtime = QualitySessionRuntimeRegistry.Current;
-        blockStartFrameIndex = runtime?.Store?.Results?.LastOrDefault()?.FrameIndex ?? LastAccountedFrameIndex;
+        if (runtime == null || !runtime.Settings.Enabled || IsComplete || RuntimeFault) return;
+
+        Disarm();
+        controlToken = runtime.ArmSequencerControl();
+        blockStartFrameIndex = runtime.Store?.Results?.LastOrDefault()?.FrameIndex ?? LastAccountedFrameIndex;
         blockResultConsumed = false;
     }
 
-    public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
-        if (RuntimeFault) return false;
-        if (IsComplete) return false;
+    public override void SequenceBlockTeardown() {
+        Disarm();
+        base.SequenceBlockTeardown();
+    }
 
-        // SequentialStrategy calls conditions before/between child items too. Only account the QSM
-        // result after the final item of one parent-container iteration has completed.
+    public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        if (RuntimeFault || IsComplete) { Disarm(); return false; }
+
+        var runtime = QualitySessionRuntimeRegistry.Current;
+        if (runtime == null || !runtime.Settings.Enabled) {
+            RuntimeFault = true;
+            RuntimeFaultText = runtime == null ? "QualitySessionMeter runtime is unavailable." : "QualitySessionMeter is OFF.";
+            LastStatus = "QSM OFF";
+            LastCause = RuntimeFaultText;
+            Disarm();
+            return false;
+        }
+
         if (previousItem != null && nextItem == null && !blockResultConsumed) {
             blockResultConsumed = true;
             var result = WaitForNextLiveResult(blockStartFrameIndex);
@@ -181,10 +129,12 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
                 LastStatus = "QSM TIMEOUT";
                 LastCause = RuntimeFaultText;
                 Logger.Error($"QualitySessionMeter V3: {RuntimeFaultText}");
+                Disarm();
                 return false;
             }
 
             Account(result);
+            Disarm();
         }
 
         return !RuntimeFault && !IsComplete;
@@ -192,16 +142,10 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
 
     private FrameQualityResult WaitForNextLiveResult(int afterFrameIndex) {
         var runtime = QualitySessionRuntimeRegistry.Current;
-        if (runtime == null || runtime.IsSyntheticMode) {
-            RuntimeFault = true;
-            RuntimeFaultText = runtime == null
-                ? "QualitySessionMeter runtime is unavailable."
-                : "Synthetic Lab is active; V3 sequence control is disabled.";
-            return null;
-        }
+        if (runtime == null || runtime.IsSyntheticMode || !runtime.Settings.Enabled) return null;
 
         var existing = runtime.Store.Results
-            .Where(r => r.FrameIndex > Math.Max(afterFrameIndex, LastAccountedFrameIndex))
+            .Where(r => r.FrameIndex > Math.Max(afterFrameIndex, LastAccountedFrameIndex) && r.QsmControlled)
             .OrderBy(r => r.FrameIndex)
             .FirstOrDefault();
         if (existing != null) return existing;
@@ -209,25 +153,21 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         var tcs = new TaskCompletionSource<FrameQualityResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         EventHandler<FrameQualityResult> handler = null;
         handler = (_, result) => {
-            if (result == null || runtime.IsSyntheticMode) return;
+            if (result == null || runtime.IsSyntheticMode || !result.QsmControlled) return;
             if (result.FrameIndex <= Math.Max(afterFrameIndex, LastAccountedFrameIndex)) return;
             tcs.TrySetResult(result);
         };
 
         runtime.FrameProcessed += handler;
         try {
-            // Re-check after subscribing to close the race between the first store check and event hook.
             existing = runtime.Store.Results
-                .Where(r => r.FrameIndex > Math.Max(afterFrameIndex, LastAccountedFrameIndex))
+                .Where(r => r.FrameIndex > Math.Max(afterFrameIndex, LastAccountedFrameIndex) && r.QsmControlled)
                 .OrderBy(r => r.FrameIndex)
                 .FirstOrDefault();
             if (existing != null) return existing;
 
             try {
-                return tcs.Task
-                    .WaitAsync(TimeSpan.FromSeconds(ClassificationTimeoutSeconds))
-                    .GetAwaiter()
-                    .GetResult();
+                return tcs.Task.WaitAsync(TimeSpan.FromSeconds(ClassificationTimeoutSeconds)).GetAwaiter().GetResult();
             } catch (TimeoutException) {
                 return null;
             }
@@ -237,37 +177,32 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
     }
 
     private void Account(FrameQualityResult result) {
-        if (result == null || result.FrameIndex <= LastAccountedFrameIndex) return;
+        var current = new ValidFrameProgressTracker.Snapshot(
+            ValidFrames, CapturedFrames, RejectedFrames, WarningFrames, LearningFrames, ErrorFrames, LastAccountedFrameIndex);
+        var next = ValidFrameProgressTracker.Account(current, result, CountWarningsAsValid);
+        if (next.LastFrameIndex == current.LastFrameIndex) return;
 
-        LastAccountedFrameIndex = result.FrameIndex;
-        CapturedFrames++;
+        ValidFrames = next.Valid;
+        CapturedFrames = next.Captured;
+        RejectedFrames = next.Rejected;
+        WarningFrames = next.Warning;
+        LearningFrames = next.Learning;
+        ErrorFrames = next.Error;
+        LastAccountedFrameIndex = next.LastFrameIndex;
         LastStatus = result.StatusText;
         LastCause = result.ProbableCause ?? "";
-
-        switch (result.Status) {
-            case FrameStatus.Accepted:
-                ValidFrames++;
-                break;
-            case FrameStatus.Warning:
-                WarningFrames++;
-                if (CountWarningsAsValid) ValidFrames++;
-                break;
-            case FrameStatus.Rejected:
-                RejectedFrames++;
-                break;
-            case FrameStatus.Learning:
-                LearningFrames++;
-                break;
-            case FrameStatus.Error:
-                ErrorFrames++;
-                break;
-        }
-
         RaisePropertyChanged(nameof(BreakdownText));
         Logger.Info($"QualitySessionMeter V3 valid-frame progress: {ProgressText}; {BreakdownText}; last={LastStatus} {LastCause}");
     }
 
+    private void Disarm() {
+        if (string.IsNullOrWhiteSpace(controlToken)) return;
+        QualitySessionRuntimeRegistry.Current?.DisarmSequencerControl(controlToken);
+        controlToken = "";
+    }
+
     public override void ResetProgress() {
+        Disarm();
         ValidFrames = 0;
         CapturedFrames = 0;
         RejectedFrames = 0;
@@ -289,25 +224,23 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         var issues = new List<string>();
         if (TargetValidFrames < 1) issues.Add("QSM Valid Frame Target must be at least 1.");
         if (ClassificationTimeoutSeconds < 5) issues.Add("QSM classification timeout must be at least 5 seconds.");
-        if (QualitySessionRuntimeRegistry.Current == null) issues.Add("QualitySessionMeter runtime is not initialized.");
+        var runtime = QualitySessionRuntimeRegistry.Current;
+        if (runtime == null) issues.Add("QualitySessionMeter runtime is not initialized.");
+        else if (!runtime.Settings.Enabled) issues.Add("QualitySessionMeter is OFF. Enable it before running a QSM Valid Frame Target.");
         Issues = issues;
         RaisePropertyChanged(nameof(Issues));
         return issues.Count == 0;
     }
 
-    public override object Clone() {
-        var clone = new QsmValidFrameTargetCondition {
-            Icon = Icon,
-            Name = Name,
-            Category = Category,
-            Description = Description,
-            TargetValidFrames = TargetValidFrames,
-            CountWarningsAsValid = CountWarningsAsValid,
-            ClassificationTimeoutSeconds = ClassificationTimeoutSeconds
-        };
-        return clone;
-    }
+    public override object Clone() => new QsmValidFrameTargetCondition {
+        Icon = Icon,
+        Name = Name,
+        Category = Category,
+        Description = Description,
+        TargetValidFrames = TargetValidFrames,
+        CountWarningsAsValid = CountWarningsAsValid,
+        ClassificationTimeoutSeconds = ClassificationTimeoutSeconds
+    };
 
-    public override string ToString() =>
-        $"QSM Valid Frame Target: {ValidFrames}/{TargetValidFrames} valid, {CapturedFrames} captured, {RejectedFrames} rejected";
+    public override string ToString() => $"QSM Valid Frame Target: {ValidFrames}/{TargetValidFrames} valid, {CapturedFrames} captured, {RejectedFrames} rejected";
 }
