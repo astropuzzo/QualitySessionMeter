@@ -46,7 +46,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: QualitySessionMeter-v0.2.0.0-field-test-nina-3.3-nightly-057
+          name: QualitySessionMeter-v0.2.0.1-field-test-nina-3.3-nightly-057
           path: artifacts/plugin/
           if-no-files-found: error
 
@@ -54,6 +54,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: QualitySessionMeter-v0.2.0.0-synthetic-report
+          name: QualitySessionMeter-v0.2.0.1-synthetic-report
           path: artifacts/synthetic-check/
           if-no-files-found: warn
