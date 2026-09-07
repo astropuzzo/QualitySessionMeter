@@ -91,7 +91,7 @@ public sealed class QualitySessionHttpBridge : IDisposable {
             lock (previewSync) {
                 previewJpeg = bytes;
                 previewUtc = DateTimeOffset.UtcNow;
-                previewImageId = e.MetaData.Image.Id?.ToString() ?? previewUtc.ToUnixTimeMilliseconds().ToString();
+                previewImageId = e.MetaData.Image.Id.ToString();
             }
         } catch {
             // Preview generation is best-effort and must never affect image saving or QSM classification.
