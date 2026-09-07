@@ -1,0 +1,91 @@
+<ResourceDictionary
+    x:Class="NINA.Plugin.QualitySessionMeter.UI.ControlCenterResources"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:NINA.Plugin.QualitySessionMeter.UI">
+
+    <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.UI.QsmControlCenterDockable_Dockable">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="10">
+                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="QSM CONTROL CENTER" FontSize="20" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ActivationText}" Margin="0,5,0,10" FontWeight="SemiBold" Foreground="#8AB4F8" TextWrapping="Wrap"/>
+                        <CheckBox Content="Enable QualitySessionMeter" IsChecked="{Binding Settings.Enabled}" FontSize="15" FontWeight="SemiBold" Margin="0,3"/>
+                        <CheckBox Content="Monitor only — analyze/count/report, never rename or move files" IsChecked="{Binding Settings.MonitorOnly}" Margin="0,5"/>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Monitoring scope" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.MonitoringScopeIndex}">
+                                <ComboBoxItem Content="QSM controlled blocks only"/>
+                                <ComboBoxItem Content="Advanced Sequencer LIGHTs (recommended)"/>
+                                <ComboBoxItem Content="All LIGHTs (manual files still mutation-protected)"/>
+                            </ComboBox>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="ADAPTIVE CALIBRATION" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Mode" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.AdaptiveThresholdModeIndex}">
+                                <ComboBoxItem Content="OFF"/>
+                                <ComboBoxItem Content="Suggest Only (recommended)"/>
+                                <ComboBoxItem Content="Automatic — bounded by safety ceilings"/>
+                            </ComboBox>
+                        </Grid>
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Stable calibration window" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.CalibrationWindow, UpdateSourceTrigger=LostFocus}"/>
+                            <TextBlock Grid.Column="2" Margin="8,0,0,0" Opacity="0.65" VerticalAlignment="Center" Text="accepted frames"/>
+                        </Grid>
+                        <TextBlock Text="{Binding CalibrationStatus}" Margin="0,10,0,2" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding CalibrationValues}" TextWrapping="Wrap" Opacity="0.8"/>
+                        <TextBlock Text="{Binding Calibration.Reason}" Margin="0,3,0,8" TextWrapping="Wrap" Opacity="0.65" FontStyle="Italic"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Apply suggestion" Command="{Binding ApplyCalibrationCommand}" Margin="0,0,6,0" Padding="10,4"/>
+                            <Button Content="Ignore for this context" Command="{Binding IgnoreCalibrationCommand}" Padding="10,4"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="PREDICTION &amp; ENVIRONMENT" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <CheckBox Content="Predictive degradation warnings" IsChecked="{Binding Settings.PredictiveWarningsEnabled}"/>
+                        <TextBlock Text="{Binding PredictionText}" Margin="18,3,0,8" TextWrapping="Wrap"/>
+                        <CheckBox Content="Environmental correlation (diagnostic only)" IsChecked="{Binding Settings.EnvironmentalCorrelationEnabled}"/>
+                        <TextBlock Text="{Binding EnvironmentText}" Margin="18,3,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="SMART RECOVERY" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <CheckBox Content="Enable QSM Smart Recovery Gate behavior" IsChecked="{Binding Settings.SmartPauseEnabled}"/>
+                        <TextBlock Margin="18,3,0,8" Opacity="0.7" TextWrapping="Wrap" Text="Opt-in. The Advanced Sequencer gate waits only BETWEEN exposures after a persistent reject streak; it never aborts an active exposure."/>
+                        <Grid Margin="18,3,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Reject/error streak before wait"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseRejectStreak, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                        <Grid Margin="18,5,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Cooldown seconds"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseSeconds, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                        <Grid Margin="18,5,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Healthy guide samples to resume"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartResumeHealthyGuideChecks, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DataTemplate>
+</ResourceDictionary>
