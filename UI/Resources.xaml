@@ -108,7 +108,7 @@
                     </StackPanel>
                 </GroupBox>
 
-                <GroupBox Header="Quality score & rejected files">
+                <GroupBox Header="Quality score &amp; rejected files">
                     <StackPanel Margin="10">
                         <Grid Margin="0,3">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
