@@ -7,6 +7,9 @@ using System.Linq;
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
 public sealed class QualityEngine {
+    private readonly ConfidenceEngine confidenceEngine = new();
+    private readonly GuidePatternAnalyzer guidePatternAnalyzer = new();
+
     public FrameQualityResult Evaluate(FrameQualityInput input, QualitySettings settings) {
         var result = new FrameQualityResult {
             FrameIndex = input.FrameIndex,
@@ -28,6 +31,14 @@ public sealed class QualityEngine {
             SustainedGuideExcursionSeconds = input.Guide?.MaxSustainedExcursionSeconds ?? double.NaN,
             StarBaseline = input.Baseline?.StarMedian ?? double.NaN,
             BackgroundBaseline = input.Baseline?.BackgroundMedian ?? double.NaN,
+            StarTrendUsable = input.Baseline?.StarTrendUsable == true,
+            StarTrendExpected = input.Baseline?.StarTrendExpectedNext ?? double.NaN,
+            StarTrendPercentPerFrame = input.Baseline?.StarTrendPercentPerFrame ?? double.NaN,
+            StarTrendR2 = input.Baseline?.StarTrendR2 ?? double.NaN,
+            BackgroundTrendUsable = input.Baseline?.BackgroundTrendUsable == true,
+            BackgroundTrendExpected = input.Baseline?.BackgroundTrendExpectedNext ?? double.NaN,
+            BackgroundTrendPercentPerFrame = input.Baseline?.BackgroundTrendPercentPerFrame ?? double.NaN,
+            BackgroundTrendR2 = input.Baseline?.BackgroundTrendR2 ?? double.NaN,
             MonitorOnly = settings.MonitorOnly
         };
 
@@ -73,6 +84,10 @@ public sealed class QualityEngine {
             var loss = Math.Max(0, -result.StarDeviationPercent);
             result.TransparencyQuality = ScoreUpper(loss, settings.MaxStarLossPercent);
             if (loss > settings.MaxStarLossPercent) reasons.Add("STAR_COUNT_DROP");
+
+            if (result.StarTrendUsable && result.StarTrendExpected > 0) {
+                result.StarTrendResidualPercent = ((input.StarCount - result.StarTrendExpected) / result.StarTrendExpected) * 100.0;
+            }
         }
 
         bool backgroundReady = !settings.EnableBackground || input.Baseline?.BackgroundReady == true;
@@ -88,7 +103,21 @@ public sealed class QualityEngine {
 
             if (result.BackgroundDeviationPercent > settings.MaxBackgroundIncreasePercent) reasons.Add("BACKGROUND_HIGH");
             if (result.BackgroundDeviationPercent < -settings.MaxBackgroundDecreasePercent) reasons.Add("BACKGROUND_LOW");
+
+            if (result.BackgroundTrendUsable && result.BackgroundTrendExpected > 0) {
+                result.BackgroundTrendResidualPercent =
+                    ((input.BackgroundMedian - result.BackgroundTrendExpected) / result.BackgroundTrendExpected) * 100.0;
+            }
         }
+
+        var pattern = guidePatternAnalyzer.Analyze(input.Guide, settings);
+        result.GuidePattern = pattern.Pattern;
+        result.GuidePatternConfidence = pattern.Confidence;
+        result.GuideDriftArcsecPerMinute = pattern.DriftArcsecPerMinute;
+        result.GuideOscillationRangeArcsec = pattern.OscillationRangeArcsec;
+        result.GuidePatternSignChanges = pattern.SignChanges;
+        result.GuidePatternBurstiness = pattern.Burstiness;
+        result.GuidePatternDetail = pattern.Detail;
 
         var scores = new[] {
             result.GuidingQuality,
@@ -102,11 +131,14 @@ public sealed class QualityEngine {
             : Combine(scores, settings.WorstMetricWeight);
 
         result.RejectReasons = reasons.Distinct().ToList();
+        result.StarTrendKind = ClassifyStarTrend(input, result, settings, starsReady, starDataAvailable);
+        result.BackgroundTrendKind = ClassifyBackgroundTrend(input, result, settings, backgroundReady, backgroundDataAvailable);
 
         if (dataErrors.Count > 0) {
             result.Status = FrameStatus.Error;
             result.ErrorMessage = string.Join(", ", dataErrors);
             result.ProbableCause = "ANALYSIS DATA UNAVAILABLE";
+            confidenceEngine.Apply(input, result, settings);
             return result;
         }
 
@@ -122,7 +154,38 @@ public sealed class QualityEngine {
         }
 
         result.ProbableCause = ClassifyCause(result);
+        confidenceEngine.Apply(input, result, settings);
         return result;
+    }
+
+    private static TrendInterpretationKind ClassifyStarTrend(
+        FrameQualityInput input,
+        FrameQualityResult result,
+        QualitySettings settings,
+        bool ready,
+        bool dataAvailable) {
+
+        if (!settings.EnableStarCount || !ready || !dataAvailable) return TrendInterpretationKind.Unavailable;
+        if (!result.StarTrendUsable || double.IsNaN(result.StarTrendResidualPercent)) return TrendInterpretationKind.Stable;
+        if (result.RejectReasons.Contains("STAR_COUNT_DROP", StringComparer.Ordinal) ||
+            result.StarTrendResidualPercent < -settings.MaxStarLossPercent) return TrendInterpretationKind.AbruptAnomaly;
+        return TrendInterpretationKind.GradualChange;
+    }
+
+    private static TrendInterpretationKind ClassifyBackgroundTrend(
+        FrameQualityInput input,
+        FrameQualityResult result,
+        QualitySettings settings,
+        bool ready,
+        bool dataAvailable) {
+
+        if (!settings.EnableBackground || !ready || !dataAvailable) return TrendInterpretationKind.Unavailable;
+        if (!result.BackgroundTrendUsable || double.IsNaN(result.BackgroundTrendResidualPercent)) return TrendInterpretationKind.Stable;
+        if (result.RejectReasons.Contains("BACKGROUND_HIGH", StringComparer.Ordinal) ||
+            result.RejectReasons.Contains("BACKGROUND_LOW", StringComparer.Ordinal) ||
+            result.BackgroundTrendResidualPercent > settings.MaxBackgroundIncreasePercent ||
+            result.BackgroundTrendResidualPercent < -settings.MaxBackgroundDecreasePercent) return TrendInterpretationKind.AbruptAnomaly;
+        return TrendInterpretationKind.GradualChange;
     }
 
     private static double Combine(double[] scores, double worstWeight) {

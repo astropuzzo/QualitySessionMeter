@@ -66,18 +66,23 @@ foreach (var scenario in scenarios) {
 
         Console.WriteLine(
             $"{i + 1,2}. {d.Name,-42} expected={d.ExpectedStatus,-8} actual={result.Status,-8} " +
-            $"Q={result.OverallQuality,5:0.0} RMS={Fmt(result.GuideRmsArcsec),6} Peak={Fmt(result.MaxGuideExcursionArcsec),6} " +
-            $"Sustain={Fmt(result.SustainedGuideExcursionSeconds),5} reasons={result.ReasonText}");
+            $"Q={result.OverallQuality,5:0.0} C={result.ConfidenceScore,5:0.0} pattern={result.GuidePattern,-18} " +
+            $"trend={result.TrendText,-7} reasons={result.ReasonText}");
     }
 
+    failures.AddRange(SyntheticEventOracle.ValidateWholeNight(scenario, store.Results, store.Events));
     ValidateArtifacts(scenario, store, scenario.Frames.Count, failures);
     int scenarioFailures = failures.Count - failuresBefore;
+    Console.WriteLine($"Events grouped: {store.Events.Count}");
     Console.WriteLine(scenarioFailures == 0
         ? $"PROFILE VERDICT: PASS {scenario.Frames.Count}/{scenario.Frames.Count}"
         : $"PROFILE VERDICT: FAIL ({scenarioFailures} mismatch/error records)");
     Console.WriteLine();
 }
 
+failures.AddRange(SyntheticEventOracle.RunDeterministicGroupingCases());
+failures.AddRange(SyntheticGuidePatternOracle.Run());
+failures.AddRange(SyntheticTrendOracle.Run());
 await ValidateFileActions(outputRoot, failures);
 
 var verdict = failures.Count == 0 ? "PASS" : "FAIL";
@@ -146,6 +151,11 @@ static void Validate(
         actual.SustainedGuideExcursionSeconds != 0) {
         failures.Add($"{prefix}: single spike must have sustained duration 0, got {actual.SustainedGuideExcursionSeconds:0.###}");
     }
+
+    var confidenceProblem = SyntheticConfidenceOracle.Validate(expected, actual);
+    if (!string.IsNullOrWhiteSpace(confidenceProblem)) {
+        failures.Add($"{prefix}: confidence oracle: {confidenceProblem}");
+    }
 }
 
 static void ValidateArtifacts(
@@ -155,19 +165,36 @@ static void ValidateArtifacts(
     List<string> failures) {
 
     var csv = Path.Combine(store.SessionFolder, "frames.csv");
+    var eventsCsv = Path.Combine(store.SessionFolder, "events.csv");
     var json = Path.Combine(store.SessionFolder, "session.json");
     var svg = Path.Combine(store.SessionFolder, "quality.svg");
+    var html = Path.Combine(store.SessionFolder, "report.html");
 
-    foreach (var file in new[] { csv, json, svg }) {
+    foreach (var file in new[] { csv, eventsCsv, json, svg, html }) {
         if (!File.Exists(file) || new FileInfo(file).Length == 0) {
             failures.Add($"{scenario.DisplayName}: artifact missing or empty: {file}");
         }
     }
 
     if (File.Exists(csv)) {
-        var lines = File.ReadLines(csv).Count();
-        if (lines != expectedFrames + 1) {
-            failures.Add($"{scenario.DisplayName}: frames.csv expected {expectedFrames + 1} lines including header, got {lines}");
+        var lines = File.ReadLines(csv).ToArray();
+        if (lines.Length != expectedFrames + 1) {
+            failures.Add($"{scenario.DisplayName}: frames.csv expected {expectedFrames + 1} lines including header, got {lines.Length}");
+        }
+        if (lines.Length > 0) {
+            var header = lines[0];
+            foreach (var required in new[] { "Confidence", "GuidePattern", "StarTrendKind", "BackgroundTrendKind" }) {
+                if (!header.Contains(required, StringComparison.Ordinal)) {
+                    failures.Add($"{scenario.DisplayName}: frames.csv missing V2 field {required}");
+                }
+            }
+        }
+    }
+
+    if (File.Exists(eventsCsv)) {
+        var lines = File.ReadLines(eventsCsv).ToArray();
+        if (lines.Length != store.Events.Count + 1) {
+            failures.Add($"{scenario.DisplayName}: events.csv expected {store.Events.Count + 1} lines including header, got {lines.Length}");
         }
     }
 
@@ -175,12 +202,35 @@ static void ValidateArtifacts(
         try {
             using var document = JsonDocument.Parse(File.ReadAllText(json));
             var captured = document.RootElement.GetProperty("captured").GetInt32();
-            var frameCount = document.RootElement.GetProperty("frames").GetArrayLength();
+            var frames = document.RootElement.GetProperty("frames");
+            var frameCount = frames.GetArrayLength();
             if (captured != expectedFrames || frameCount != expectedFrames) {
                 failures.Add($"{scenario.DisplayName}: session.json expected {expectedFrames} frames, got captured={captured}, frames={frameCount}");
             }
+            if (frameCount > 0) {
+                foreach (var required in new[] { "ConfidenceScore", "GuidePattern", "StarTrendKind", "BackgroundTrendKind" }) {
+                    if (!frames[0].TryGetProperty(required, out _)) {
+                        failures.Add($"{scenario.DisplayName}: session.json missing frame field {required}");
+                    }
+                }
+            }
+
+            int eventCount = document.RootElement.GetProperty("eventCount").GetInt32();
+            int serializedEvents = document.RootElement.GetProperty("events").GetArrayLength();
+            if (eventCount != store.Events.Count || serializedEvents != store.Events.Count) {
+                failures.Add($"{scenario.DisplayName}: session.json event count mismatch, expected {store.Events.Count}, got eventCount={eventCount}, events={serializedEvents}");
+            }
         } catch (Exception ex) {
             failures.Add($"{scenario.DisplayName}: session.json parse failed: {ex.Message}");
+        }
+    }
+
+    if (File.Exists(html)) {
+        var body = File.ReadAllText(html);
+        foreach (var marker in new[] { "Session events", "Best accepted frames", "Worst accepted frames", "Confidence", "Guide pattern" }) {
+            if (!body.Contains(marker, StringComparison.OrdinalIgnoreCase)) {
+                failures.Add($"{scenario.DisplayName}: report.html missing section/marker '{marker}'");
+            }
         }
     }
 }
@@ -210,5 +260,3 @@ static async Task ValidateFileActions(string outputRoot, List<string> failures) 
         failures.Add("MoveToRejectedFolder file action failed its isolated temp-file test.");
     }
 }
-
-static string Fmt(double value) => double.IsNaN(value) ? "N/A" : value.ToString("0.00");

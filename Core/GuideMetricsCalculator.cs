@@ -85,7 +85,8 @@ public static class GuideMetricsCalculator {
             Samples = window.Length,
             RmsArcsec = rms,
             MaxExcursionArcsec = max,
-            MaxSustainedExcursionSeconds = longestRun
+            MaxSustainedExcursionSeconds = longestRun,
+            Series = window
         };
     }
 }

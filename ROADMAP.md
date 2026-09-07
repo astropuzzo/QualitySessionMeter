@@ -2,7 +2,7 @@
 
 QualitySessionMeter is developed in three product stages: **V1** real-time quality monitoring, **V2** temporal/session intelligence, and **V3** closed-loop quality-controlled acquisition through the N.I.N.A. Advanced Sequencer.
 
-This file is also the **operational handoff/source of truth**. Update it in the same development cycle as every material code change so another AI/developer can resume from the repository without reconstructing chat history.
+This file is the **operational handoff/source of truth**. Update it in the same development cycle as every material code change so another AI/developer can resume from the repository without reconstructing chat history.
 
 ---
 
@@ -18,26 +18,265 @@ NINA.Plugin: 3.3.0.1057-nightly
 Windows: x64
 ```
 
-Do not use the obsolete .NET 8 / NINA.Plugin 3.2 field-test build with this N.I.N.A. nightly.
-
-## V1 validation status — GATE GREEN
-
-**V1 product functionality is implemented and the development regression gate is green.**
-
-Host validation performed by the user:
+## Repository state
 
 ```text
-Build: 0.1.0.1
-Host: N.I.N.A. 3.3 NIGHTLY #057
-Plugin load: PASS
-In-N.I.N.A. canonical Synthetic Lab: PASS 29/29
+main
+  V1 validated baseline
+  merge commit: cc16deffe88181bd92a067f2e0366831f02d9959
+
+active branch
+  v2-smart-quality-analysis
+
+active PR
+  #2 — V2 — Smart Quality Analysis
+  draft / not merged
+
+latest field-test line
+  0.2.0.1
+  purpose: rejected-frame timeline cause markers after successful 0.2.0.0 host review
 ```
 
-The earlier WPF startup failure (`Cannot re-initialize ResourceDictionary instance`) was fixed by removing duplicate manual loading of exported ResourceDictionaries from the dockable constructors.
+**Do not merge PR #2 yet.** Build `0.2.0.0` already rendered successfully in the user's real N.I.N.A. host and the V2 report/dashboard were inspected. The remaining V2 host gate is the user-requested timeline enhancement implemented in `0.2.0.1`.
 
-The Synthetic Lab was then expanded into six deterministic whole-night profiles. Latest CI result:
+### User-local V2 host review already completed
+
+User supplied screenshots from N.I.N.A. and `report.html` showing that the V2 dashboard/report load and render correctly, including:
+
+- Quality + Confidence;
+- Guide Pattern;
+- Trend;
+- Session Events;
+- Best/Worst accepted ranking;
+- multichannel timeline;
+- frame history;
+- generated HTML report.
+
+The report was readable and did not require a general redesign.
+
+### Final V2 UI request before merge
+
+Rejected frames must be immediately visible in both timelines rather than requiring the user to inspect the frame-history table.
+
+Implemented presentation vocabulary:
 
 ```text
+💨  guide / wind problem
+☁  star-count / cloud / transparency problem
+🌫  background / haze problem
+❌  rejected with an unmapped future reason
+⚠  analysis error / unassessed marker
+```
+
+Rules:
+
+- every `REJECTED` frame receives a strong vertical red marker/band at its exact timeline x-position;
+- a compact cause badge is displayed above the marker;
+- multi-channel rejects show multiple icons, e.g. `☁🌫` or `💨☁🌫`;
+- marker mapping is presentation-only and never changes Quality, Confidence or hard reject decisions;
+- HTML markers include a tooltip containing frame number, probable cause and raw reason text;
+- HTML frame-history Cause cells also show the compact icon(s);
+- WPF and HTML use the same shared `RejectionVisual` mapping.
+
+Exact next gate: CI on `0.2.0.1`, then a short user-local visual check of rejected-frame markers in N.I.N.A. and the HTML report. If that passes, merge PR #2 and start V3.
+
+---
+
+# V1 — CLOSED DEVELOPMENT GATE
+
+V1 is merged to `main` and already passed local host validation.
+
+```text
+Build 0.1.0.1
+Plugin load in N.I.N.A. 3.3 NIGHTLY #057: PASS
+In-host Canonical Synthetic Lab: PASS 29/29
+```
+
+V1 core rules remain unchanged in V2:
+
+- Quality Meter 0–100;
+- Guide RMS;
+- sustained guide excursion;
+- hard guide excursion;
+- relative star-count loss;
+- relative background change;
+- context-separated rolling baselines;
+- `ANY enabled hard rule fails -> REJECTED`;
+- rejected frames never enter the baseline;
+- warning frames do not update the baseline;
+- a single guide spike is not a sustained excursion;
+- missing required analysis data => `ERROR / UNASSESSED`, never false ACCEPTED;
+- no automatic deletion;
+- Quality Score and hard decision remain separate concepts.
+
+Explicitly excluded from core reject logic unless the user changes this decision:
+
+- HFR;
+- FWHM;
+- eccentricity.
+
+---
+
+# V2 — SMART QUALITY ANALYSIS
+
+**Status: IMPLEMENTED + CI VALIDATED + MAIN HOST SURFACES REVIEWED; awaiting final 0.2.0.1 rejection-marker visual check.**
+
+V2 answers:
+
+> What is happening across the night, how certain are we, and what temporal pattern caused the degradation?
+
+V2 layers intelligence on V1 evidence without replacing V1 hard rules.
+
+## 1. Evidence-based Confidence Score — IMPLEMENTED
+
+Per-frame Confidence is independent from Quality and ACCEPT/REJECT.
+
+Evidence components:
+
+- required-data completeness;
+- baseline maturity;
+- separation from configured thresholds;
+- agreement between independent abnormal channels;
+- diagnostic explanation text.
+
+Rules:
+
+- missing required data => confidence 0;
+- LEARNING confidence is capped;
+- near-threshold warnings stay moderate;
+- strong multi-channel failures can reach very high confidence;
+- confidence never overrides a hard reject rule.
+
+Persisted to CSV/JSON and shown in the dashboard/history/report.
+
+## 2. Event Grouping — IMPLEMENTED
+
+Temporally related abnormal frames are grouped into session events with:
+
+- event type;
+- start/end;
+- affected-frame count;
+- rejected/warning/error counts;
+- mean/peak confidence;
+- severity;
+- primary cause;
+- healthy-gap bridging and stable-recovery closure;
+- mixed-condition promotion where evidence changes during one continuous event.
+
+Outputs:
+
+- `events.csv`;
+- event list inside `session.json`;
+- dashboard/report event surfaces.
+
+## 3. Guide Pattern Analysis — IMPLEMENTED
+
+Diagnostic guide-pattern classes:
+
+- `STABLE`;
+- `ISOLATED SPIKE`;
+- `SUSTAINED`;
+- `OSCILLATION`;
+- `DRIFT`;
+- `WIND-LIKE`;
+- `IRREGULAR`;
+- unavailable.
+
+Additional diagnostics include pattern confidence, drift rate, oscillation range, sign-change count, burstiness and explanation text.
+
+These labels are diagnostic interpretations only and do not create new reject rules.
+
+## 4. Slow Trend Analysis — IMPLEMENTED CONSERVATIVELY
+
+Star/background behavior can be classified as:
+
+- `STABLE`;
+- `GRADUAL`;
+- `ABRUPT`;
+- unavailable.
+
+The trend layer records expected value, trend rate, fit quality and residual.
+
+Critical safety rule:
+
+> Hard V1 star/background rejection continues to use the robust rolling reference. Trend analysis does not normalize away a slowly worsening cloud event.
+
+Rejected frames never enter trend/reference history.
+
+Coverage includes the selectable `Deterioration + recovery` profile plus dedicated deterministic benign/abrupt trend oracles.
+
+## 5. Multichannel Timeline — IMPLEMENTED + REJECT MARKERS ENHANCED IN 0.2.0.1
+
+Live/session inspection combines:
+
+- Overall Quality;
+- Confidence;
+- Guide RMS;
+- star-count deviation;
+- background deviation;
+- frame-state markers;
+- strong rejected-frame vertical markers;
+- compact rejected-frame cause icons using the shared `RejectionVisual` mapping.
+
+The WPF timeline and HTML report share the same reason-to-icon vocabulary so the visual language cannot silently diverge.
+
+## 6. Frame Ranking — IMPLEMENTED
+
+Accepted frames are ranked into Best/Worst views using Quality as the primary ranking value and Confidence as diagnostic/tie-break context.
+
+Ranking never replaces hard ACCEPT/REJECT.
+
+## 7. Advanced Reporting — IMPLEMENTED
+
+Each session can produce:
+
+- `frames.csv`;
+- `events.csv`;
+- `session.json`;
+- `quality.svg`;
+- self-contained interactive `report.html`.
+
+The HTML report contains session summary, multichannel timeline, events, cause distribution, ranking and detailed frame history. It has no CDN/runtime web dependency.
+
+From `0.2.0.1`, rejected frames in the HTML timeline receive red bands/lines plus compact cause badges and hover tooltips; the cause icons are also visible in rejected/error frame-history rows.
+
+## V2 N.I.N.A. dashboard — IMPLEMENTED
+
+The dockable is a scrollable dashboard containing:
+
+- Quality;
+- Confidence;
+- status/reason/probable cause;
+- Guide RMS / max excursion;
+- stars/background;
+- Guide Pattern;
+- Trend;
+- session counters;
+- multichannel timeline;
+- frame history;
+- grouped session events;
+- Best/Worst accepted ranking;
+- report/session-folder controls.
+
+Presentation fixes:
+
+- `LEARNING` => `Quality — / LEARNING` rather than `100 / EXCELLENT`;
+- `ERROR` => `Quality — / UNASSESSED`;
+- the internal numeric score remains available for deterministic regression/persistence;
+- `0.2.0.1`: rejected timeline frames are visually explicit and carry mini cause icons.
+
+---
+
+# V2 REGRESSION BASELINE
+
+The last fully recorded V2 candidate before the rejection-marker enhancement passed GitHub Actions on Windows against `.NET 10` and `NINA.Plugin 3.3.0.1057-nightly`.
+
+```text
+Candidate: 0.2.0.0
+Commit: b709d09bf05739b4c3af61a36364dd5f2af0548f
+Workflow run: #73 / 34150474822
+Conclusion: SUCCESS
+
 Canonical regression       PASS 29/29
 Excellent night            PASS 17/17
 Average night              PASS 15/15
@@ -47,280 +286,90 @@ Deterioration + recovery   PASS 14/14
 
 GLOBAL VERDICT: PASS
 Profiles: 6
-Frames exercised: 108
+Whole-night frames: 108
 Failures: 0
+
+Confidence oracles: PASS
+Event grouping oracles: PASS
+Guide-pattern oracles: PASS
+Trend oracles: PASS
+frames.csv: PASS
+events.csv: PASS
+session.json: PASS
+quality.svg: PASS
+report.html: PASS
+isolated BAD_ action: PASS
+isolated Rejected-folder action: PASS
+clean plugin package: PASS
 ```
 
-The same CI run also passed:
+`0.2.0.1` must re-pass the same complete gate before being handed to the user.
 
-- plugin build against `NINA.Plugin 3.3.0.1057-nightly` / .NET 10;
-- CSV persistence;
-- JSON persistence;
-- SVG persistence;
-- isolated `BAD_` prefix file-action test;
-- isolated move-to-`Rejected` file-action test;
-- field-test artifact packaging.
+Known non-blocking NuGet warning:
 
-A synthetic regression previously exposed a real V1 persistence bug (`NaN` values breaking `session.json` during LEARNING); unavailable numeric metrics are now serialized as JSON `null`.
+- N.I.N.A. nightly requests `NINA.Accord.Imaging >= 3.5.3-alpha`; NuGet resolves `3.5.3` (`NU1603`).
 
-## Current branch / PR
-
-```text
-Branch: synthetic-session-harness
-PR: #1 — V1 validation harness: multi-scenario QSM Synthetic Lab
-Status: validation gate GREEN; ready to merge to main
-```
-
-### Exact next repository steps
-
-1. Merge PR #1 into `main`.
-2. Verify the post-merge `main` build is green.
-3. Create branch `v2-smart-quality-analysis` from updated `main`.
-4. Change this handoff section to show V2 as IN PROGRESS.
-5. Begin V2 with the **confidence-score foundation**, including persistence/UI and deterministic synthetic oracles.
-
-## Product sequencing constraint
-
-Do **not** pull the Advanced Sequencer / Valid Frame Target work forward. Accepted-only sequencer progress remains a **V3** feature exactly as specified below.
+The previous nullable warnings in `HtmlReportWriter` were also cleaned while implementing the marker update.
 
 ---
 
-# Synthetic Lab policy
+# EXACT NEXT STEP — FINAL V2 HOST VISUAL GATE
 
-The Synthetic Lab is a **development / pre-release verification harness**, not a production product feature.
+1. Run CI on the exact `0.2.0.1` HEAD.
+2. Require the full 108-frame V1+V2 suite and all deterministic oracles to remain green.
+3. Produce a clean `0.2.0.1` field-test artifact.
+4. User replaces the existing DLL/PDB in N.I.N.A. 3.3 NIGHTLY #057.
+5. Run a reject-rich Synthetic Lab profile such as `Poor night` or `Severe / disaster night`.
+6. Verify rejected frames have clear red timeline markers and correct mini-icons:
+   - guide reject => `💨`;
+   - star-count/cloud reject => `☁`;
+   - background reject => `🌫`;
+   - multi-channel reject => multiple icons.
+7. Open generated `report.html` and verify the same visual mapping there.
+8. If visually correct, record PASS here, merge PR #2 to `main`, then start V3 from that merge.
 
-## During V1/V2/V3 development
+Do not ask the user to repeat already-passed general V2 dashboard/report validation unless a new regression is visible.
 
-Keep it available in development/field-test builds because it allows deterministic testing inside N.I.N.A. without risking a real imaging night. New algorithms should receive synthetic scenarios/oracles before field testing whenever practical.
+---
 
-Current whole-night profiles:
+# SYNTHETIC LAB POLICY
 
-- Canonical regression — all V1 rules/edge cases;
-- Excellent night — stable high-quality session;
-- Average night — normal variation, warnings, occasional rejects;
-- Poor night — frequent wind/cloud/background failures;
-- Severe / disaster night — repeated major failures;
-- Deterioration + recovery — gradual decline, collapse and recovery; intended as a foundation for V2 temporal analysis.
+Synthetic Lab is a **development / pre-release verification harness**, not a production feature.
+
+Selectable whole-night profiles currently exposed in development/field-test builds:
+
+- Canonical regression;
+- Excellent night;
+- Average night;
+- Poor night;
+- Severe / disaster night;
+- Deterioration + recovery.
+
+The Lab uses isolated baseline/session state, ignores live image-save processing while active and never applies real rejected-file actions.
 
 ## Final public V3 release
 
-The final public V3 artifact **must not expose or ship the QSM Synthetic Lab as a normal dockable/plugin feature**. The public plugin must look like the production quality-control product, not a test harness.
+The final public V3 artifact **must not expose or ship QSM Synthetic Lab as a normal production dockable**.
 
-The source harness may remain in the repository or behind a development-only build flag. **Headless synthetic regression in CI must remain** even when the test UI is excluded from final release packaging.
+Permitted final arrangement:
 
----
-
-# V1 — Real-Time Frame Quality Monitor
-
-**Status: IMPLEMENTED + HOST-VALIDATED CANONICAL TEST + 108-FRAME CI REGRESSION GREEN.**
-
-V1 answers:
-
-> Is this exposure good, how good is it, and why?
-
-## Core capabilities
-
-- Quality Meter 0–100.
-- Exposure Guide RMS.
-- Sustained guide excursions.
-- Hard guide excursions.
-- Relative star-count loss.
-- Relative background increase/decrease.
-- Robust adaptive rolling medians.
-- Context-separated baselines by target/filter/exposure/gain/binning/camera.
-- `ANY enabled hard rule fails -> REJECTED`.
-- Basic probable-cause classification.
-- Live Quality timeline and frame history.
-- Session Quality and Acceptance Rate.
-- Monitor Only mode.
-- Safe rejected-file keep / `BAD_` prefix / move to `Rejected` handling.
-- No automatic deletion.
-- Persistent CSV, JSON and SVG output.
-- Missing required analysis data => `ERROR / UNASSESSED`, never false ACCEPTED.
-
-## Fixed implementation rules
-
-- Rejected frames never update the adaptive baseline.
-- Warning frames do not update the V1 baseline.
-- Learning and Accepted frames can build/update the baseline.
-- A single guide spike does not count as a sustained excursion.
-- Sustained duration requires consecutive confirmed above-threshold guide samples.
-- Guide metrics are calculated only from samples inside the exposure interval.
-- Quality Score and hard ACCEPT/REJECT decision remain separate concepts.
-- Synthetic mode has an isolated baseline/session store and disables real-file actions.
-
-## Explicitly excluded from rejection logic
-
-- HFR
-- FWHM
-- eccentricity
-
-These remain excluded because real wind-damaged point–streak–point frames can retain deceptively similar values.
+- development-only Synthetic Lab source/build flag remains in repository if useful;
+- headless synthetic regression remains permanent CI coverage;
+- production V3 package contains production QSM functionality only.
 
 ---
 
-# V2 — Smart Quality Analysis
+# V3 — QUALITY-CONTROLLED ACQUISITION
 
-**Status: NEXT PRODUCT VERSION. Start after PR #1 is merged and the V2 branch is created.**
-
-V2 answers:
-
-> What is happening across the night, how certain are we, and what temporal pattern caused the degradation?
-
-V2 must use the V1 evidence more intelligently rather than add arbitrary image metrics.
-
-## 1. Confidence score — FIRST V2 MILESTONE
-
-Add per-frame confidence separate from Quality.
-
-Examples:
-
-```text
-Quality: 43/100
-Confidence: 99%
-Reason: severe guiding disturbance
-```
-
-```text
-Quality: 61/100
-Confidence: 54%
-Reason: possible transparency loss; baseline still weak
-```
-
-Confidence must be evidence-driven, not decorative. Initial model should consider at least:
-
-- baseline maturity relative to configured learning/window size;
-- required data availability;
-- distance/margin from relevant hard thresholds;
-- number of independent abnormal channels that agree;
-- strength of guiding evidence for guide-driven classifications.
-
-Required implementation surface:
-
-- `FrameQualityResult` fields for confidence and explanation/evidence;
-- CSV/JSON persistence;
-- dashboard/history display;
-- deterministic Synthetic Lab / headless CI cases for strong high-confidence evidence and weaker/near-threshold evidence.
-
-## 2. Event grouping
-
-Group temporally related abnormal frames into session events instead of treating every bad exposure as unrelated.
-
-Example:
-
-```text
-22:51–23:05
-Cloud / transparency event
-3 affected frames
-Confidence 97%
-```
-
-Likely event classes:
-
-- cloud / transparency;
-- bright-cloud / background;
-- wind / guiding disturbance;
-- mixed conditions;
-- analysis/data-loss event.
-
-Events need clear start/end rules and must close after a configurable/defined healthy gap.
-
-## 3. Guide-pattern analysis
-
-Use the complete exposure guide time series to distinguish:
-
-- isolated spike;
-- sustained excursion;
-- oscillation;
-- drift;
-- wind-like disturbance;
-- possible cable/mechanical event.
-
-Pattern labels are diagnostic evidence, not guaranteed physical-cause claims. Add deterministic synthetic sample factories for oscillation/drift/wind-like patterns.
-
-## 4. Slow-trend compensation
-
-Distinguish gradual change from abrupt anomalies.
-
-Benign/gradual example:
-
-```text
-1900 -> 1870 -> 1830 -> 1800 -> 1760 -> 1720 stars
-```
-
-Abrupt anomaly:
-
-```text
-1900 -> 1870 -> 1840 -> 1810 -> 1040 stars
-```
-
-Trend modelling must remain context-separated and must not allow rejected frames to normalize bad conditions. Add a benign slow-trend synthetic profile in addition to the existing `Deterioration + recovery` profile.
-
-## 5. Multichannel session timeline
-
-Combined inspection of:
-
-- Overall Quality;
-- Confidence;
-- star count / transparency residual;
-- background;
-- Guide RMS;
-- guide excursions/patterns;
-- detected events.
-
-The UI should make it obvious *when* quality changed and *why*.
-
-## 6. Frame ranking
-
-Rank accepted frames by Quality, with best/worst accepted views. Ranking does not replace hard ACCEPT/REJECT logic.
-
-Example:
-
-```text
-BEST ACCEPTED
-00124.fit   98
-00118.fit   97
-```
-
-```text
-WORST ACCEPTED
-00139.fit   67
-00142.fit   69
-```
-
-## 7. Advanced reporting
-
-Planned outputs:
-
-- CSV;
-- JSON;
-- interactive HTML report;
-- PNG/SVG plots;
-- rejection-reason distribution;
-- filter breakdown;
-- grouped events;
-- best/worst accepted frames;
-- confidence and temporal diagnostics.
-
-## V2 development rule
-
-Every new V2 algorithm should gain deterministic synthetic coverage before it is treated as ready for field testing whenever practical.
-
----
-
-# V3 — Quality-Controlled Acquisition
-
-**Status: PLANNED FINAL MAJOR PRODUCT STAGE AFTER V2. Do not implement early unless the user explicitly changes this roadmap.**
+**Status: PLANNED FINAL MAJOR STAGE. Do not implement until V2 host validation passes unless the user explicitly changes the roadmap.**
 
 V3 answers:
 
 > How many genuinely valid exposures have I acquired, and can N.I.N.A. keep acquiring until that valid-frame target is complete?
 
-## Valid Frame Target — central V3 behavior
+## Valid Frame Target — central behavior
 
-This is deliberately **not** a separate “re-acquire rejected frames later” pass. The sequence progress itself must count only accepted frames.
-
-Example:
+This is not an after-the-fact re-acquisition pass. Sequence progress itself counts accepted frames only.
 
 ```text
 Requested valid frames: 300
@@ -330,8 +379,6 @@ Sequence progress:      195 / 300
 ```
 
 A rejected exposure never increments valid progress.
-
-Conceptually:
 
 ```text
 while AcceptedCount < RequestedValidFrames:
@@ -356,8 +403,6 @@ Total captured:  317
 
 ## Count modes
 
-Potential Advanced Sequencer option:
-
 ```text
 ( ) Captured exposures
 (*) Accepted exposures
@@ -365,59 +410,31 @@ Potential Advanced Sequencer option:
 
 ## Multiple filters
 
-Each filter block independently tracks its valid target:
-
 ```text
 L   206 / 300 valid   (217 captured, 11 rejected)
 R   100 / 100 valid   (108 captured,  8 rejected) COMPLETE
 G    70 / 100 valid   ( 72 captured,  2 rejected)
 ```
 
-## Auto-calibration
+## Additional V3 features
 
-Estimate stable-session variation and propose thresholds for:
-
-- star-count loss;
-- background deviation;
-- Guide RMS;
-- guide excursion.
-
-User choices: `Apply / Modify / Ignore`.
-
-## Adaptive threshold modes
-
-```text
-OFF
-Suggest Only
-Automatic
-```
-
-Default/preferred mode: **Suggest Only**. Automatic changes require explicit opt-in.
-
-## Smart pause / resume
-
-A single bad frame does not stop acquisition; persistent deterioration can pause it. Recovery must be confirmed by multiple healthy checks before resume.
-
-## Environmental correlation
-
-Where available, optionally correlate Quality with wind, humidity, cloud sensor, SQM, temperature and dew point. Sensors remain optional.
-
-## Predictive degradation
-
-Warn about worsening quality trends and use them as input to acquisition control; never pre-reject an exposure that has not been acquired.
-
-## Final-release Synthetic Lab requirement
+- auto-calibration from stable early-session data with `Apply / Modify / Ignore`;
+- adaptive threshold modes `OFF / Suggest Only / Automatic` with **Suggest Only** preferred by default;
+- smart pause on persistent deterioration rather than one bad frame;
+- smart resume only after multiple healthy checks;
+- optional environmental correlation with wind/humidity/cloud/SQM/temperature/dew point where N.I.N.A. exposes suitable data;
+- predictive degradation warnings;
+- Advanced Sequencer integration consuming the same QSM ACCEPTED/REJECTED state.
 
 Before public V3 release:
 
-- exclude the Synthetic Lab dockable/test UI from production packaging;
+- remove/exclude Synthetic Lab UI from the production artifact;
 - retain automated synthetic regression in CI;
-- retain development-only harness code in source only if useful;
-- verify the release artifact presents only production QualitySessionMeter functionality.
+- verify production package exposes only production QSM features.
 
 ---
 
-# Version matrix
+# VERSION MATRIX
 
 | Feature | V1 | V2 | V3 |
 |---|:---:|:---:|:---:|
@@ -425,14 +442,15 @@ Before public V3 release:
 | Guide RMS | ✅ | ✅ | ✅ |
 | Sustained/hard excursion | ✅ | ✅ | ✅ |
 | Star/background adaptive baseline | ✅ | ✅ | ✅ |
-| Hard auto-reject decision | ✅ | ✅ | ✅ |
-| Live timeline | ✅ | ✅ | ✅ |
+| Hard reject decision | ✅ | ✅ | ✅ |
 | Persistent session log | ✅ | ✅ | ✅ |
 | Basic probable cause | ✅ | ✅ | ✅ |
 | Confidence score |  | ✅ | ✅ |
 | Event grouping |  | ✅ | ✅ |
 | Guide-pattern analysis |  | ✅ | ✅ |
-| Slow-trend compensation |  | ✅ | ✅ |
+| Slow-trend diagnostics |  | ✅ | ✅ |
+| Multichannel timeline |  | ✅ | ✅ |
+| Rejected-frame cause markers |  | ✅ | ✅ |
 | Frame ranking |  | ✅ | ✅ |
 | Interactive HTML report |  | ✅ | ✅ |
 | Auto calibration |  |  | ✅ |
@@ -443,23 +461,25 @@ Before public V3 release:
 | Valid Frame Target |  |  | ✅ |
 | Predictive degradation |  |  | ✅ |
 
-Synthetic Lab is intentionally omitted from the production feature matrix because it is a development/test harness and must be absent from the final public V3 package.
+Synthetic Lab is intentionally omitted from the production feature matrix because it is a development/test harness.
 
 ---
 
-# Architectural constraints
+# ARCHITECTURAL CONSTRAINTS
 
 1. Never refactor the Quality Engine in a way that prevents V3 accepted-frame counting.
-2. Keep quality decision/state independent from filesystem actions.
+2. Keep Quality/decision state independent from filesystem actions.
 3. Rejected-file handling must never become the source of truth for ACCEPT/REJECT.
 4. V2 temporal intelligence layers on raw per-frame evidence; it must not erase or hide it.
 5. V3 sequencer control consumes the same ACCEPTED/REJECTED state already recorded by the engine.
 6. Development Synthetic Lab code must remain separable from production release packaging.
-7. Do not claim a feature validated unless the relevant CI/synthetic/host test has actually passed.
+7. Do not claim a feature validated unless the relevant CI/synthetic/host test actually passed.
+8. HFR/FWHM/eccentricity remain excluded from core reject logic unless the user explicitly changes that decision.
+9. Rejection marker icons are a presentation layer only; raw reject reason codes remain authoritative.
 
 ---
 
-# Documentation / handoff discipline
+# DOCUMENTATION / HANDOFF DISCIPLINE
 
 For every material change:
 
