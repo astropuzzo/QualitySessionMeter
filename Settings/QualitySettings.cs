@@ -27,7 +27,7 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     }
 
     public AdaptiveThresholdMode AdaptiveThresholdMode {
-        get => (AdaptiveThresholdMode)Clamp(accessor.GetValueInt32(nameof(AdaptiveThresholdMode), (int)Models.AdaptiveThresholdMode.SuggestOnly), 0, 2);
+        get => (AdaptiveThresholdMode)Clamp(accessor.GetValueInt32(nameof(AdaptiveThresholdMode), (int)NINA.Plugin.QualitySessionMeter.Models.AdaptiveThresholdMode.SuggestOnly), 0, 2);
         set { accessor.SetValueInt32(nameof(AdaptiveThresholdMode), Clamp((int)value, 0, 2)); Raise(); Raise(nameof(AdaptiveThresholdModeIndex)); }
     }
     public int AdaptiveThresholdModeIndex { get => (int)AdaptiveThresholdMode; set => AdaptiveThresholdMode = (AdaptiveThresholdMode)Clamp(value, 0, 2); }
@@ -37,7 +37,6 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueInt32(nameof(CalibrationWindow), Clamp(value, 8, 50)); Raise(); }
     }
 
-    // Automatic mode cannot loosen thresholds beyond these explicit safety ceilings.
     public double AutoSafetyMaxGuideRms {
         get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxGuideRms), 2.50), 0.5, 10);
         set { accessor.SetValueDouble(nameof(AutoSafetyMaxGuideRms), Clamp(value, 0.5, 10)); Raise(); }
@@ -69,8 +68,6 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueBoolean(nameof(EnvironmentalCorrelationEnabled), value); Raise(); }
     }
 
-    // Disabled by default for first production release: it deliberately blocks between exposures,
-    // never during an active shutter. Users opt in after validating their setup.
     public bool SmartPauseEnabled {
         get => accessor.GetValueBoolean(nameof(SmartPauseEnabled), false);
         set { accessor.SetValueBoolean(nameof(SmartPauseEnabled), value); Raise(); }
