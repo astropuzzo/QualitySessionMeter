@@ -30,15 +30,55 @@ active branch
 
 active PR
   #2 — V2 — Smart Quality Analysis
+  draft / not merged
 
-field-test candidate
-  0.2.0.0
-  head: b709d09bf05739b4c3af61a36364dd5f2af0548f
-  CI run: #73 / 34150474822
-  result: PASS
+latest field-test line
+  0.2.0.1
+  purpose: rejected-frame timeline cause markers after successful 0.2.0.0 host review
 ```
 
-**Do not merge PR #2 yet.** The next gate is user-local host/UI validation in N.I.N.A. 3.3 NIGHTLY #057.
+**Do not merge PR #2 yet.** Build `0.2.0.0` already rendered successfully in the user's real N.I.N.A. host and the V2 report/dashboard were inspected. The remaining V2 host gate is the user-requested timeline enhancement implemented in `0.2.0.1`.
+
+### User-local V2 host review already completed
+
+User supplied screenshots from N.I.N.A. and `report.html` showing that the V2 dashboard/report load and render correctly, including:
+
+- Quality + Confidence;
+- Guide Pattern;
+- Trend;
+- Session Events;
+- Best/Worst accepted ranking;
+- multichannel timeline;
+- frame history;
+- generated HTML report.
+
+The report was readable and did not require a general redesign.
+
+### Final V2 UI request before merge
+
+Rejected frames must be immediately visible in both timelines rather than requiring the user to inspect the frame-history table.
+
+Implemented presentation vocabulary:
+
+```text
+💨  guide / wind problem
+☁  star-count / cloud / transparency problem
+🌫  background / haze problem
+❌  rejected with an unmapped future reason
+⚠  analysis error / unassessed marker
+```
+
+Rules:
+
+- every `REJECTED` frame receives a strong vertical red marker/band at its exact timeline x-position;
+- a compact cause badge is displayed above the marker;
+- multi-channel rejects show multiple icons, e.g. `☁🌫` or `💨☁🌫`;
+- marker mapping is presentation-only and never changes Quality, Confidence or hard reject decisions;
+- HTML markers include a tooltip containing frame number, probable cause and raw reason text;
+- HTML frame-history Cause cells also show the compact icon(s);
+- WPF and HTML use the same shared `RejectionVisual` mapping.
+
+Exact next gate: CI on `0.2.0.1`, then a short user-local visual check of rejected-frame markers in N.I.N.A. and the HTML report. If that passes, merge PR #2 and start V3.
 
 ---
 
@@ -79,7 +119,7 @@ Explicitly excluded from core reject logic unless the user changes this decision
 
 # V2 — SMART QUALITY ANALYSIS
 
-**Status: IMPLEMENTED + CI VALIDATED; awaiting user-local N.I.N.A. field-test of build 0.2.0.0.**
+**Status: IMPLEMENTED + CI VALIDATED + MAIN HOST SURFACES REVIEWED; awaiting final 0.2.0.1 rejection-marker visual check.**
 
 V2 answers:
 
@@ -165,16 +205,20 @@ Rejected frames never enter trend/reference history.
 
 Coverage includes the selectable `Deterioration + recovery` profile plus dedicated deterministic benign/abrupt trend oracles.
 
-## 5. Multichannel Timeline — IMPLEMENTED
+## 5. Multichannel Timeline — IMPLEMENTED + REJECT MARKERS ENHANCED IN 0.2.0.1
 
-Live/session inspection now combines:
+Live/session inspection combines:
 
 - Overall Quality;
 - Confidence;
 - Guide RMS;
 - star-count deviation;
 - background deviation;
-- frame-state markers.
+- frame-state markers;
+- strong rejected-frame vertical markers;
+- compact rejected-frame cause icons using the shared `RejectionVisual` mapping.
+
+The WPF timeline and HTML report share the same reason-to-icon vocabulary so the visual language cannot silently diverge.
 
 ## 6. Frame Ranking — IMPLEMENTED
 
@@ -194,9 +238,11 @@ Each session can produce:
 
 The HTML report contains session summary, multichannel timeline, events, cause distribution, ranking and detailed frame history. It has no CDN/runtime web dependency.
 
+From `0.2.0.1`, rejected frames in the HTML timeline receive red bands/lines plus compact cause badges and hover tooltips; the cause icons are also visible in rejected/error frame-history rows.
+
 ## V2 N.I.N.A. dashboard — IMPLEMENTED
 
-The dockable is now a scrollable dashboard containing:
+The dockable is a scrollable dashboard containing:
 
 - Quality;
 - Confidence;
@@ -212,19 +258,21 @@ The dockable is now a scrollable dashboard containing:
 - Best/Worst accepted ranking;
 - report/session-folder controls.
 
-Presentation fixes in 0.2.0.0:
+Presentation fixes:
 
 - `LEARNING` => `Quality — / LEARNING` rather than `100 / EXCELLENT`;
 - `ERROR` => `Quality — / UNASSESSED`;
-- the internal numeric score remains available for deterministic regression/persistence.
+- the internal numeric score remains available for deterministic regression/persistence;
+- `0.2.0.1`: rejected timeline frames are visually explicit and carry mini cause icons.
 
 ---
 
-# V2 FINAL CI GATE — PASS
+# V2 REGRESSION BASELINE
 
-Final candidate tested by GitHub Actions on Windows against `.NET 10` and `NINA.Plugin 3.3.0.1057-nightly`.
+The last fully recorded V2 candidate before the rejection-marker enhancement passed GitHub Actions on Windows against `.NET 10` and `NINA.Plugin 3.3.0.1057-nightly`.
 
 ```text
+Candidate: 0.2.0.0
 Commit: b709d09bf05739b4c3af61a36364dd5f2af0548f
 Workflow run: #73 / 34150474822
 Conclusion: SUCCESS
@@ -255,56 +303,32 @@ isolated Rejected-folder action: PASS
 clean plugin package: PASS
 ```
 
-Field-test artifact:
+`0.2.0.1` must re-pass the same complete gate before being handed to the user.
 
-```text
-QualitySessionMeter-v0.2.0.0-field-test-nina-3.3-nightly-057
-Artifact ID: 10029197607
-SHA-256: a7680f817571367675740d41f72e0a5867390717faa6cc4fdee09b13937ce6a6
-```
+Known non-blocking NuGet warning:
 
-Synthetic report artifact:
+- N.I.N.A. nightly requests `NINA.Accord.Imaging >= 3.5.3-alpha`; NuGet resolves `3.5.3` (`NU1603`).
 
-```text
-QualitySessionMeter-v0.2.0.0-synthetic-report
-Artifact ID: 10029197935
-```
-
-Known non-blocking warnings:
-
-- N.I.N.A. nightly NuGet dependency resolves `NINA.Accord.Imaging 3.5.3` where the nightly requests `>= 3.5.3-alpha` (`NU1603`).
-- `HtmlReportWriter` has nullable-annotation compiler warnings while project nullable annotations are disabled. No build/runtime failure is produced.
+The previous nullable warnings in `HtmlReportWriter` were also cleaned while implementing the marker update.
 
 ---
 
-# EXACT NEXT STEP — USER HOST TEST
+# EXACT NEXT STEP — FINAL V2 HOST VISUAL GATE
 
-Install build `0.2.0.0` over the existing field-test DLL/PDB and test inside N.I.N.A. 3.3 NIGHTLY #057.
+1. Run CI on the exact `0.2.0.1` HEAD.
+2. Require the full 108-frame V1+V2 suite and all deterministic oracles to remain green.
+3. Produce a clean `0.2.0.1` field-test artifact.
+4. User replaces the existing DLL/PDB in N.I.N.A. 3.3 NIGHTLY #057.
+5. Run a reject-rich Synthetic Lab profile such as `Poor night` or `Severe / disaster night`.
+6. Verify rejected frames have clear red timeline markers and correct mini-icons:
+   - guide reject => `💨`;
+   - star-count/cloud reject => `☁`;
+   - background reject => `🌫`;
+   - multi-channel reject => multiple icons.
+7. Open generated `report.html` and verify the same visual mapping there.
+8. If visually correct, record PASS here, merge PR #2 to `main`, then start V3 from that merge.
 
-Required host checks before PR #2 can be merged:
-
-1. plugin loads and reports version `0.2.0.0`;
-2. open both `Quality Session Meter` and `QSM Synthetic Lab`;
-3. verify the Synthetic Lab profile selector contains:
-   - Canonical regression;
-   - Excellent night;
-   - Average night;
-   - Poor night;
-   - Severe / disaster night;
-   - Deterioration + recovery;
-4. run at minimum Canonical, Average, Severe/Disaster and Deterioration + recovery;
-5. each selected scenario must finish with PASS and expected processed-frame count;
-6. visually inspect new Confidence, Guide Pattern, Trend, Events and Best/Worst ranking surfaces;
-7. verify LEARNING displays `Quality —`;
-8. open the generated synthetic session folder and inspect `report.html`;
-9. report any clipping, tiny text, bad scroll behavior, confusing wording or incorrect values with screenshots.
-
-If all host checks pass:
-
-- record results here;
-- merge PR #2 to `main`;
-- update README/release notes as needed;
-- start V3 from the validated V2 baseline.
+Do not ask the user to repeat already-passed general V2 dashboard/report validation unless a new regression is visible.
 
 ---
 
@@ -426,6 +450,7 @@ Before public V3 release:
 | Guide-pattern analysis |  | ✅ | ✅ |
 | Slow-trend diagnostics |  | ✅ | ✅ |
 | Multichannel timeline |  | ✅ | ✅ |
+| Rejected-frame cause markers |  | ✅ | ✅ |
 | Frame ranking |  | ✅ | ✅ |
 | Interactive HTML report |  | ✅ | ✅ |
 | Auto calibration |  |  | ✅ |
@@ -450,6 +475,7 @@ Synthetic Lab is intentionally omitted from the production feature matrix becaus
 6. Development Synthetic Lab code must remain separable from production release packaging.
 7. Do not claim a feature validated unless the relevant CI/synthetic/host test actually passed.
 8. HFR/FWHM/eccentricity remain excluded from core reject logic unless the user explicitly changes that decision.
+9. Rejection marker icons are a presentation layer only; raw reject reason codes remain authoritative.
 
 ---
 
