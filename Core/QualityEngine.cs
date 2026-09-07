@@ -7,6 +7,8 @@ using System.Linq;
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
 public sealed class QualityEngine {
+    private readonly ConfidenceEngine confidenceEngine = new();
+
     public FrameQualityResult Evaluate(FrameQualityInput input, QualitySettings settings) {
         var result = new FrameQualityResult {
             FrameIndex = input.FrameIndex,
@@ -107,6 +109,7 @@ public sealed class QualityEngine {
             result.Status = FrameStatus.Error;
             result.ErrorMessage = string.Join(", ", dataErrors);
             result.ProbableCause = "ANALYSIS DATA UNAVAILABLE";
+            confidenceEngine.Apply(input, result, settings);
             return result;
         }
 
@@ -122,6 +125,7 @@ public sealed class QualityEngine {
         }
 
         result.ProbableCause = ClassifyCause(result);
+        confidenceEngine.Apply(input, result, settings);
         return result;
     }
 
