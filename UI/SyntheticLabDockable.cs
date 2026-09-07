@@ -6,6 +6,7 @@ using NINA.Plugin.QualitySessionMeter.Settings;
 using NINA.Plugin.QualitySessionMeter.Synthetic;
 using NINA.Profile;
 using NINA.Profile.Interfaces;
+using NINA.Sequencer.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.ViewModel;
 using System;
@@ -24,7 +25,6 @@ public sealed class SyntheticLabDockable : DockableVM, IDisposable {
     private readonly QualitySessionRuntime runtime;
 
     public override bool IsTool { get; } = true;
-
     public IReadOnlyList<SyntheticSessionDefinition> Scenarios { get; } = SyntheticSessionGenerator.GetScenarios();
 
     private SyntheticSessionDefinition selectedScenario;
@@ -41,18 +41,10 @@ public sealed class SyntheticLabDockable : DockableVM, IDisposable {
 
     public string ScenarioDescription => SelectedScenario?.Description ?? "Select a synthetic night profile.";
     public string ScenarioExpectedSummary => SelectedScenario?.ExpectedSummary ?? "—";
-    public string RunningScenario => string.IsNullOrWhiteSpace(runtime.SyntheticSessionName)
-        ? SelectedScenario?.DisplayName ?? "—"
-        : runtime.SyntheticSessionName;
+    public string RunningScenario => string.IsNullOrWhiteSpace(runtime.SyntheticSessionName) ? SelectedScenario?.DisplayName ?? "—" : runtime.SyntheticSessionName;
 
     private int frameDelayMs = 150;
-    public int FrameDelayMs {
-        get => frameDelayMs;
-        set {
-            frameDelayMs = Math.Clamp(value, 0, 5000);
-            RaisePropertyChanged();
-        }
-    }
+    public int FrameDelayMs { get => frameDelayMs; set { frameDelayMs = Math.Clamp(value, 0, 5000); RaisePropertyChanged(); } }
 
     public bool IsSyntheticMode => runtime.IsSyntheticMode;
     public bool IsSyntheticRunning => runtime.IsSyntheticRunning;
@@ -62,9 +54,7 @@ public sealed class SyntheticLabDockable : DockableVM, IDisposable {
     public string Status => runtime.SyntheticStatus;
     public string Progress => runtime.SyntheticTotal <= 0 ? "0 / 0" : $"{runtime.SyntheticProcessed} / {runtime.SyntheticTotal}";
     public string LastScenario => string.IsNullOrWhiteSpace(runtime.SyntheticLastScenario) ? "—" : runtime.SyntheticLastScenario;
-    public string FailureSummary => string.IsNullOrWhiteSpace(runtime.SyntheticFailureSummary)
-        ? "No verdict yet."
-        : runtime.SyntheticFailureSummary;
+    public string FailureSummary => string.IsNullOrWhiteSpace(runtime.SyntheticFailureSummary) ? "No verdict yet." : runtime.SyntheticFailureSummary;
     public string SessionFolder => runtime.ActiveSessionFolder;
     public string SafetyText => runtime.IsSyntheticMode
         ? "ISOLATED: live ImageSaved events are ignored; no camera or real image file is touched."
@@ -79,29 +69,25 @@ public sealed class SyntheticLabDockable : DockableVM, IDisposable {
     public SyntheticLabDockable(
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
-        IGuiderMediator guiderMediator) : base(profileService) {
+        IGuiderMediator guiderMediator,
+        ISequenceMediator sequenceMediator) : base(profileService) {
 
         Title = "QSM Synthetic Lab";
         ImageGeometry = PluginIcon.CreateMeterGeometry();
-
-        selectedScenario = Scenarios.FirstOrDefault(x => x.Id == SyntheticSessionGenerator.CanonicalScenarioId)
-            ?? Scenarios.FirstOrDefault();
+        selectedScenario = Scenarios.FirstOrDefault(x => x.Id == SyntheticSessionGenerator.CanonicalScenarioId) ?? Scenarios.FirstOrDefault();
 
         var accessor = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         var settings = new QualitySettings(accessor);
-        runtime = QualitySessionRuntimeRegistry.GetOrCreate(profileService, imageSaveMediator, guiderMediator, settings);
+        runtime = QualitySessionRuntimeRegistry.GetOrCreate(profileService, imageSaveMediator, guiderMediator, sequenceMediator, settings);
 
         runtime.SyntheticStateChanged += RuntimeSyntheticStateChanged;
-
         RunCommand = new AsyncRelayCommand(RunAsync);
         StopCommand = new RelayCommand(runtime.StopSyntheticSession);
         ReturnLiveCommand = new RelayCommand(runtime.ExitSyntheticMode);
         OpenFolderCommand = new RelayCommand(OpenFolder);
     }
 
-    private Task RunAsync() => runtime.RunSyntheticSessionAsync(
-        SelectedScenario?.Id ?? SyntheticSessionGenerator.CanonicalScenarioId,
-        FrameDelayMs);
+    private Task RunAsync() => runtime.RunSyntheticSessionAsync(SelectedScenario?.Id ?? SyntheticSessionGenerator.CanonicalScenarioId, FrameDelayMs);
 
     private void OpenFolder() {
         var path = runtime.ActiveSessionFolder;
@@ -130,7 +116,5 @@ public sealed class SyntheticLabDockable : DockableVM, IDisposable {
         else Apply();
     }
 
-    public void Dispose() {
-        runtime.SyntheticStateChanged -= RuntimeSyntheticStateChanged;
-    }
+    public void Dispose() => runtime.SyntheticStateChanged -= RuntimeSyntheticStateChanged;
 }
