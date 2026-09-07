@@ -6,6 +6,7 @@ using NINA.Plugin.QualitySessionMeter.Models;
 using NINA.Plugin.QualitySessionMeter.Settings;
 using NINA.Profile;
 using NINA.Profile.Interfaces;
+using NINA.Sequencer.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.ViewModel;
 using System;
@@ -42,10 +43,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     private int syntheticDelayMs = 150;
     public int SyntheticDelayMs {
         get => syntheticDelayMs;
-        set {
-            syntheticDelayMs = Math.Clamp(value, 0, 5000);
-            RaisePropertyChanged();
-        }
+        set { syntheticDelayMs = Math.Clamp(value, 0, 5000); RaisePropertyChanged(); }
     }
 
     public int Captured => Frames.Count;
@@ -69,7 +67,11 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public string SyntheticFailureSummary => runtime.SyntheticFailureSummary;
     public string ModeText => runtime.IsSyntheticMode
         ? "SYNTHETIC LAB — NO CAMERA / NO REAL FILES"
-        : Settings.MonitorOnly ? "MONITOR ONLY" : "ACTIVE REJECT HANDLING";
+        : !Settings.Enabled
+            ? "QSM OFF — NO ANALYSIS / NO FILE ACTIONS"
+            : Settings.MonitorOnly
+                ? $"MONITOR ONLY · {Settings.MonitoringScope}"
+                : $"ACTIVE REJECT HANDLING · {Settings.MonitoringScope}";
 
     public ICommand ResetSessionCommand { get; }
     public ICommand OpenSessionFolderCommand { get; }
@@ -82,14 +84,15 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public QualitySessionMeterDockable(
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
-        IGuiderMediator guiderMediator) : base(profileService) {
+        IGuiderMediator guiderMediator,
+        ISequenceMediator sequenceMediator) : base(profileService) {
 
         Title = PluginConstants.DisplayName;
         ImageGeometry = PluginIcon.CreateMeterGeometry();
 
         var accessor = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         var settings = new QualitySettings(accessor);
-        runtime = QualitySessionRuntimeRegistry.GetOrCreate(profileService, imageSaveMediator, guiderMediator, settings);
+        runtime = QualitySessionRuntimeRegistry.GetOrCreate(profileService, imageSaveMediator, guiderMediator, sequenceMediator, settings);
         lastSyntheticMode = runtime.IsSyntheticMode;
 
         ReloadLiveFrames();
@@ -144,7 +147,6 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     private void RuntimeSyntheticStateChanged(object sender, EventArgs e) {
         void Apply() {
             bool nowSynthetic = runtime.IsSyntheticMode;
-
             if (nowSynthetic && !lastSyntheticMode) {
                 Frames.Clear();
                 CurrentFrame = null;
@@ -178,15 +180,11 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     private void RefreshDerivedViews() {
         BestAccepted.Clear();
         foreach (var frame in Frames.Where(x => x.Status == FrameStatus.Accepted)
-                     .OrderByDescending(x => x.OverallQuality).ThenByDescending(x => x.ConfidenceScore).Take(5)) {
-            BestAccepted.Add(frame);
-        }
+                     .OrderByDescending(x => x.OverallQuality).ThenByDescending(x => x.ConfidenceScore).Take(5)) BestAccepted.Add(frame);
 
         WorstAccepted.Clear();
         foreach (var frame in Frames.Where(x => x.Status == FrameStatus.Accepted)
-                     .OrderBy(x => x.OverallQuality).ThenBy(x => x.ConfidenceScore).Take(5)) {
-            WorstAccepted.Add(frame);
-        }
+                     .OrderBy(x => x.OverallQuality).ThenBy(x => x.ConfidenceScore).Take(5)) WorstAccepted.Add(frame);
 
         var grouper = new EventGroupingEngine();
         foreach (var frame in Frames) grouper.Add(frame);
