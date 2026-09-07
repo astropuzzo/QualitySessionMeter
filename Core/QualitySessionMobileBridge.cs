@@ -18,6 +18,8 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
     public const string SnapshotTopic = "QualitySessionMeter.ApiV1.Snapshot";
 
     private const int DefaultRecentFrames = 160;
+    private const double LiveGuideWindowSeconds = 20;
+    private const int MaxLiveGuideSamples = 120;
     private readonly IMessageBroker broker;
     private bool disposed;
 
@@ -60,6 +62,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
         var allFrames = runtime.Store?.Results?.ToArray() ?? Array.Empty<FrameQualityResult>();
         var recentFrames = allFrames.TakeLast(DefaultRecentFrames).ToArray();
         var current = allFrames.LastOrDefault();
+        var liveGuide = runtime.GetRecentGuideMetrics(LiveGuideWindowSeconds);
 
         int accepted = allFrames.Count(x => x.Status == FrameStatus.Accepted);
         int warnings = allFrames.Count(x => x.Status == FrameStatus.Warning);
@@ -122,12 +125,43 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
                 ["starDelta"] = Series("Stars Δ", "#FDD663", "% vs rolling baseline", "negative means fewer stars than the rolling clean-frame reference"),
                 ["backgroundDelta"] = Series("Background Δ", "#F28B82", "% vs rolling baseline", "positive = brighter than baseline; negative = darker")
             },
+            ["guidingLive"] = MobileLiveGuide(liveGuide),
             ["currentFrame"] = current == null ? null : MobileFrame(current),
             ["frames"] = recentFrames.Select(x => (object)MobileFrame(x)).ToList()
         };
 
         return result;
     }
+
+    private static IDictionary<string, object> MobileLiveGuide(GuideExposureMetrics metrics) {
+        var source = metrics?.Series?.TakeLast(MaxLiveGuideSamples).ToArray() ?? Array.Empty<GuideSample>();
+        var ra = source.Where(x => Finite(x.RaArcsec)).Select(x => x.RaArcsec).ToArray();
+        var dec = source.Where(x => Finite(x.DecArcsec)).Select(x => x.DecArcsec).ToArray();
+        var latest = source.LastOrDefault();
+        return new Dictionary<string, object> {
+            ["hasData"] = metrics?.HasData == true && source.Length > 0,
+            ["windowSeconds"] = LiveGuideWindowSeconds,
+            ["samples"] = source.Length,
+            ["rmsTotalArcsec"] = JsonNumber(metrics?.RmsArcsec ?? double.NaN),
+            ["rmsRaArcsec"] = JsonNumber(AxisRms(ra)),
+            ["rmsDecArcsec"] = JsonNumber(AxisRms(dec)),
+            ["maxExcursionArcsec"] = JsonNumber(metrics?.MaxExcursionArcsec ?? double.NaN),
+            ["latestUtc"] = latest == null ? null : latest.TimestampUtc.ToUniversalTime().ToString("O"),
+            ["latestRaArcsec"] = latest == null ? null : JsonNumber(latest.RaArcsec),
+            ["latestDecArcsec"] = latest == null ? null : JsonNumber(latest.DecArcsec),
+            ["latestTotalArcsec"] = latest == null ? null : JsonNumber(latest.TotalArcsec),
+            ["series"] = source.Select(x => (object)new Dictionary<string, object> {
+                ["timestampUtc"] = x.TimestampUtc.ToUniversalTime().ToString("O"),
+                ["raArcsec"] = JsonNumber(x.RaArcsec),
+                ["decArcsec"] = JsonNumber(x.DecArcsec),
+                ["totalArcsec"] = JsonNumber(x.TotalArcsec)
+            }).ToList()
+        };
+    }
+
+    private static double AxisRms(double[] values) => values == null || values.Length == 0
+        ? double.NaN
+        : Math.Sqrt(values.Select(x => x * x).Average());
 
     private static IDictionary<string, object> MobileFrame(FrameQualityResult frame) => new Dictionary<string, object> {
         ["frameIndex"] = frame.FrameIndex,
