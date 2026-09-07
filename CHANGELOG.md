@@ -2,6 +2,63 @@
 
 All notable changes to QualitySessionMeter are documented here.
 
+## [1.0.0.2] - 2026-09-07
+
+### Timeline readability / reference model
+
+Real-host testing showed that the multichannel timeline still required internal knowledge to interpret correctly even after the 1.0.0.1 event-marker fix.
+
+- Added an explicit color-matched legend directly beside each plotted channel:
+  - blue `Quality` — 0–100;
+  - purple `Confidence` — 0–100%;
+  - green `Guide RMS` — arcseconds, lower is better;
+  - yellow `Stars Δ` — percentage versus the rolling clean-frame star baseline;
+  - salmon `Background Δ` — percentage versus the rolling clean-frame background baseline.
+- Added a visible dashed `0% rolling baseline` reference to the image-delta band.
+- Added live dashed rejection-limit lines for:
+  - Guide RMS;
+  - negative star-count loss;
+  - positive and negative background deviation.
+- Timeline limit lines are bound to the live QSM settings, so changing a threshold during a sequence updates the graph without restarting QSM.
+- Added scale/unit hints to all three bands.
+- Image-delta scaling now expands when needed so active thresholds and large deviations remain visible instead of silently clipping against a fixed ±50% range.
+- Hovering anywhere in the plot selects the nearest frame and explains:
+  - frame/status;
+  - Quality / Confidence;
+  - Guide RMS and current RMS limit;
+  - star count, rolling star baseline, delta and rejection threshold;
+  - background value, rolling background baseline, delta and +/- limits;
+  - probable cause / raw reason.
+- When a rolling baseline is not ready yet, the hover explicitly says `baseline learning/not ready` instead of presenting an unexplained empty delta.
+- Existing `G/S/B/!` event markers and exact event-line hover remain intact.
+
+### Touch 'n' Stars / mobile integration foundation
+
+- Added a read-only `QualitySessionMeter.ApiV1` contract over N.I.N.A.'s process-local `IMessageBroker`.
+- Request topic: `QualitySessionMeter.ApiV1.RequestSnapshot`.
+- Response topic: `QualitySessionMeter.ApiV1.Snapshot`, correlated to the request `MessageId`.
+- Snapshot payload uses only plain dictionaries/lists/scalars so a companion plugin can serialize it without a direct QualitySessionMeter assembly dependency.
+- Snapshot includes:
+  - mode and session summary;
+  - live thresholds/baseline settings;
+  - current frame;
+  - latest 160 assessed frames;
+  - raw rolling baseline values and deltas;
+  - prediction/environment hints;
+  - canonical QSM series colors/units/meaning for a matching mobile chart.
+- QSM opens no extra HTTP port. A Touch 'n' Stars server adapter can bridge the broker contract to its existing `/api` layer.
+- Mobile contract v1 is intentionally read-only; remote threshold/file/control writes require a separately versioned safety-reviewed command contract.
+- Added `docs/TOUCH-N-STARS.md` with the backend/frontend integration contract and intended responsive UX.
+- Bumped plugin/file/assembly version to `1.0.0.2`.
+
+### Validation status
+
+- Windows production/field-test build and the full V1/V2/V3 synthetic regression are mandatory before merge/release.
+- A fresh N.I.N.A. host screenshot remains the final visual gate for the new timeline.
+- Touch 'n' Stars phone visibility additionally requires the TNS-side server adapter and Vue/Pinia plugin page; the QSM-side contract is now available for that integration.
+
+---
+
 ## [1.0.0.1] - 2026-09-07
 
 ### UI / usability hotfix
