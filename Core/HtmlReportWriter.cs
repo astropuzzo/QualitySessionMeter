@@ -33,7 +33,7 @@ public static class HtmlReportWriter {
         sb.AppendLine("<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>");
         sb.AppendLine("<title>QualitySessionMeter — Session report</title>");
         sb.AppendLine("<style>");
-        sb.AppendLine("*{box-sizing:border-box}body{margin:0;background:#0f1115;color:#f1f3f4;font:14px 'Segoe UI',Arial,sans-serif}main{max-width:1440px;margin:auto;padding:24px}h1{margin:0;font-size:28px}h2{font-size:17px;margin:0 0 12px}h3{font-size:11px;color:#9aa0a6;text-transform:uppercase;letter-spacing:.06em;margin:0 0 7px}.muted{color:#9aa0a6}.top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px}.card{background:#171a20;border:1px solid #2a3039;border-radius:10px;padding:14px}.section{margin-top:12px}.big{font-size:28px;font-weight:650}.good{color:#81c995}.bad{color:#f28b82}.accent{color:#8ab4f8}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.legend{display:flex;gap:14px;flex-wrap:wrap;color:#bdc1c6;margin:0 0 8px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}.rank{display:grid;grid-template-columns:50px 1fr 58px 80px;gap:8px;padding:7px 0;border-top:1px solid #2a3039}.rank:first-of-type{border-top:0}.event{display:grid;grid-template-columns:55px 170px 1fr 78px 72px;gap:8px;padding:8px 0;border-bottom:1px solid #2a3039}.pill{border:1px solid #353b45;border-radius:999px;padding:2px 8px;font-size:11px}.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}input,select,button{background:#11151b;color:#f1f3f4;border:1px solid #343b46;border-radius:6px;padding:7px 9px}button{cursor:pointer}.tablewrap{max-height:600px;overflow:auto;border:1px solid #2a3039;border-radius:8px}table{width:100%;border-collapse:collapse;font-size:12px}th{position:sticky;top:0;background:#171a20;color:#9aa0a6;text-align:left;padding:8px;border-bottom:1px solid #353b45}td{padding:7px 8px;border-bottom:1px solid #242933;white-space:nowrap}tr:hover td{background:#1d222a}.cause{display:grid;grid-template-columns:minmax(150px,260px) 1fr 40px;gap:8px;align-items:center;margin:7px 0}.bar{height:8px;background:#252b34;border-radius:5px;overflow:hidden}.fill{height:100%;background:#8ab4f8}.footer{margin-top:16px;color:#737a84;font-size:12px}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.event{grid-template-columns:55px 1fr 70px}.event .optional{display:none}}");
+        sb.AppendLine("*{box-sizing:border-box}body{margin:0;background:#0f1115;color:#f1f3f4;font:14px 'Segoe UI',Arial,sans-serif}main{max-width:1440px;margin:auto;padding:24px}h1{margin:0;font-size:28px}h2{font-size:17px;margin:0 0 12px}h3{font-size:11px;color:#9aa0a6;text-transform:uppercase;letter-spacing:.06em;margin:0 0 7px}.muted{color:#9aa0a6}.top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px}.card{background:#171a20;border:1px solid #2a3039;border-radius:10px;padding:14px}.section{margin-top:12px}.big{font-size:28px;font-weight:650}.good{color:#81c995}.bad{color:#f28b82}.accent{color:#8ab4f8}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.legend{display:flex;gap:14px;flex-wrap:wrap;color:#bdc1c6;margin:0 0 8px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}.reject-key{display:inline-block;color:#ffd7d3;background:#542329;border:1px solid #f28b82;border-radius:5px;padding:1px 6px;margin-right:5px;font-size:11px}.rank{display:grid;grid-template-columns:50px 1fr 58px 80px;gap:8px;padding:7px 0;border-top:1px solid #2a3039}.rank:first-of-type{border-top:0}.event{display:grid;grid-template-columns:55px 170px 1fr 78px 72px;gap:8px;padding:8px 0;border-bottom:1px solid #2a3039}.pill{border:1px solid #353b45;border-radius:999px;padding:2px 8px;font-size:11px}.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}input,select,button{background:#11151b;color:#f1f3f4;border:1px solid #343b46;border-radius:6px;padding:7px 9px}button{cursor:pointer}.tablewrap{max-height:600px;overflow:auto;border:1px solid #2a3039;border-radius:8px}table{width:100%;border-collapse:collapse;font-size:12px}th{position:sticky;top:0;background:#171a20;color:#9aa0a6;text-align:left;padding:8px;border-bottom:1px solid #353b45}td{padding:7px 8px;border-bottom:1px solid #242933;white-space:nowrap}tr:hover td{background:#1d222a}.cause{display:grid;grid-template-columns:minmax(150px,260px) 1fr 40px;gap:8px;align-items:center;margin:7px 0}.bar{height:8px;background:#252b34;border-radius:5px;overflow:hidden}.fill{height:100%;background:#8ab4f8}.footer{margin-top:16px;color:#737a84;font-size:12px}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.event{grid-template-columns:55px 1fr 70px}.event .optional{display:none}}");
         sb.AppendLine("</style></head><body><main>");
 
         sb.Append("<div class='top'><div><h1>QualitySessionMeter</h1><div class='muted'>V2 Smart Quality Analysis — session report</div></div><div class='muted'>")
@@ -51,6 +51,7 @@ public static class HtmlReportWriter {
 
         sb.AppendLine("<section class='card section'><h2>Multichannel timeline</h2>");
         sb.AppendLine("<div class='legend'><span><i class='dot' style='background:#8ab4f8'></i>Quality</span><span><i class='dot' style='background:#c58af9'></i>Confidence</span><span><i class='dot' style='background:#81c995'></i>Guide RMS</span><span><i class='dot' style='background:#fdd663'></i>Stars Δ</span><span><i class='dot' style='background:#f28b82'></i>Background Δ</span></div>");
+        sb.AppendLine($"<div class='legend'><span><b class='reject-key'>REJECT</b>{RejectionVisual.GuideIcon} guide / wind &nbsp; {RejectionVisual.SkyIcon} stars / cloud &nbsp; {RejectionVisual.BackgroundIcon} background / haze</span></div>");
         sb.AppendLine(BuildTimeline(frames));
         sb.AppendLine("</section>");
 
@@ -78,8 +79,10 @@ public static class HtmlReportWriter {
         sb.AppendLine("<div class='tablewrap'><table id='frames'><thead><tr><th>#</th><th>File</th><th>Status</th><th>Quality</th><th>Confidence</th><th>RMS</th><th>Guide pattern</th><th>Trend</th><th>Stars Δ</th><th>BG Δ</th><th>Cause</th></tr></thead><tbody>");
         foreach (var f in frames) {
             string search = $"{f.FileName} {f.StatusText} {f.ProbableCause} {f.GuidePatternText} {f.TrendText}".ToLowerInvariant();
+            string causeIcon = f.Status is FrameStatus.Rejected or FrameStatus.Error ? RejectionVisual.GetIcons(f) : string.Empty;
+            string causeText = string.IsNullOrWhiteSpace(causeIcon) ? f.ProbableCause : $"{causeIcon} {f.ProbableCause}";
             sb.Append("<tr data-frame='").Append(f.FrameIndex).Append("' data-quality='").Append(N(f.OverallQuality)).Append("' data-status='").Append(A(f.StatusText)).Append("' data-search='").Append(A(search)).Append("'>")
-              .Append("<td>").Append(f.FrameIndex).Append("</td><td>").Append(H(f.FileName)).Append("</td><td>").Append(H(f.StatusText)).Append("</td><td>").Append(H(f.QualityText)).Append("</td><td>").Append(H(f.ConfidenceText)).Append("</td><td>").Append(H(f.GuideRmsText)).Append("</td><td title='").Append(A(f.GuidePatternDetail)).Append("'>").Append(H(f.GuidePatternText)).Append("</td><td>").Append(H(f.TrendText)).Append("</td><td>").Append(H(f.StarDeltaText)).Append("</td><td>").Append(H(f.BackgroundDeltaText)).Append("</td><td>").Append(H(f.ProbableCause)).AppendLine("</td></tr>");
+              .Append("<td>").Append(f.FrameIndex).Append("</td><td>").Append(H(f.FileName)).Append("</td><td>").Append(H(f.StatusText)).Append("</td><td>").Append(H(f.QualityText)).Append("</td><td>").Append(H(f.ConfidenceText)).Append("</td><td>").Append(H(f.GuideRmsText)).Append("</td><td title='").Append(A(f.GuidePatternDetail)).Append("'>").Append(H(f.GuidePatternText)).Append("</td><td>").Append(H(f.TrendText)).Append("</td><td>").Append(H(f.StarDeltaText)).Append("</td><td>").Append(H(f.BackgroundDeltaText)).Append("</td><td>").Append(H(causeText)).AppendLine("</td></tr>");
         }
         sb.AppendLine("</tbody></table></div></section>");
         sb.AppendLine("<div class='footer'>Guide pattern, trend and probable-cause labels are diagnostic interpretations of measured data; they are not guaranteed physical-cause identifications.</div>");
@@ -92,7 +95,7 @@ public static class HtmlReportWriter {
     }
 
     private static string BuildTimeline(IReadOnlyList<FrameQualityResult> frames) {
-        const int width = 1320, height = 390, left = 46, right = 14, top = 22, band = 105, gap = 16;
+        const int width = 1320, height = 414, left = 46, right = 14, top = 48, band = 105, gap = 16;
         int plotW = width - left - right;
         var sb = new StringBuilder();
         sb.Append($"<svg viewBox='0 0 {width} {height}' style='min-width:820px;width:100%;height:auto;background:#101318;border-radius:8px'>");
@@ -106,9 +109,42 @@ public static class HtmlReportWriter {
             Line(sb, frames, left, top + band + gap, plotW, band, x => x.GuideRmsArcsec, 0, guideMax, "#81c995", false);
             Line(sb, frames, left, top + 2 * (band + gap), plotW, band, x => x.StarDeviationPercent, -50, 50, "#fdd663", false);
             Line(sb, frames, left, top + 2 * (band + gap), plotW, band, x => x.BackgroundDeviationPercent, -50, 50, "#f28b82", false);
+            RejectionMarkers(sb, frames, left, top, plotW, height - top);
         }
         sb.Append("</svg>");
         return sb.ToString();
+    }
+
+    private static void RejectionMarkers(
+        StringBuilder sb,
+        IReadOnlyList<FrameQualityResult> frames,
+        double left,
+        double top,
+        double width,
+        double plotHeight) {
+
+        for (int i = 0; i < frames.Count; i++) {
+            var frame = frames[i];
+            if (frame.Status != FrameStatus.Rejected && frame.Status != FrameStatus.Error) continue;
+
+            double x = frames.Count == 1 ? left + width / 2 : left + i * width / (frames.Count - 1.0);
+            string icons = frame.Status == FrameStatus.Error ? RejectionVisual.ErrorIcon : RejectionVisual.GetIcons(frame);
+            string tooltip = RejectionVisual.GetTooltip(frame);
+            int channelCount = Math.Max(1, Math.Min(3, frame.RejectReasons?.Count ?? 1));
+            double badgeWidth = 22 + channelCount * 18;
+            double badgeY = frame.FrameIndex % 2 == 0 ? 4 : 25;
+            double badgeX = x - badgeWidth / 2;
+
+            sb.Append("<g class='rejection-marker'><title>").Append(H(tooltip)).Append("</title>")
+              .Append("<rect x='").Append((x - 2.5).ToString("0.##", CultureInfo.InvariantCulture)).Append("' y='").Append(top.ToString("0.##", CultureInfo.InvariantCulture))
+              .Append("' width='5' height='").Append(plotHeight.ToString("0.##", CultureInfo.InvariantCulture)).Append("' fill='#f28b82' opacity='.18'/>")
+              .Append("<line x1='").Append(x.ToString("0.##", CultureInfo.InvariantCulture)).Append("' y1='").Append(top.ToString("0.##", CultureInfo.InvariantCulture))
+              .Append("' x2='").Append(x.ToString("0.##", CultureInfo.InvariantCulture)).Append("' y2='").Append((top + plotHeight).ToString("0.##", CultureInfo.InvariantCulture)).Append("' stroke='#ff7b72' stroke-width='1.6'/>")
+              .Append("<rect x='").Append(badgeX.ToString("0.##", CultureInfo.InvariantCulture)).Append("' y='").Append(badgeY.ToString("0.##", CultureInfo.InvariantCulture))
+              .Append("' width='").Append(badgeWidth.ToString("0.##", CultureInfo.InvariantCulture)).Append("' height='19' rx='5' fill='#542329' stroke='#f28b82'/>")
+              .Append("<text x='").Append(x.ToString("0.##", CultureInfo.InvariantCulture)).Append("' y='").Append((badgeY + 14).ToString("0.##", CultureInfo.InvariantCulture))
+              .Append("' text-anchor='middle' fill='#fff' font-size='13' font-family='Segoe UI Emoji,Segoe UI,sans-serif'>").Append(H(icons)).Append("</text></g>");
+        }
     }
 
     private static void Band(StringBuilder sb, int left, int top, int width, int height, string title) {
@@ -146,6 +182,6 @@ public static class HtmlReportWriter {
     private static void Metric(StringBuilder sb, string title, string value, string cls) => sb.Append("<div class='card'><h3>").Append(H(title)).Append("</h3><div class='big ").Append(cls).Append("'>").Append(H(value)).AppendLine("</div></div>");
     private static bool Finite(double v) => !double.IsNaN(v) && !double.IsInfinity(v);
     private static string N(double v) => Finite(v) ? v.ToString("0.####", CultureInfo.InvariantCulture) : "";
-    private static string H(string? v) => WebUtility.HtmlEncode(v ?? "");
-    private static string A(string? v) => H(v).Replace("'", "&#39;");
+    private static string H(string v) => WebUtility.HtmlEncode(v ?? "");
+    private static string A(string v) => H(v).Replace("'", "&#39;");
 }
