@@ -25,6 +25,21 @@ public sealed class FrameQualityResult {
     public double BackgroundBaseline { get; set; } = double.NaN;
     public double BackgroundDeviationPercent { get; set; } = double.NaN;
 
+    // V2 slow-trend diagnostics. Hard V1 rejection still uses the robust rolling median.
+    public bool StarTrendUsable { get; set; }
+    public double StarTrendExpected { get; set; } = double.NaN;
+    public double StarTrendPercentPerFrame { get; set; } = double.NaN;
+    public double StarTrendR2 { get; set; } = double.NaN;
+    public double StarTrendResidualPercent { get; set; } = double.NaN;
+    public TrendInterpretationKind StarTrendKind { get; set; } = TrendInterpretationKind.Unavailable;
+
+    public bool BackgroundTrendUsable { get; set; }
+    public double BackgroundTrendExpected { get; set; } = double.NaN;
+    public double BackgroundTrendPercentPerFrame { get; set; } = double.NaN;
+    public double BackgroundTrendR2 { get; set; } = double.NaN;
+    public double BackgroundTrendResidualPercent { get; set; } = double.NaN;
+    public TrendInterpretationKind BackgroundTrendKind { get; set; } = TrendInterpretationKind.Unavailable;
+
     public int GuideSamples { get; set; }
     public double GuideRmsArcsec { get; set; } = double.NaN;
     public double MaxGuideExcursionArcsec { get; set; } = double.NaN;
@@ -46,7 +61,6 @@ public sealed class FrameQualityResult {
     public double OverallQuality { get; set; }
 
     // V2: confidence is intentionally separate from Quality and ACCEPT/REJECT.
-    // The component values make the score auditable in CSV/JSON and later reports.
     public double ConfidenceScore { get; set; } = double.NaN;
     public double ConfidenceDataCompleteness { get; set; } = double.NaN;
     public double ConfidenceBaselineMaturity { get; set; } = double.NaN;
@@ -118,10 +132,20 @@ public sealed class FrameQualityResult {
     public string GuidePatternConfidenceText => double.IsNaN(GuidePatternConfidence)
         ? "N/A"
         : GuidePatternConfidence.ToString("0", CultureInfo.InvariantCulture) + "%";
+    public string TrendText {
+        get {
+            if (StarTrendKind == TrendInterpretationKind.AbruptAnomaly || BackgroundTrendKind == TrendInterpretationKind.AbruptAnomaly) return "ABRUPT";
+            if (StarTrendKind == TrendInterpretationKind.GradualChange || BackgroundTrendKind == TrendInterpretationKind.GradualChange) return "GRADUAL";
+            if (StarTrendKind == TrendInterpretationKind.Stable || BackgroundTrendKind == TrendInterpretationKind.Stable) return "STABLE";
+            return "N/A";
+        }
+    }
     public string StarsText => StarCount >= 0 ? StarCount.ToString(CultureInfo.InvariantCulture) : "N/A";
     public string StarDeltaText => FormatPercent(StarDeviationPercent);
+    public string StarTrendResidualText => FormatPercent(StarTrendResidualPercent);
     public string BackgroundText => double.IsNaN(BackgroundMedian) ? "N/A" : BackgroundMedian.ToString("0.##", CultureInfo.InvariantCulture);
     public string BackgroundDeltaText => FormatPercent(BackgroundDeviationPercent);
+    public string BackgroundTrendResidualText => FormatPercent(BackgroundTrendResidualPercent);
 
     private static string FormatArcsec(double value) =>
         double.IsNaN(value) ? "N/A" : value.ToString("0.00", CultureInfo.InvariantCulture) + "\"";
