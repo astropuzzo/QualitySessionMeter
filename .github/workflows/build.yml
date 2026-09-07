@@ -13,21 +13,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET 8
+      - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
-      - name: Restore
+      - name: Restore plugin
         run: dotnet restore QualitySessionMeter.csproj
 
-      - name: Build Release
+      - name: Build plugin Release
         run: dotnet build QualitySessionMeter.csproj -c Release --no-restore
 
-      - name: Upload plugin build
+      - name: Restore synthetic checker
+        run: dotnet restore QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj
+
+      - name: Run canonical synthetic night
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/synthetic-check | Out-Null
+          dotnet run --project QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj -c Release --no-restore -- "$PWD/artifacts/synthetic-check"
+
+      - name: Prepare clean plugin package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/plugin | Out-Null
+          Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.dll" "artifacts/plugin/QualitySessionMeter.dll" -Force
+          if (Test-Path "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb") {
+            Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb" "artifacts/plugin/QualitySessionMeter.pdb" -Force
+          }
+
+      - name: Upload field-test plugin
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: QualitySessionMeter-v1
-          path: bin/Release/net8.0-windows7.0/
+          name: QualitySessionMeter-v1-field-test-nina-3.3-nightly-057
+          path: artifacts/plugin/
           if-no-files-found: error
+
+      - name: Upload synthetic-check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: QualitySessionMeter-synthetic-report
+          path: artifacts/synthetic-check/
+          if-no-files-found: warn

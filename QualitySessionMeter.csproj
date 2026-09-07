@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0-windows7.0</TargetFramework>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
     <OutputType>Library</OutputType>
     <RootNamespace>NINA.Plugin.QualitySessionMeter</RootNamespace>
     <AssemblyName>QualitySessionMeter</AssemblyName>
@@ -16,15 +16,20 @@
     <Description>Real-time subframe quality control and session metering for N.I.N.A.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
-    <Version>0.1.0</Version>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
+    <Version>0.1.0.1</Version>
+    <AssemblyVersion>0.1.0.1</AssemblyVersion>
+    <FileVersion>0.1.0.1</FileVersion>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NINA.Plugin" Version="3.2.0.9001" />
+    <Compile Remove="QualitySessionMeter.SyntheticCheck\**\*.cs" />
+    <None Remove="QualitySessionMeter.SyntheticCheck\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NINA.Plugin" Version="3.3.0.1057-nightly" />
   </ItemGroup>
 </Project>
