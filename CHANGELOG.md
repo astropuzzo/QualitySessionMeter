@@ -2,6 +2,32 @@
 
 All notable changes to QualitySessionMeter are documented here.
 
+## [0.2.0.1] - 2026-09-07
+
+### Rejected-frame timeline visibility
+
+- Added explicit rejected-frame markers to both the live N.I.N.A. multichannel timeline and the generated HTML report.
+- Every rejected frame now receives a strong vertical red marker/band at its exact timeline position.
+- Added compact cause badges using a shared visual vocabulary:
+  - `💨` guide / wind / RMS / excursion failure;
+  - `☁` star-count / cloud / transparency failure;
+  - `🌫` background / haze failure;
+  - combined failures show multiple icons;
+  - `❌` is a fallback for future unmapped reject reasons;
+  - `⚠` marks analysis-error/unassessed positions.
+- Added `RejectionVisual` as the single presentation mapping used by both WPF and HTML so the two timelines cannot silently diverge.
+- HTML rejected-frame markers include hover tooltips with frame number, probable cause and raw reason text.
+- HTML frame-history Cause cells now show the same compact visual icon(s).
+- Marker/icon rendering is presentation-only and does not alter Quality, Confidence, baseline state or hard reject decisions.
+- Removed the nullable-annotation warnings previously emitted by `HtmlReportWriter` while nullable annotations are disabled for the project.
+- Bumped the V2 host-test build to `0.2.0.1`.
+
+### Host-test context
+
+The user already verified the main `0.2.0.0` V2 dashboard and generated HTML report inside N.I.N.A. 3.3 NIGHTLY #057. The remaining host gate is visual confirmation that reject-rich synthetic sessions display the new timeline markers and cause icons clearly.
+
+---
+
 ## [0.2.0.0] - 2026-09-07
 
 ### V2 — Smart Quality Analysis field-test candidate
