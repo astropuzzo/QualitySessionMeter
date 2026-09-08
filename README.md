@@ -22,7 +22,7 @@ Two packages are generated during pre-store development:
 - **field-test-with-synthetic-lab** — the package to use during current validation; includes Synthetic Lab;
 - **production** — generated in parallel to continuously prove that the future catalog package builds without Synthetic Lab/test UI.
 
-The official N.I.N.A. package will use the production source set only.
+The official N.I.N.A. package will use the production source set only. The exact official publishing procedure and release blockers are documented in **[docs/PUBLISHING.md](docs/PUBLISHING.md)**.
 
 ## What QSM is designed to catch
 
@@ -162,7 +162,8 @@ The address resolver prefers an active physical Ethernet/Wi-Fi RFC1918 LAN addre
 
 The dashboard includes:
 
-- current-frame diagnostics and latest LIGHT preview;
+- current-frame diagnostics;
+- a **latest real saved LIGHT preview**;
 - session counters and metric definitions;
 - the same three-band multichannel session timeline used conceptually by the N.I.N.A. panel;
 - live guiding with:
@@ -170,6 +171,10 @@ The dashboard includes:
   - a separate total-error-magnitude plot;
   - true sustained/hard excursion thresholds drawn only where they are semantically valid;
   - real sample timestamps and per-sample hover/touch details.
+
+The latest-LIGHT preview is generated from the image payload N.I.N.A. already provides at save time. QSM clones/freezes that image and JPEG-encodes a bounded preview in memory; it does **not** reopen or modify the acquisition FITS/XISF. One shared preview cache feeds both the universal dashboard and the OpenAstro companion bridge, so both surfaces show the same latest real LIGHT.
+
+Synthetic Lab deliberately has no real camera image pixels and therefore cannot fabricate an astronomical preview. During a synthetic-only session the preview remains unavailable unless a real LIGHT has already been captured during the current plugin lifetime; the next real saved LIGHT refreshes it automatically.
 
 The rolling 20-second dashboard RMS is a **live diagnostic window**. The completed-frame Guide RMS remains exposure-specific and is the value used by the exposure-RMS hard rule.
 
@@ -184,6 +189,7 @@ The existing OpenAstro companion bridge remains separate from the universal Web 
 - it is opt-in;
 - it uses a dedicated tokenized read-only API;
 - it preserves the existing `/api/v1/...` contract;
+- it serves the same shared in-memory latest-LIGHT preview as the universal dashboard;
 - enabling the normal Web Dashboard does **not** connect an installation to the maintainer's server or to another user's server.
 
 This separation allows the same QSM build to support both ordinary LAN/VPN users and advanced companion-server integrations without maintaining divergent plugin builds.
@@ -252,6 +258,7 @@ N.I.N.A. loads plugin DLLs from that version folder and one plugin subdirectory 
 4. Start N.I.N.A. and confirm the loaded QSM version in the plugin/log output.
 5. Keep **Monitor Only** enabled for real-sky validation until file handling has been intentionally tested.
 6. Use **Synthetic Lab** for deterministic regression scenarios before testing destructive-adjacent workflows such as rename/move/restore.
+7. For Web Dashboard preview validation, save at least one **real LIGHT**; Synthetic Lab alone cannot create an image preview.
 
 The exact versioned plugin folder is controlled by N.I.N.A.'s plugin API floor and can change in a future N.I.N.A. major/plugin-API revision.
 
@@ -316,20 +323,25 @@ Every release candidate is expected to pass:
 
 Additional host validation is still required before an official catalog submission; CI does not substitute for visual/runtime testing inside N.I.N.A.
 
-## Official N.I.N.A. catalog plan
+## Official N.I.N.A. catalog publishing
 
-The official plugin manager is driven by the central `isbeorn/nina.plugin.manifests` repository. The final publication flow will be:
+The official plugin manager is driven by the central `isbeorn/nina.plugin.manifests` repository. QSM now includes a separate tag-driven workflow, `.github/workflows/nina-release.yml`, for the official production release path.
 
-1. finish real-host release validation;
-2. create an immutable production build from a version tag;
-3. generate `manifest.json` from that final DLL/archive;
-4. validate the manifest against the official schema;
-5. submit the manifest to the official repository;
-6. address maintainer review before merge.
+The official flow is:
 
-The DLL must not be rebuilt after manifest/checksum generation.
+1. complete every host/runtime/artwork blocker in **[docs/PUBLISHING.md](docs/PUBLISHING.md)**;
+2. create an immutable **four-part tag without a leading `v`**, matching the version in `QualitySessionMeter.csproj`;
+3. the workflow builds the production source set only and runs the complete regression suite;
+4. it generates the archive and `manifest.json` from that final DLL;
+5. it validates the generated manifest against the current official manifest repository;
+6. it creates the GitHub release with the exact ZIP + manifest/checksum pair;
+7. if the maintainer fork and `PAT` secret are configured, it opens the upstream manifest PR automatically; otherwise the validated manifest can be submitted manually.
 
-Store metadata is kept in assembly metadata so the official manifest generator can consume it directly rather than relying on hand-edited manifest values.
+The DLL is never rebuilt after manifest/checksum generation.
+
+Store metadata is kept in assembly metadata so the official manifest generator can consume it directly rather than relying on hand-edited manifest values. Final `FeaturedImageURL`, `ScreenshotURL` and `AltScreenshotURL` are intentionally added only after current final release screenshots are captured and committed under `docs/store/`; outdated field-test screenshots are not published as store artwork.
+
+Once an approved manifest is merged upstream, future QSM versions are surfaced through N.I.N.A.'s Plugin Manager. QSM does not implement a separate self-updater.
 
 ## Development disclosure and maintenance responsibility
 
