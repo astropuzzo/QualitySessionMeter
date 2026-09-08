@@ -1,8 +1,14 @@
 # QualitySessionMeter Roadmap
 
-QualitySessionMeter is developed in three core stages: **V1** real-time quality monitoring, **V2** temporal/session intelligence, and **V3** quality-controlled acquisition through the N.I.N.A. Advanced Sequencer. Remote/mobile observability is layered on top of those stable cores and must not weaken their safety semantics.
+QualitySessionMeter is a N.I.N.A. quality-control plugin built around three stable layers:
 
-This file is the operational handoff/source of truth. Material code/UI changes must update this state in the same development cycle.
+- **V1** — per-frame measurement, hard rejection rules and Quality scoring;
+- **V2** — confidence, temporal/session intelligence and reporting;
+- **V3** — quality-aware Advanced Sequencer acquisition.
+
+Remote/mobile observability is layered on top and must never weaken the core decision, provenance or file-safety model.
+
+This document is the current operational handoff/source of truth. Detailed historical changes belong in `CHANGELOG.md`.
 
 ---
 
@@ -18,295 +24,249 @@ NINA.Plugin: 3.3.0.1057-nightly
 Windows: x64
 ```
 
-## Repository / release state
+## Current release line
 
 ```text
-main
-  V1 + V2 + V3 merged
-  1.0.0.1 UI/usability hotfix merged
-  1.0.0.2 self-explanatory timeline/mobile broker foundation merged
-  1.1.0.0 OpenAstro remote monitor bridge released
-  1.1.0.1 V3 provenance/token/package-isolation synchronization released
-  1.1.0.2 Synthetic Lab remote snapshot fix released
-
-public releases
-  v1.0.0.0 — V3
-  v1.0.0.1 — UI/usability hotfix
-  v1.0.0.2 — timeline readability + in-process mobile contract
-  v1.1.0.0 — OpenAstro read-only remote monitor bridge
-  v1.1.0.1 — final V3 hardening synchronization
-  v1.1.0.2 — Synthetic Lab visible in remote snapshot
-
-candidate version
-  1.2.0.0
-
-candidate purpose
-  rejected-frame visual review inside N.I.N.A. + reversible QSM BAD file actions + filename-rich OpenAstro telemetry
-
-candidate status
-  LOCAL BUILD PASS → WINDOWS CI / FIELD-TEST ARTIFACT / HOST VISUAL TEST
+latest published pre-store test: 1.3.0.2
+current hardening candidate:      1.3.0.3
+working PR:                       #11
 ```
 
-Known non-blocking dependency warning:
+`1.3.0.3` is a **pre-store field-test candidate**, not yet an official N.I.N.A. manifest submission.
 
-- `NINA.Image 3.3.0.1057-nightly` requests `NINA.Accord.Imaging >= 3.5.3-alpha`; NuGet resolves `3.5.3` (`NU1603`).
-
----
-
-
-## 1.2 review workflow — IMPLEMENTED / HOST VALIDATION PENDING
-
-- Rejected Review lists rejected real frames with filename, automatic cause and core metrics.
-- Selecting a row loads the existing FITS/XISF into N.I.N.A. Image using N.I.N.A.'s image-data/imaging services; Synthetic Lab rows remain non-openable because they have no real image file.
-- `Undo BAD / restore filename` reverses only the physical QSM file action (`BAD_` prefix or move to `Rejected`).
-- The automatic `REJECTED` record is immutable for audit and the already-consumed sequencer decision is not retroactively changed.
-- Restore is collision-safe and refuses to overwrite an existing original file.
-- OpenAstro snapshot now includes filename/disposition and deeper per-frame diagnostics; the browser monitor can render real frame tables instead of an anonymous chart-only view.
-
-
-# V1 — CLOSED / MERGED
-
-Authoritative behavior retained by every later release:
-
-- Quality Meter 0–100;
-- exposure-specific guide RMS;
-- sustained/hard guide excursion;
-- relative star-count loss;
-- relative background change;
-- context-separated rolling baselines;
-- baseline continuously updates from clean evidence;
-- rejected/warning/error frames never contaminate the baseline;
-- missing required analysis => `ERROR / UNASSESSED`;
-- no automatic deletion;
-- Quality Score remains independent from hard ACCEPT/REJECT.
-
-HFR, FWHM and eccentricity remain deliberately excluded from hard rejection logic unless explicitly reconsidered.
-
----
-
-# V2 — CLOSED / MERGED
-
-Implemented and retained:
-
-- Confidence Score independent from Quality and hard decision;
-- Session Event Grouping;
-- guide-pattern analysis;
-- conservative slow-trend diagnostics;
-- multichannel timeline;
-- Best/Worst accepted-frame ranking;
-- rejected-frame cause visualization;
-- `frames.csv`, `events.csv`, `session.json`, `quality.svg`, self-contained `report.html`.
-
-Canonical whole-night regression remains 6 profiles / 108 frames / 0 expected failures.
-
----
-
-# V3 — CLOSED / RELEASED
-
-V3 provides quality-controlled acquisition through the Advanced Sequencer:
-
-- explicit OFF/ON and source scoping;
-- safe provenance/file-action gates;
-- `QSM Valid Frame Target` with QSM-owned valid progress;
-- `ACCEPTED` advances valid progress;
-- `WARNING` advances by default, configurable;
-- `REJECTED`, `ERROR`, `LEARNING` do not advance;
-- correlated controlled-frame accounting;
-- fail-safe classification timeout;
-- adaptive threshold suggestion / bounded automatic modes;
-- predictive degradation diagnostics;
-- optional environment correlation;
-- opt-in Smart Recovery Gate operating only between exposures;
-- production Control Center;
-- field-test vs production packaging separation.
-
----
-
-# 1.0.0.1 — RELEASED
-
-Real-host UI fixes:
-
-- explicit labels beside N.I.N.A. toggle templates;
-- compact Control Center hierarchy;
-- help-rich Plugin Options and detailed tooltips;
-- Advanced Sequencer help for Valid Frame Target and Smart Recovery;
-- deterministic `G/S/B/!/?` event codes instead of emoji glyphs;
-- exact event/frame X alignment and dense-overlap suppression.
-
----
-
-# 1.0.0.2 — RELEASED
-
-Timeline/mobile foundation:
-
-- color-matched legend for Quality, Confidence, Guide RMS, Stars Δ and Background Δ;
-- explicit dashed `0% rolling baseline`;
-- live visible rejection limits;
-- dynamic chart ranges/units;
-- nearest-frame hover showing raw values, baselines, deltas and limits;
-- process-local versioned `QualitySessionMeter.ApiV1` `IMessageBroker` snapshot contract;
-- full-session summary + latest 160 chart frames;
-- plain dictionary/list/scalar payload for assembly-decoupled companions.
-
----
-
-# 1.1.0.1 — SYNCHRONIZED HARDENING CANDIDATE
-
-This patch keeps the 1.1 OpenAstro bridge and adds the final local V3 safety/package work that had not yet reached GitHub: frozen acquisition provenance, exact one-shot control-token matching, stronger state cleanup/persistence, full SyntheticCheck persistence coverage, and complete production-vs-field-test Synthetic Lab isolation.
-
----
-
-# 1.1.0.0 OPENASTRO REMOTE MONITOR — RELEASED
-
-Goal: allow the user's modified ASIAIR/OpenAstro Control panel to become the single remote-facing session monitor while N.I.N.A./QSM remains private on the trusted LAN/Tailscale network.
-
-Architecture:
+Field-test packaging policy remains:
 
 ```text
-N.I.N.A. + QSM (Windows)
-        |
-        | tokenized read-only HTTP on trusted LAN/Tailscale
-        v
-OpenAstro Control (modified ASIAIR / internal eMMC)
-        |
-        | existing authenticated remote panel
-        v
-phone / tablet / remote browser
+field-test / current validation
+  QsmDevelopmentBuild=true
+  Synthetic Lab INCLUDED
+
+production / future N.I.N.A. store
+  QsmDevelopmentBuild=false
+  Synthetic Lab EXCLUDED
 ```
 
-## QSM HTTP bridge — implemented
-
-- new `QualitySessionHttpBridge`;
-- bridge is **disabled** unless `QSM_REMOTE_TOKEN` exists;
-- optional `QSM_REMOTE_PORT`, default `18973`;
-- optional `QSM_REMOTE_BIND`;
-- raw TCP HTTP implementation avoids Windows `HttpListener` URL-ACL/admin requirements;
-- fixed-time token comparison;
-- authenticated routes accept `X-QSM-Token` or Bearer auth;
-- V1 remote bridge is strictly GET/read-only;
-- no remote threshold changes, file mutations or sequencer commands.
-
-Routes:
-
-```text
-GET /healthz
-GET /api/v1/snapshot       authenticated
-GET /api/v1/preview.jpg    authenticated
-```
-
-Security rule: port 18973 must not be exposed directly to the public Internet. The intended client is the trusted OpenAstro node.
-
-## Mobile/session snapshot — implemented
-
-Existing `QualitySessionMeter.ApiV1` snapshot now includes:
-
-- full-session counters;
-- latest 160 assessed frames for charting;
-- current frame/status/cause;
-- target, filter, exposure, gain, binning and camera;
-- Quality / Confidence;
-- star/background baselines and deltas;
-- relevant live QSM settings;
-- prediction/environment hints;
-- canonical chart colors/units.
-
-## True live guiding — implemented
-
-Remote guide telemetry is **not** reconstructed from the RMS of the previous exposure and does not require a second direct PHD2 connection.
-
-QSM reuses its existing N.I.N.A. `IGuiderMediator.GuideEvent` stream and exposes a rolling 20-second window:
-
-- timestamped RA error in arcsec;
-- timestamped DEC error in arcsec;
-- latest total error;
-- total RMS;
-- RA RMS;
-- DEC RMS;
-- maximum excursion;
-- up to 120 recent guide samples.
-
-This remains guider-agnostic at the remote layer because N.I.N.A. supplies the guide events.
-
-## Latest LIGHT preview — implemented
-
-The bridge creates the mobile preview from N.I.N.A.'s processed `ImageSaved` `BitmapSource`:
-
-- LIGHT frames only;
-- max width 1280 px;
-- JPEG quality 82;
-- encoded and retained in RAM only;
-- FITS/XISF is never re-read for the preview;
-- no preview file is written to disk;
-- preview generation failure cannot affect image saving or QSM classification.
-
-This keeps remote traffic light and prevents the monitoring feature from depending on OpenAstro SERVER NVMe or removable Media USB.
-
-## Validation so far
-
-A pre-version-bump Windows run on commit `0390010bd7bcafbb2afecf049bc33298bf95430c` is fully green:
-
-```text
-production source-set gate     PASS
-production build/package       PASS
-field-test build/package       PASS
-V1/V2/V3 synthetic regression  PASS
-artifact upload                 PASS
-```
-
-One host-API compile issue was caught and fixed before merge: N.I.N.A. #057 exposes `Image.Id` as a non-nullable `int`; preview metadata now handles that exact API correctly.
-
-Final 1.1.0.0 gate:
-
-```text
-versioned Windows CI green
-→ merge PR #6
-→ main CI green
-→ publish v1.1.0.0 production package
-→ install field-test build in real N.I.N.A.
-→ configure trusted QSM token/path
-→ field-test OpenAstro page with real sequence, guiding and LIGHT preview
-```
-
-Do not mark the remote preview/guide presentation as host-verified until a real N.I.N.A. + OpenAstro session has been observed.
+Both variants must build from the same source commit and pass the same production source-set isolation gate.
 
 ---
 
-# SYNTHETIC LAB / PACKAGING POLICY
+# 1.3.0.3 RELEASE-HARDENING SCOPE
 
-Synthetic Lab is a development/field-test harness, not a public production feature.
+## Native N.I.N.A. UI consistency
 
-```text
-field-test: QsmDevelopmentBuild=true  -> Synthetic Lab included
-production: QsmDevelopmentBuild=false -> Synthetic Lab code/UI excluded
-```
+- Plugin Options use a flat N.I.N.A.-style layout instead of custom card/GroupBox presentation.
+- Structural foreground/background/border brushes follow the active N.I.N.A. theme.
+- Dark-mode readability is treated as a release gate, not a cosmetic follow-up.
+- Every non-obvious user-editable option must provide contextual help explaining:
+  - what is measured;
+  - unit/range;
+  - whether lower/higher is stricter;
+  - whether the option affects hard rejection, diagnostic scoring, filesystem handling or sequencer behavior;
+  - relevant safety constraints.
+- Adaptive Calibration settings are exposed in Plugin Options, including its bounded automatic safety caps.
 
-Headless SyntheticCheck remains permanent CI coverage.
+## Canonical multichannel timeline
+
+The N.I.N.A. timeline and browser timeline must express the same measurement model:
+
+1. **Quality + Confidence** — 0–100;
+2. **Guide RMS** — arcsec, lower is better, with active RMS limit;
+3. **Stars Δ + Background Δ** — percentages relative to the rolling same-context clean-frame baseline.
+
+Required presentation semantics:
+
+- visible units;
+- visible `0% rolling baseline`;
+- active hard limits shown where applicable;
+- rejected/warning/error event markers;
+- `G/S/B/!` event semantics;
+- exact-value hover/tooltips;
+- legend lane clipped independently from the plot;
+- graph labels/reference labels must not overlap data on narrow dock layouts.
+
+A decorative single-series substitute is not acceptable.
+
+## Live guiding dashboard
+
+The Web Dashboard live guiding graph must not imply that the rolling live signal is the same quantity used for exposure rejection.
+
+Required model:
+
+- signed **RA** and **DEC** errors centered on zero;
+- **Total error magnitude** shown separately;
+- real sample timestamps / rolling lookback window;
+- RA RMS, DEC RMS, total rolling RMS and maximum excursion;
+- sustained/hard excursion limits shown only against total magnitude, because the engine applies those rules to the total guide-error magnitude;
+- per-sample hover details;
+- explicit note that exposure classification uses exposure-window guide metrics, not merely the dashboard rolling 20-second diagnostic.
+
+## Web Dashboard security / network model
+
+The browser dashboard remains an optional read-only service independent from the OpenAstro integration bridge.
+
+Required behavior:
+
+- disabled by default;
+- no UPnP, router forwarding, DNS or outbound tunnel configuration;
+- preferred displayed URL uses the physical private LAN IPv4 and ignores common VPN/virtual adapters;
+- URL is selectable and has one-click clipboard copy;
+- password is optional, not mandatory;
+- when enabled, password storage uses salted PBKDF2-HMAC-SHA256 rather than clear text;
+- password/auth/port/profile reconfiguration invalidates existing browser sessions;
+- bounded request/header/body sizes;
+- bounded concurrent clients;
+- request timeout;
+- login rate limiting;
+- HttpOnly + SameSite session cookie;
+- CSP, nosniff, frame-deny, referrer, permissions and same-origin headers;
+- all session-derived text inserted into HTML must be escaped or assigned through text-safe DOM APIs;
+- no remote threshold/file/sequencer control routes;
+- direct public-Internet HTTP exposure is unsupported; remote access is expected through a trusted VPN or HTTPS reverse proxy.
+
+The existing tokenized OpenAstro bridge remains separate and backward-compatible.
+
+## Documentation / reviewer readiness
+
+Required before official manifest submission:
+
+- `README.md` matches the actual .NET/N.I.N.A. target and current package names;
+- `docs/METRICS.md` is the authoritative metric/reference document;
+- `SECURITY.md` documents the Web Dashboard trust model and reporting path;
+- assembly metadata contains stable GUID, author/company, license, repository, homepage, tags, minimum N.I.N.A. version, short description and long description;
+- `CHANGELOG.md` describes the current release line;
+- material AI assistance is disclosed when submitting the official manifest, with the human maintainer retaining responsibility for review, testing, security, privacy, licensing, provenance and maintenance;
+- actual screenshots/featured image are added before store submission; generated/mock UI must not be presented as evidence of host behavior.
 
 ---
 
-# ARCHITECTURAL / UX CONSTRAINTS
+# RELEASE GATES FOR 1.3.0.3
 
-1. Never refactor the Quality Engine in a way that breaks valid-frame counting.
-2. Quality/decision state remains independent from filesystem actions.
-3. Rejected-file handling never becomes the source of truth for ACCEPT/REJECT.
-4. V2 temporal intelligence must preserve raw per-frame evidence.
-5. V3 sequencer control consumes the same `FrameQualityResult` recorded by the engine.
-6. Synthetic Lab remains separable from production packaging.
-7. Do not claim a validation gate passed until the relevant CI/host test actually passed.
-8. HFR/FWHM/eccentricity remain excluded from hard reject logic unless explicitly changed.
-9. The V3 loop fails safe on missing classification.
-10. Never infer file eligibility merely from extension/path.
-11. Never rename/move an ineligible manual/external frame.
-12. Every non-obvious user control must have contextual help.
-13. Every relative timeline series must visibly identify its reference/baseline and units.
-14. Active hard-rejection limits shown on a graph must reflect live engine settings.
-15. Remote/mobile integrations are versioned and read-only before any control contract is considered.
-16. QSM remote secrets are never returned in snapshots or sent to the browser.
-17. Mobile preview must remain display-only, bounded, in-memory and independent from FITS storage.
-18. Remote monitoring must remain functional when OpenAstro SERVER NVMe or Media USB is absent.
+## Automated gates
+
+All must pass from the exact candidate commit:
+
+```text
+production source-set isolation
+production build
+production package
+field-test build with Synthetic Lab
+field-test package
+full V1/V2/V3 SyntheticCheck
+UI/release-quality static gates
+```
+
+Static release-quality gates must catch regressions such as:
+
+- old simplified `qualityCanvas` browser chart returning;
+- custom GroupBox/card Plugin Options returning;
+- dashboard address losing explicit OneWay read-only binding;
+- missing LAN resolver;
+- missing timeline clipping;
+- missing HTML escaping;
+- missing browser security headers.
+
+## Real-host gates
+
+Do **not** declare store readiness until these are observed in actual N.I.N.A.:
+
+1. plugin loads cleanly on N.I.N.A. 3.3 NIGHTLY #057;
+2. Plugin Options render correctly in the active dark theme;
+3. Control Center text/controls have readable contrast;
+4. multichannel timeline labels, markers and reference text do not overlap;
+5. Synthetic Lab is present in the field-test package and drives the real dockable UI;
+6. browser dashboard opens from another LAN device;
+7. displayed dashboard URL selects the intended physical LAN address with VPN enabled;
+8. Copy button places the full URL on the Windows clipboard;
+9. password OFF allows direct access;
+10. password ON accepts correct credentials, rejects invalid credentials and revokes sessions after password/config changes;
+11. live guiding graph receives real N.I.N.A./guider samples and uses correct RA/DEC/total semantics;
+12. latest LIGHT preview updates without writing preview files to disk;
+13. OpenAstro integration still works unchanged;
+14. shutdown/profile switch/plugin teardown produces no listener/client exceptions;
+15. rejected-frame review and undo remain collision-safe with real FITS/XISF files.
+
+---
+
+# STORE SUBMISSION GATES
+
+Official N.I.N.A. publication remains blocked until the real-host gates above are complete.
+
+When ready:
+
+1. freeze a production commit/tag;
+2. build the **production package only** for store distribution;
+3. generate the manifest from that immutable final DLL/archive;
+4. include checksum generated from the final archive;
+5. validate the manifest against the official N.I.N.A. schema;
+6. add real featured/screenshot image URLs to assembly/manifest metadata;
+7. disclose material AI-assisted development in the submission;
+8. submit the manifest PR to `isbeorn/nina.plugin.manifests`;
+9. respond to upstream review without changing the already-checksummed artifact; if code changes are required, create a new version/artifact/manifest.
+
+N.I.N.A. Plugin Manager then handles discovery and compatible update availability from the central manifest repository. QSM must not implement a separate self-updater for the normal public distribution path.
+
+---
+
+# AUTHORITATIVE CORE BEHAVIOR
+
+These constraints remain closed unless deliberately redesigned and regression-tested.
+
+## V1 — per-frame core
+
+- Overall Quality 0–100 is diagnostic and independent from hard ACCEPT/REJECT.
+- Exposure-specific guide RMS uses samples inside the exposure interval.
+- Sustained excursion requires confirmed consecutive above-threshold samples; an isolated spike does not satisfy a duration rule.
+- Hard excursion may reject on a sufficiently large instantaneous total guide error.
+- Star-count and background rules use mature same-context rolling clean-frame baselines.
+- Baselines are isolated by target/filter/exposure/gain/binning/camera.
+- LEARNING and ACCEPTED can train the clean baseline; REJECTED/WARNING/ERROR do not contaminate it.
+- Missing required analysis fails safe to ERROR/UNASSESSED rather than silently ACCEPTED.
+- HFR/FWHM/eccentricity remain excluded from hard rejection logic in this release line.
+
+## V2 — session intelligence
+
+- Confidence is separate from Quality and from hard ACCEPT/REJECT.
+- Session Event Grouping retains raw per-frame evidence.
+- Guide-pattern and slow-trend analysis are diagnostic layers.
+- Predictive degradation warnings are advisory and do not reject by themselves.
+- Environment correlation is explanatory context and not an independent hard rule.
+- Session artifacts remain `frames.csv`, `events.csv`, `session.json`, `quality.svg` and self-contained `report.html`.
+
+## V3 — sequencer / file safety
+
+- acquisition provenance is frozen before final image save;
+- Valid Frame Target consumes the exact correlated controlled-frame classification;
+- ACCEPTED advances valid progress;
+- WARNING advances by default when configured to count warnings;
+- REJECTED, ERROR and LEARNING do not advance valid progress;
+- missing classification fails safe;
+- Smart Recovery operates only between exposures and never aborts an active shutter;
+- filesystem action is not the source of truth for the quality verdict;
+- QSM never deletes rejected images in the normal workflow;
+- rejected-file rename/move requires eligible provenance and Monitor Only OFF;
+- Undo BAD/restoration changes physical file disposition only and never rewrites the original automatic verdict/sequencer history;
+- collision protection must prevent overwriting an existing target filename.
+
+---
+
+# PACKAGING POLICY
+
+Synthetic Lab is intentionally retained during pre-store validation because it exercises the real N.I.N.A. dockable/UI without requiring a camera or real image files.
+
+```text
+QsmDevelopmentBuild=true
+  Synthetic/**                INCLUDED
+  Synthetic dockable/UI       INCLUDED
+
+QsmDevelopmentBuild=false
+  Synthetic/**                EXCLUDED
+  Synthetic dockable/UI       EXCLUDED
+```
+
+Headless SyntheticCheck remains permanent CI coverage even after the public store package stops shipping the interactive Synthetic Lab.
 
 ---
 
 # NEXT STEP
 
-Finish the versioned **1.1.0.0** CI/release, then field-test the OpenAstro `NINA` page with a real sequence. After monitoring is proven stable, consider optional remote alerting and only then a separately versioned, explicitly safety-reviewed control surface.
+Finish `1.3.0.3` automated gates, merge PR #11, publish the pre-store field-test package with Synthetic Lab, then perform the complete real-host dark-theme + LAN/phone + guiding + OpenAstro validation. Only after those tests pass should QSM move to manifest/image preparation for the official N.I.N.A. plugin list.
