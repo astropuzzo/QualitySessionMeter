@@ -26,18 +26,18 @@
 
     <DataTemplate x:Key="QualitySessionMeter_Options_Polished">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Background="{DynamicResource BackgroundBrush}">
-            <StackPanel Margin="8,4,24,22" MaxWidth="980" ToolTipService.ShowDuration="30000">
+            <StackPanel Margin="8,4,24,22" MaxWidth="980" ToolTipService.ShowDuration="30000" ToolTipService.InitialShowDelay="300">
 
                 <TextBlock Text="Options" Style="{StaticResource QsmSectionHeader}" Margin="0,2,0,5"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,8"/>
 
                 <TextBlock Text="General" Style="{StaticResource QsmSubHeader}"/>
-                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Master switch for QSM analysis and sequence-control integration.">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Master switch. OFF means QSM does not analyze eligible LIGHT frames and QSM Advanced Sequencer control is inactive. The separate browser/OpenAstro monitoring services retain their own enable rules.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Enable QualitySessionMeter" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.Enabled}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Choose which LIGHT frames QSM monitors. File actions remain provenance-gated for safety.">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Selects which LIGHT frames are eligible for quality assessment. QSM Controlled Blocks Only is the strictest scope. Advanced Sequencer LIGHTs includes LIGHTs with running Advanced Sequencer evidence. All LIGHTs also monitors other LIGHT saves. File mutation remains separately provenance-gated and is never inferred only from filename or extension.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Monitoring Scope" VerticalAlignment="Center"/>
                     <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.MonitoringScopeIndex}" Width="238" HorizontalAlignment="Left">
@@ -46,59 +46,59 @@
                         <ComboBoxItem Content="All LIGHTs"/>
                     </ComboBox>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Analyze and report normally, but suppress rename/move actions for rejected frames.">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Safety mode. QSM still evaluates, classifies, counts and reports frames, but it suppresses QSM rename/move actions. A rejected frame remains REJECTED; Monitor Only changes only filesystem handling. Recommended during initial field validation.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Monitor Only" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.MonitorOnly}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Maximum number of recent clean LEARNING/ACCEPTED samples retained for each independent target/filter/exposure/gain/binning/camera baseline. Range: 4–50 frames. A larger window is steadier but reacts more slowly to genuine long-term changes.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Baseline Window" VerticalAlignment="Center" ToolTip="Maximum recent clean samples retained per target/filter/exposure/gain/binning/camera context."/>
+                    <TextBlock Text="Baseline Window" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.BaselineWindow, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="frames" VerticalAlignment="Center" Opacity="0.72"/>
+                    <TextBlock Grid.Column="2" Text="frames (4–50)" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Number of clean same-context samples required before relative star-count and background baselines are mature. Range: 2 through Baseline Window. Until mature, QSM labels the context LEARNING rather than pretending the relative reference is already reliable.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Minimum Learning Frames" VerticalAlignment="Center" ToolTip="Clean same-context samples required before image-signal baselines are mature."/>
+                    <TextBlock Text="Minimum Learning Frames" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MinimumLearningFrames, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="frames" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
                 <TextBlock Text="Guiding" Style="{StaticResource QsmSubHeader}"/>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Hard rejection rule using RMS calculated only from guide samples whose timestamps fall inside the exposure interval. This is not the same as the dashboard rolling 20-second RMS diagnostic.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Reject on Exposure RMS" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnableGuideRms}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Maximum allowed exposure-specific total guide RMS in arcseconds when Reject on Exposure RMS is enabled. Range: 0.05–20 arcsec. Lower is stricter. Choose from known-good guiding at your image scale; the default is a starting point, not a universal astrophotography constant.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Maximum RMS" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MaxGuideRms, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="arcsec" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Hard rejection rule for prolonged total guide-error magnitude. A single isolated spike does not satisfy the duration rule; consecutive above-threshold samples must persist long enough.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Reject Sustained Excursion" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnableSustainedExcursion}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Total guide-error magnitude that starts the sustained-excursion timer. Range: 0.05–50 arcsec. Crossing this value alone does not reject; the excursion must also meet Minimum Excursion Duration.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Excursion Threshold" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.ExcursionThreshold, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="arcsec" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Continuous time above Excursion Threshold required by the sustained-excursion hard rule. Range: 0.1–60 seconds. Increasing it ignores short disturbances more aggressively.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Minimum Excursion Duration" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.ExcursionMinimumDuration, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="seconds" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Emergency hard rejection rule. A sufficiently large instantaneous total guide-error magnitude can reject a frame even when the disturbance is too short to meet the sustained-duration rule.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Reject Hard Excursion" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnableHardExcursion}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Instantaneous total guide-error magnitude for the hard excursion rule. It is clamped to be at least the normal Excursion Threshold and at most 100 arcsec.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Hard Excursion" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.HardExcursionThreshold, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
@@ -106,43 +106,91 @@
                 </Grid>
 
                 <TextBlock Text="Image Signal" Style="{StaticResource QsmSubHeader}"/>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Hard rejection rule comparing detected star count with the mature rolling clean-frame baseline for the same imaging context. QSM deliberately does not use HFR, FWHM or eccentricity as hard rejection criteria in this release.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Reject Relative Star Loss" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnableStarCount}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Maximum allowed drop in detected stars relative to the mature same-context baseline. Range: 1–95%. A frame at -40% with a 35% limit fails this hard rule. Rejected/warning/error frames never train the baseline.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Maximum Star Loss" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MaxStarLossPercent, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Hard rejection rule comparing image background median with the mature same-context rolling baseline. Both excessive brightening and excessive darkening are evaluated independently.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Reject Background Deviation" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnableBackground}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Maximum allowed positive background change relative to the mature baseline. Range: 1–500%. Positive excursions can be associated with illuminated cloud, haze, moonlight or other sky-brightness changes; the measured rule itself is purely numerical.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Maximum Background Increase" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MaxBackgroundIncreasePercent, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Maximum allowed negative background change relative to the mature baseline. Range: 1–95%. QSM reports a probable cause separately; the threshold decision is based on the measured relative deviation.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Maximum Background Decrease" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MaxBackgroundDecreasePercent, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
-                <TextBlock Text="Quality &amp; Session Intelligence" Style="{StaticResource QsmSubHeader}"/>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <TextBlock Text="Adaptive Calibration" Style="{StaticResource QsmSubHeader}"/>
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Controls threshold assistance derived from stable same-context ACCEPTED frames only. Off disables suggestions. Suggest Only calculates a bounded proposal but never changes thresholds by itself. Automatic applies one available bounded proposal per imaging context; the safety caps below remain hard upper bounds.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Worst Metric Weight" VerticalAlignment="Center" ToolTip="Affects the displayed 0–100 Quality Score only; hard reject rules remain independent."/>
+                    <TextBlock Text="Mode" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.AdaptiveThresholdModeIndex}" Width="238" HorizontalAlignment="Left">
+                        <ComboBoxItem Content="Off"/>
+                        <ComboBoxItem Content="Suggest Only (recommended)"/>
+                        <ComboBoxItem Content="Automatic (bounded)"/>
+                    </ComboBox>
+                </Grid>
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Number of stable ACCEPTED frames required before a calibration suggestion is available. Stable calibration frames must be from the same target/filter/exposure/gain/binning/camera context, have Quality at least 80 and, when finite, Confidence at least 70. Range: 8–50 frames.">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Stable Calibration Window" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.CalibrationWindow, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="accepted frames (8–50)" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <TextBlock Margin="14,8,0,3" Style="{StaticResource QsmHint}" Text="Automatic calibration is deliberately bounded. These values are maximum limits for generated suggestions, not rejection thresholds by themselves."/>
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Upper safety cap for an automatically generated Maximum RMS suggestion. Range: 0.5–10 arcsec. The calibration engine cannot automatically loosen Maximum RMS above this value.">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Auto Safety: Max RMS" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.AutoSafetyMaxGuideRms, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="arcsec" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Upper safety cap for an automatically generated sustained Excursion Threshold. Range: 1–20 arcsec.">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Auto Safety: Max Excursion" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.AutoSafetyMaxExcursion, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="arcsec" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Upper safety cap for an automatically generated Hard Excursion threshold. Range: current Auto Safety Max Excursion through 30 arcsec.">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Auto Safety: Max Hard Excursion" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.AutoSafetyMaxHardExcursion, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="arcsec" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Upper safety cap for an automatically generated Maximum Star Loss suggestion. Range: 10–80%. The automatic calibrator cannot loosen the star-loss rule beyond this percentage.">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Auto Safety: Max Star Loss" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.AutoSafetyMaxStarLossPercent, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Upper safety cap shared by automatically generated background increase/decrease suggestions. Range: 10–100%. This cap does not itself reject frames.">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Auto Safety: Max Background" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.AutoSafetyMaxBackgroundPercent, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+
+                <TextBlock Text="Quality &amp; Session Intelligence" Style="{StaticResource QsmSubHeader}"/>
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Weight of the worst available sub-score in the displayed 0–100 Overall Quality calculation. Range: 0.50–0.95. Higher values make the weakest channel dominate more strongly. This setting does not replace, weaken or strengthen hard ACCEPT/REJECT rules.">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Worst Metric Weight" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.WorstMetricWeight, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="0.50–0.95" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Filesystem action attempted only for an eligible REJECTED frame when Monitor Only is OFF. Keep in Place leaves the image untouched. Prefix BAD_ renames it. Move to Rejected Folder relocates it to a sibling Rejected folder. QSM never deletes an image and all actions are collision-safe.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Rejected File Action" VerticalAlignment="Center"/>
                     <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.RejectedFileActionIndex}" Width="238" HorizontalAlignment="Left">
@@ -151,93 +199,93 @@
                         <ComboBoxItem Content="Move to Rejected Folder"/>
                     </ComboBox>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Enables conservative early-warning diagnostics based on recent measured trends. Predictive warnings are advisory only: they do not reject a frame by themselves.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Predictive Warnings" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.PredictiveWarningsEnabled}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="When N.I.N.A. has connected weather/environment data, QSM records it and may add a diagnostic correlation hint. Environment data is explanatory context; it is not an independent hard rejection rule in this release.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Environmental Correlation" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnvironmentalCorrelationEnabled}" HorizontalAlignment="Left"/>
                 </Grid>
 
                 <TextBlock Text="Smart Recovery" Style="{StaticResource QsmSubHeader}"/>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Enables the behavior used by the optional QSM Smart Recovery Gate Advanced Sequencer item. The gate operates only between exposures: it never aborts an exposure already in progress. After persistent controlled REJECTED/ERROR results it waits, checks guide recovery when guide rules are active, and then allows the next probe exposure.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Enable Smart Recovery" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.SmartPauseEnabled}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Number of consecutive QSM-controlled REJECTED or ERROR results required before the Smart Recovery Gate enters recovery wait. Range: 2–10 frames. ACCEPTED/WARNING results break the required streak.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Reject Streak" VerticalAlignment="Center"/>
+                    <TextBlock Text="Reject / Error Streak" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseRejectStreak, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="frames" VerticalAlignment="Center" Opacity="0.72"/>
+                    <TextBlock Grid.Column="2" Text="controlled frames (2–10)" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Cooldown inserted by QSM Smart Recovery Gate after persistent degradation, before it evaluates whether guiding has recovered. Range: 10–1800 seconds. This delay occurs between exposures only.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Pause Duration" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseSeconds, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="seconds" VerticalAlignment="Center" Opacity="0.72"/>
+                    <TextBlock Grid.Column="2" Text="seconds (10–1800)" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Consecutive healthy guide samples required after cooldown before Smart Recovery reports RECOVERED. Range: 1–10. Healthy is evaluated against a conservative sample limit derived from the active RMS and excursion settings. If no reliable recovery signal arrives before the safety timeout, the gate fails open to one probe exposure instead of waiting forever.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Healthy Guide Checks to Resume" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.SmartResumeHealthyGuideChecks, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="checks" VerticalAlignment="Center" Opacity="0.72"/>
+                    <TextBlock Grid.Column="2" Text="checks (1–10)" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
                 <TextBlock Text="Web Dashboard" Style="{StaticResource QsmSubHeader}"/>
-                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Starts the read-only browser dashboard on this N.I.N.A. computer. Reachability from outside your LAN depends on your VPN/reverse proxy/network setup.">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Starts QSM's self-contained read-only HTTP dashboard on this N.I.N.A. computer. OFF means the local dashboard listener is not running. QSM does not configure UPnP, router forwarding, DNS or outbound tunnels.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Enable Web Dashboard" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.WebDashboardEnabled}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="TCP port used by the local browser dashboard. Range: 1024–65535; default 18974. Changing it restarts the dashboard listener. The separate OpenAstro integration bridge keeps its own port/token configuration and is not changed here.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Port" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.WebDashboardPort, UpdateSourceTrigger=LostFocus}" Width="90" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="default 18974" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Preferred physical-LAN URL detected for this N.I.N.A. PC. QSM prioritizes active Ethernet/Wi-Fi private IPv4 interfaces and ignores common VPN/virtual adapters when choosing the displayed link. The server may still be reachable through other interfaces according to the host's network/firewall configuration.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="370"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Dashboard Address" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding WebDashboardAddress, Mode=OneWay}" IsReadOnly="True" IsReadOnlyCaretVisible="True" Width="350" HorizontalAlignment="Left"/>
-                    <Button Grid.Column="2" Content="Copy" Click="CopyDashboardAddress" Width="72" HorizontalAlignment="Left" Margin="8,0,0,0"/>
+                    <Button Grid.Column="2" Content="Copy" Click="CopyDashboardAddress" Width="72" HorizontalAlignment="Left" Margin="8,0,0,0" ToolTip="Copy the complete dashboard URL to the Windows clipboard."/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Runtime state of the local dashboard listener. If startup fails, this field reports the listener error instead of silently pretending the dashboard is available.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Status" VerticalAlignment="Center"/>
                     <TextBlock Grid.Column="1" Text="{Binding WebDashboardStatus}" VerticalAlignment="Center"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Optional browser login. OFF gives direct dashboard access to any client that can reach the local listener. ON requires the configured dashboard password. This is transport-independent application authentication; plain HTTP is still plain HTTP, so direct public-Internet exposure is not supported. Use a trusted LAN/VPN or an HTTPS reverse proxy.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Require Password" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.WebDashboardRequirePassword}" HorizontalAlignment="Left"/>
                 </Grid>
-                <Grid Style="{StaticResource QsmOptionRow}">
+                <Grid Style="{StaticResource QsmOptionRow}" ToolTip="Type a new password and leave the field to store it. QSM stores a random salt plus a PBKDF2-HMAC-SHA256 derived hash, not the clear-text password. Changing or clearing the password invalidates existing dashboard sessions.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="250"/><ColumnDefinition Width="260"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Password" VerticalAlignment="Center"/>
-                    <PasswordBox Grid.Column="1" Width="238" HorizontalAlignment="Left" LostKeyboardFocus="DashboardPasswordLostFocus" ToolTip="Type a new password and leave the field to save it. No password is required unless Require Password is enabled."/>
+                    <PasswordBox Grid.Column="1" Width="238" HorizontalAlignment="Left" LostKeyboardFocus="DashboardPasswordLostFocus"/>
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
                         <TextBlock Text="{Binding Settings.WebDashboardPasswordStatus}" VerticalAlignment="Center" Opacity="0.72" Margin="8,0,8,0"/>
-                        <Button Content="Clear" Click="ClearDashboardPassword" Width="64"/>
+                        <Button Content="Clear" Click="ClearDashboardPassword" Width="64" ToolTip="Remove the saved password hash. If Require Password remains ON, the dashboard will show that password protection is not configured until a new password is set."/>
                     </StackPanel>
                 </Grid>
-                <TextBlock Margin="14,6,0,0" Style="{StaticResource QsmHint}" Text="The dashboard is read-only. QSM does not open router ports or expose itself to the Internet automatically. Use your existing LAN, VPN or HTTPS reverse proxy as appropriate."/>
+                <TextBlock Margin="14,6,0,0" Style="{StaticResource QsmHint}" Text="The dashboard exposes read-only session telemetry and an in-memory JPEG preview. It does not provide threshold, file or sequencer write commands. QSM does not open router ports. For access away from home, use an existing VPN or an HTTPS reverse proxy. The tokenized OpenAstro companion API is separate and remains backward-compatible."/>
 
                 <TextBlock Text="Description" Style="{StaticResource QsmSectionHeader}"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>
-                <TextBlock Margin="14,0,0,0" TextWrapping="Wrap" Text="QualitySessionMeter evaluates each LIGHT frame using exposure guiding, adaptive star-count/background baselines, temporal session intelligence and explicit hard rejection rules. Rejected images are never deleted."/>
+                <TextBlock Margin="14,0,0,0" TextWrapping="Wrap" Text="QualitySessionMeter evaluates each eligible LIGHT using exposure-specific guiding, rolling same-context star/background baselines, temporal session intelligence and explicit hard rejection rules. Overall Quality and Confidence are diagnostic scores; hard ACCEPT/REJECT remains rule-driven. Rejected images are never deleted."/>
 
                 <TextBlock Text="Features" Style="{StaticResource QsmSectionHeader}"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>
-                <TextBlock Margin="14,0,0,0" TextWrapping="Wrap" Text="• Real-time Quality and Confidence scores&#x0a;• Exposure-specific guiding RMS and excursion analysis&#x0a;• Rolling same-context star/background baselines&#x0a;• Reversible rejected-file handling with provenance safety&#x0a;• Session events, predictive warnings and reporting&#x0a;• Valid Frame Target / Smart Recovery sequencer integration&#x0a;• Read-only local Web Dashboard for phone/tablet monitoring"/>
+                <TextBlock Margin="14,0,0,0" TextWrapping="Wrap" Text="• Real-time Quality and independent Confidence scores&#x0a;• Exposure-specific guide RMS plus sustained/hard excursion rules&#x0a;• Rolling target/filter/exposure/gain/binning/camera star/background baselines&#x0a;• Reversible rejected-file handling with acquisition-provenance safety&#x0a;• Session events, predictive diagnostics, environment correlation and reports&#x0a;• Valid Frame Target and opt-in Smart Recovery Advanced Sequencer integration&#x0a;• Read-only local Web Dashboard for phone/tablet monitoring&#x0a;• Separate tokenized OpenAstro companion API for advanced integrations"/>
 
                 <TextBlock Text="Getting Help" Style="{StaticResource QsmSectionHeader}"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>
-                <TextBlock Margin="14,0,0,0" TextWrapping="Wrap" Text="Repository and issue tracker: github.com/astropuzzo/QualitySessionMeter"/>
-                <TextBlock Margin="14,5,0,0" Style="{StaticResource QsmHint}" Text="Current pre-store field-test builds include Synthetic Lab for validation. The future public N.I.N.A. store package excludes Synthetic Lab."/>
+                <TextBlock Margin="14,0,0,0" TextWrapping="Wrap" Text="Repository, documentation and issue tracker: github.com/astropuzzo/QualitySessionMeter"/>
+                <TextBlock Margin="14,5,0,0" Style="{StaticResource QsmHint}" Text="See docs/METRICS.md for authoritative metric definitions and SECURITY.md for the supported Web Dashboard threat model. Current pre-store field-test builds include Synthetic Lab for validation; the future public N.I.N.A. store package excludes Synthetic Lab."/>
             </StackPanel>
         </ScrollViewer>
     </DataTemplate>
