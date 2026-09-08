@@ -16,17 +16,20 @@ The current `1.3.x` line is still a **pre-store field-test line**. During this p
 - Fixed Plugin Options controls whose boxes were left-positioned but whose text/content could still inherit centered alignment from N.I.N.A. styles. TextBlock text, TextBox content, PasswordBox content, ComboBox content and ComboBox items are explicitly left-aligned while preserving native control styles.
 - Fixed inconsistent foreground colors in Plugin Options by resolving `ButtonForegroundBrush` on loaded controls rather than relying on inherited/hard-coded text colors.
 - Fixed Control Center hard-coded dark card chrome versus inherited host foreground colors. Cards/borders now resolve N.I.N.A. background/border resources on the UI dispatcher; ordinary text uses the host foreground resource and QSM accent text uses the host primary resource.
-- Added defensive freezing for Synthetic Lab fallback brushes in field-test builds.
+- Synthetic Lab now follows light/dark host structural resources through loaded-element resource references while keeping all shared fallback brushes frozen.
+- Added an adaptive `Frame #` axis to the N.I.N.A. multichannel timeline and the Web Dashboard using the same chronological QSM `FrameIndex` shown by Recent Frames and hover diagnostics.
+- Separated the Frame # row from the EVENTS legend/badge row so axis text cannot overlap the event explanation on narrow timelines.
+- Web Dashboard timeline hover now includes filename as well as frame number/state/metrics.
+- Replaced blind periodic browser preview reloads with preview-generation-aware updates; the last valid LIGHT remains visible through temporary reconnect/fetch errors.
 
-### Timeline usability and latest-LIGHT preview resiliency
+### Automated visual regression
 
-- Added an adaptive **Frame # axis** to the N.I.N.A. multichannel timeline using the same chronological `FrameIndex` shown in Recent frames and tooltips.
-- Frame-number tick density adapts to available plot width while preserving first/latest frame identity; the axis uses the previously unused lower half of the event lane so it does not steal vertical space from the three metric bands.
-- Added the same Frame # axis to the universal Web Dashboard timeline and added Frame # to the Current frame card.
-- Browser timeline hover now includes the corresponding filename as well as frame index, status and metrics.
-- Replaced blind periodic preview-image reloads with snapshot-generation-aware preview updates. The browser downloads the JPEG only when QSM reports a new preview generation.
-- A temporary preview fetch/reconnect failure now keeps the last valid LIGHT visible instead of replacing it with a broken image.
-- Added pre-store and official-release CI gates for Frame # axis presence, generation-aware preview behavior and the WPF Freezable/dispatcher safety contract.
+- Added `QualitySessionMeter.VisualHarness`, a Windows/WPF visual test host that renders the actual QSM DataTemplates and `QualityTimelineControl` with deterministic stress-test data without requiring a local N.I.N.A. installation.
+- Added a Playwright renderer that extracts the actual embedded Web Dashboard HTML and renders desktop, tablet and mobile layouts against deterministic snapshot/guiding/preview responses.
+- Added `.github/workflows/visual-preview.yml`: every PR can now generate dark/light WPF screenshots and desktop/tablet/mobile browser screenshots entirely on GitHub-hosted Windows runners.
+- The visual harness is explicitly excluded from the plugin compile/resource source set and can never ship in the production DLL.
+- Automated visual inspection already caught and drove fixes for Synthetic Lab light-theme chrome and Frame #/EVENTS overlap before host installation.
+- These renders are visual-regression evidence only; final store readiness still requires one real N.I.N.A./AvalonDock smoke test because a standalone harness cannot reproduce every host lifecycle/dispatcher interaction.
 
 ---
 
