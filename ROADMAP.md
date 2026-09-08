@@ -27,12 +27,12 @@ Windows: x64
 ## Current release line
 
 ```text
-latest published pre-store test: 1.3.0.2
-current hardening candidate:      1.3.0.3
-working PR:                       #11
+latest published pre-store test: 1.3.0.4
+current hardening candidate:      1.3.0.5
+working PR:                       #13
 ```
 
-`1.3.0.3` is a **pre-store field-test candidate**, not yet an official N.I.N.A. manifest submission.
+`1.3.0.5` is a **pre-store field-test hotfix candidate**, not yet an official N.I.N.A. manifest submission.
 
 Field-test packaging policy remains:
 
@@ -50,20 +50,38 @@ Both variants must build from the same source commit and pass the same productio
 
 ---
 
-# 1.3.0.3 RELEASE-HARDENING SCOPE
+# 1.3.0.5 RELEASE-HARDENING SCOPE
+
+## WPF / AvalonDock stability
+
+A real N.I.N.A. 3.3.0.1057 host log exposed a store-blocking crash during Imaging-layout materialization:
+
+```text
+XamlParseException
+StaticResourceHolder
+The calling thread cannot access this object because a different thread owns it
+Cannot access Freezable 'System.Windows.Media.SolidColorBrush' across threads because it cannot be frozen
+```
+
+Root cause: QSM 1.3.0.4 data-bound shared `SolidColorBrush.Color` resources to host theme brushes. A bound WPF `Freezable` cannot be frozen, so AvalonDock can later fail when materializing a shared template from another dispatcher.
+
+Required 1.3.0.5 behavior:
+
+- no `BindingOperations.SetBinding` against shared QSM `SolidColorBrush` resources;
+- fallback shared brushes are immutable/frozen;
+- N.I.N.A. theme resources are resolved on the actual loaded UI element using `SetResourceReference(...)` on the owning UI dispatcher;
+- official and pre-store CI fail if the unsafe brush-binding pattern returns;
+- real-host dock/layout load and reload must be tested before store submission.
 
 ## Native N.I.N.A. UI consistency
 
 - Plugin Options use a flat N.I.N.A.-style layout instead of custom card/GroupBox presentation.
-- Structural foreground/background/border brushes follow the active N.I.N.A. theme.
-- Dark-mode readability is treated as a release gate, not a cosmetic follow-up.
-- Every non-obvious user-editable option must provide contextual help explaining:
-  - what is measured;
-  - unit/range;
-  - whether lower/higher is stricter;
-  - whether the option affects hard rejection, diagnostic scoring, filesystem handling or sequencer behavior;
-  - relevant safety constraints.
-- Adaptive Calibration settings are exposed in Plugin Options, including its bounded automatic safety caps.
+- Text, TextBox content, PasswordBox content, ComboBox content and ComboBox items are explicitly left-aligned where appropriate; host styles must not silently recenter QSM values.
+- Structural foreground/background/border resources follow the active N.I.N.A. theme without sharing mutable brushes across dispatchers.
+- Dark-mode readability is a release gate, not a cosmetic follow-up.
+- Control Center cards use N.I.N.A. background/border/foreground resources rather than hard-coded dark chrome combined with inherited host text colors.
+- Every non-obvious user-editable option provides contextual help describing measurement, units/range, strictness direction, behavior and relevant safety constraints.
+- Adaptive Calibration settings remain exposed, including bounded automatic safety caps.
 
 ## Canonical multichannel timeline
 
@@ -81,10 +99,26 @@ Required presentation semantics:
 - rejected/warning/error event markers;
 - `G/S/B/!` event semantics;
 - exact-value hover/tooltips;
-- legend lane clipped independently from the plot;
-- graph labels/reference labels must not overlap data on narrow dock layouts.
+- clipped legend lane independent from the plot;
+- graph labels/reference labels must not overlap data on narrow dock layouts;
+- **adaptive Frame # axis** using the same chronological QSM `FrameIndex` used by Recent frames and tooltips;
+- first and latest frame remain identifiable while tick density adapts to available width.
 
-A decorative single-series substitute is not acceptable.
+A decorative single-series substitute or an unindexed plot is not acceptable.
+
+## Latest LIGHT preview
+
+The universal Web Dashboard and OpenAstro bridge share the same in-memory latest-LIGHT preview cache.
+
+Required behavior:
+
+- only real saved `LIGHT` images update the preview;
+- preview encoding is display-only and never participates in quality decisions;
+- no preview image file is written to disk;
+- the browser uses snapshot preview generation/version metadata and does **not** blindly replace the `<img>` on a timer;
+- the browser downloads a JPEG only when the preview generation changes;
+- a temporary 404/reconnect/update failure keeps the last valid LIGHT visible rather than replacing it with a broken image;
+- Synthetic Lab cannot fabricate astronomical pixels and therefore cannot create a new preview by itself.
 
 ## Live guiding dashboard
 
@@ -96,9 +130,9 @@ Required model:
 - **Total error magnitude** shown separately;
 - real sample timestamps / rolling lookback window;
 - RA RMS, DEC RMS, total rolling RMS and maximum excursion;
-- sustained/hard excursion limits shown only against total magnitude, because the engine applies those rules to the total guide-error magnitude;
+- sustained/hard excursion limits shown only against total magnitude;
 - per-sample hover details;
-- explicit note that exposure classification uses exposure-window guide metrics, not merely the dashboard rolling 20-second diagnostic.
+- explicit distinction between rolling 20-second diagnostics and exposure-window guide metrics used for frame classification.
 
 ## Web Dashboard security / network model
 
@@ -111,35 +145,21 @@ Required behavior:
 - preferred displayed URL uses the physical private LAN IPv4 and ignores common VPN/virtual adapters;
 - URL is selectable and has one-click clipboard copy;
 - password is optional, not mandatory;
-- when enabled, password storage uses salted PBKDF2-HMAC-SHA256 rather than clear text;
+- password storage uses salted PBKDF2-HMAC-SHA256 rather than clear text;
 - password/auth/port/profile reconfiguration invalidates existing browser sessions;
-- bounded request/header/body sizes;
-- bounded concurrent clients;
-- request timeout;
-- login rate limiting;
+- bounded request/header/body sizes and concurrent clients;
+- request timeout and login rate limiting;
 - HttpOnly + SameSite session cookie;
 - CSP, nosniff, frame-deny, referrer, permissions and same-origin headers;
-- all session-derived text inserted into HTML must be escaped or assigned through text-safe DOM APIs;
+- session-derived text inserted into HTML is escaped or assigned through text-safe DOM APIs;
 - no remote threshold/file/sequencer control routes;
 - direct public-Internet HTTP exposure is unsupported; remote access is expected through a trusted VPN or HTTPS reverse proxy.
 
 The existing tokenized OpenAstro bridge remains separate and backward-compatible.
 
-## Documentation / reviewer readiness
-
-Required before official manifest submission:
-
-- `README.md` matches the actual .NET/N.I.N.A. target and current package names;
-- `docs/METRICS.md` is the authoritative metric/reference document;
-- `SECURITY.md` documents the Web Dashboard trust model and reporting path;
-- assembly metadata contains stable GUID, author/company, license, repository, homepage, tags, minimum N.I.N.A. version, short description and long description;
-- `CHANGELOG.md` describes the current release line;
-- material AI assistance is disclosed when submitting the official manifest, with the human maintainer retaining responsibility for review, testing, security, privacy, licensing, provenance and maintenance;
-- actual screenshots/featured image are added before store submission; generated/mock UI must not be presented as evidence of host behavior.
-
 ---
 
-# RELEASE GATES FOR 1.3.0.3
+# RELEASE GATES FOR 1.3.0.5
 
 ## Automated gates
 
@@ -153,15 +173,22 @@ field-test build with Synthetic Lab
 field-test package
 full V1/V2/V3 SyntheticCheck
 UI/release-quality static gates
+WPF Freezable/dispatcher safety gate
+frame-axis presence gate
+preview-generation behavior gate
 ```
 
 Static release-quality gates must catch regressions such as:
 
 - old simplified `qualityCanvas` browser chart returning;
+- missing Frame # axis in either N.I.N.A. or browser timeline;
 - custom GroupBox/card Plugin Options returning;
+- centered text/value content returning in QSM Options;
+- shared `SolidColorBrush` binding returning;
 - dashboard address losing explicit OneWay read-only binding;
 - missing LAN resolver;
 - missing timeline clipping;
+- blind periodic preview reload returning;
 - missing HTML escaping;
 - missing browser security headers.
 
@@ -170,20 +197,25 @@ Static release-quality gates must catch regressions such as:
 Do **not** declare store readiness until these are observed in actual N.I.N.A.:
 
 1. plugin loads cleanly on N.I.N.A. 3.3 NIGHTLY #057;
-2. Plugin Options render correctly in the active dark theme;
-3. Control Center text/controls have readable contrast;
-4. multichannel timeline labels, markers and reference text do not overlap;
-5. Synthetic Lab is present in the field-test package and drives the real dockable UI;
-6. browser dashboard opens from another LAN device;
-7. displayed dashboard URL selects the intended physical LAN address with VPN enabled;
-8. Copy button places the full URL on the Windows clipboard;
-9. password OFF allows direct access;
-10. password ON accepts correct credentials, rejects invalid credentials and revokes sessions after password/config changes;
-11. live guiding graph receives real N.I.N.A./guider samples and uses correct RA/DEC/total semantics;
-12. latest LIGHT preview updates without writing preview files to disk;
-13. OpenAstro integration still works unchanged;
-14. shutdown/profile switch/plugin teardown produces no listener/client exceptions;
-15. rejected-frame review and undo remain collision-safe with real FITS/XISF files.
+2. Imaging/AvalonDock layout initializes without `XamlParseException`/Freezable cross-thread errors;
+3. reopening/resizing/reloading QSM dockables does not reproduce the crash;
+4. Plugin Options render correctly in the active dark theme;
+5. all option labels/values are left-aligned where intended and readable;
+6. Control Center text/controls have readable contrast;
+7. multichannel timeline labels, markers and reference text do not overlap;
+8. Frame # axis is readable and correctly correlates plotted points with Recent frames rows;
+9. Synthetic Lab is present in the field-test package and drives the real dockable UI;
+10. browser dashboard opens from another LAN device;
+11. displayed dashboard URL selects the intended physical LAN address with VPN enabled;
+12. Copy button places the full URL on the Windows clipboard;
+13. password OFF allows direct access;
+14. password ON accepts correct credentials, rejects invalid credentials and revokes sessions after password/config changes;
+15. live guiding graph receives real N.I.N.A./guider samples and uses correct RA/DEC/total semantics;
+16. latest real LIGHT preview updates on the browser and OpenAstro from the shared cache;
+17. reconnect/temporary preview failure keeps the previous valid preview visible;
+18. OpenAstro integration still works unchanged;
+19. shutdown/profile switch/plugin teardown produces no listener/client exceptions;
+20. rejected-frame review and undo remain collision-safe with real FITS/XISF files.
 
 ---
 
@@ -197,7 +229,7 @@ When ready:
 2. build the **production package only** for store distribution;
 3. generate the manifest from that immutable final DLL/archive;
 4. include checksum generated from the final archive;
-5. validate the manifest against the official N.I.N.A. schema;
+5. validate the manifest against the official N.I.N.A. schema/repository tooling;
 6. add real featured/screenshot image URLs to assembly/manifest metadata;
 7. disclose material AI-assisted development in the submission;
 8. submit the manifest PR to `isbeorn/nina.plugin.manifests`;
@@ -269,4 +301,4 @@ Headless SyntheticCheck remains permanent CI coverage even after the public stor
 
 # NEXT STEP
 
-Finish `1.3.0.3` automated gates, merge PR #11, publish the pre-store field-test package with Synthetic Lab, then perform the complete real-host dark-theme + LAN/phone + guiding + OpenAstro validation. Only after those tests pass should QSM move to manifest/image preparation for the official N.I.N.A. plugin list.
+Finish the exact `1.3.0.5` CI run on PR #13, merge only if green, publish the pre-store field-test package with Synthetic Lab, then repeat real-host validation focused first on the crash reproduction path, dark-theme alignment/contrast, Frame # axis and latest-LIGHT preview. Only after those tests pass should QSM move to final store artwork/manifest submission.
