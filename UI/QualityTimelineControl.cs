@@ -140,7 +140,9 @@ public sealed class QualityTimelineControl : FrameworkElement {
         var frames = ItemsSource?.Cast<object>().OfType<FrameQualityResult>().TakeLast(160).ToArray()
             ?? Array.Empty<FrameQualityResult>();
 
-        const double labelWidth = 154;
+        // Reserve a real legend column. The old fixed 154px lane let long legend text draw
+        // directly over the plot. Every label is now clipped to this column.
+        double labelWidth = Math.Clamp(w * 0.27, 150, 215);
         const double markerLane = 38;
         const double gap = 6;
         double plotW = Math.Max(1, w - labelWidth - 1);
@@ -153,11 +155,16 @@ public sealed class QualityTimelineControl : FrameworkElement {
         renderedBandHeight = bandH;
         renderedGap = gap;
 
-        var background = FrozenBrush(18, 22, 28);
-        var borderPen = FrozenPen(48, 54, 61, 1);
-        var gridPen = FrozenPen(56, 62, 70, 0.8);
-        var textBrush = FrozenBrush(154, 160, 166);
-        var secondaryText = FrozenBrush(118, 125, 134);
+        // Structural colors follow the active N.I.N.A. profile theme. Diagnostic series keep
+        // stable semantic colors so Quality/Confidence/Guide/Stars/Background remain recognizable.
+        // Secondary timeline text intentionally uses the normal host foreground too: N.I.N.A.'s
+        // disabled-control foreground can be extremely dim in night/dark profiles and these labels
+        // are explanatory data, not disabled UI.
+        var background = ThemeBrush("SecondaryBackgroundBrush", 18, 22, 28);
+        var borderPen = ThemePen("BorderBrush", 48, 54, 61, 1.0);
+        var gridPen = ThemePen("BorderBrush", 56, 62, 70, 0.7);
+        var textBrush = ThemeBrush("ButtonForegroundBrush", 220, 224, 230);
+        var secondaryText = ThemeBrush("ButtonForegroundBrush", 190, 196, 204);
         var qualityBrush = FrozenBrush(138, 180, 248);
         var confidenceBrush = FrozenBrush(197, 138, 249);
         var guideBrush = FrozenBrush(129, 201, 149);
@@ -169,7 +176,21 @@ public sealed class QualityTimelineControl : FrameworkElement {
         var starsPen = FrozenPen(253, 214, 99, 1.6);
         var backgroundPen = FrozenPen(242, 139, 130, 1.6);
 
-        DrawEventLaneLabel(dc, textBrush);
+        DrawEventLaneLabel(dc, textBrush, secondaryText, labelWidth - 8);
+
+        double topBand = markerLane;
+        double rmsBand = markerLane + bandH + gap;
+        double imgBand = markerLane + 2 * (bandH + gap);
+
+        DrawLegendItem(dc, 3, topBand + 3, labelWidth - 8, qualityBrush, secondaryText, "Quality", "0–100");
+        DrawLegendItem(dc, 3, topBand + 25, labelWidth - 8, confidenceBrush, secondaryText, "Confidence", "0–100");
+        DrawLegendItem(dc, 3, rmsBand + 5, labelWidth - 8, guideBrush, secondaryText, "Guide RMS", "arcsec · lower is better");
+        DrawLegendItem(dc, 3, imgBand + 3, labelWidth - 8, starsBrush, secondaryText, "Stars Δ", EnableStarCount ? $"% vs baseline · reject < -{MaxStarLossPercent:0.#}%" : "% vs baseline · disabled");
+        DrawLegendItem(dc, 3, imgBand + 27, labelWidth - 8, backgroundBrush, secondaryText, "Background Δ", EnableBackground ? $"limits -{MaxBackgroundDecreasePercent:0.#}/+{MaxBackgroundIncreasePercent:0.#}%" : "% vs baseline · disabled");
+
+        // Everything belonging to the graph is clipped to the plot rectangle. This prevents
+        // marker badges/reference labels from leaking into the legend on narrow dock layouts.
+        dc.PushClip(new RectangleGeometry(new Rect(labelWidth, 0, plotW, h)));
 
         for (int b = 0; b < 3; b++) {
             double y = markerLane + b * (bandH + gap);
@@ -177,21 +198,12 @@ public sealed class QualityTimelineControl : FrameworkElement {
             dc.DrawLine(gridPen, new Point(labelWidth, y + bandH / 2), new Point(labelWidth + plotW, y + bandH / 2));
         }
 
-        double topBand = markerLane;
-        double rmsBand = markerLane + bandH + gap;
-        double imgBand = markerLane + 2 * (bandH + gap);
-
-        DrawLegendItem(dc, 3, topBand + 5, qualityBrush, "Quality", "0–100");
-        DrawLegendItem(dc, 3, topBand + 22, confidenceBrush, "Confidence", "0–100");
-        DrawLegendItem(dc, 3, rmsBand + 6, guideBrush, "Guide RMS", "arcsec · lower is better");
-        DrawLegendItem(dc, 3, imgBand + 4, starsBrush, "Stars Δ", EnableStarCount ? $"% vs baseline · reject < -{MaxStarLossPercent:0.#}%" : "% vs baseline · disabled");
-        DrawLegendItem(dc, 3, imgBand + 23, backgroundBrush, "Background Δ", EnableBackground ? $"% vs baseline · limits -{MaxBackgroundDecreasePercent:0.#}/+{MaxBackgroundIncreasePercent:0.#}%" : "% vs baseline · disabled");
-
         DrawScaleHint(dc, labelWidth + plotW - 29, topBand + 2, "100", secondaryText);
         DrawScaleHint(dc, labelWidth + plotW - 18, topBand + bandH - 13, "0", secondaryText);
 
         if (frames.Length == 0) {
             DrawCenteredMessage(dc, labelWidth, markerLane, plotW, h - markerLane, "Waiting for assessed LIGHT frames", secondaryText);
+            dc.Pop();
             return;
         }
 
@@ -205,7 +217,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
         if (EnableGuideRms && Finite(MaxGuideRms) && MaxGuideRms > 0) {
             double y = ValueToY(MaxGuideRms, 0, maxRms, rmsBand, bandH);
-            DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(129, 201, 149, 1.0), $"RMS limit {MaxGuideRms:0.00}\"", guideBrush);
+            DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(129, 201, 149, 1.0), $"RMS limit {MaxGuideRms:0.00}\"", guideBrush, background);
         }
         DrawScaleHint(dc, labelWidth + 4, rmsBand + 2, $"0–{maxRms:0.0}\"", secondaryText);
 
@@ -218,25 +230,26 @@ public sealed class QualityTimelineControl : FrameworkElement {
         DrawSeries(dc, frames, labelWidth, imgBand, plotW, bandH, f => f.BackgroundDeviationPercent, -imgAbsMax, imgAbsMax, backgroundPen);
 
         double zeroY = ValueToY(0, -imgAbsMax, imgAbsMax, imgBand, bandH);
-        DrawReferenceLine(dc, labelWidth, plotW, zeroY, FrozenDashedPen(120, 128, 138, 1.1), "0% rolling baseline", textBrush);
+        DrawReferenceLine(dc, labelWidth, plotW, zeroY, ThemeDashedPen("BorderBrush", 120, 128, 138, 1.1), "0% rolling baseline", textBrush, background);
 
         if (EnableStarCount && MaxStarLossPercent > 0) {
             double y = ValueToY(-MaxStarLossPercent, -imgAbsMax, imgAbsMax, imgBand, bandH);
-            DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(253, 214, 99, 0.9), null, starsBrush);
+            DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(253, 214, 99, 0.9), null, starsBrush, background);
         }
         if (EnableBackground) {
             if (MaxBackgroundIncreasePercent > 0) {
                 double y = ValueToY(MaxBackgroundIncreasePercent, -imgAbsMax, imgAbsMax, imgBand, bandH);
-                DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(242, 139, 130, 0.9), null, backgroundBrush);
+                DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(242, 139, 130, 0.9), null, backgroundBrush, background);
             }
             if (MaxBackgroundDecreasePercent > 0) {
                 double y = ValueToY(-MaxBackgroundDecreasePercent, -imgAbsMax, imgAbsMax, imgBand, bandH);
-                DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(242, 139, 130, 0.9), null, backgroundBrush);
+                DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(242, 139, 130, 0.9), null, backgroundBrush, background);
             }
         }
         DrawScaleHint(dc, labelWidth + 4, imgBand + 2, $"±{imgAbsMax:0}%", secondaryText);
 
         DrawStatusMarkers(dc, frames, labelWidth, plotW, markerLane, h - 1);
+        dc.Pop();
     }
 
     private string BuildFrameTooltip(FrameQualityResult frame, double y) {
@@ -341,23 +354,29 @@ public sealed class QualityTimelineControl : FrameworkElement {
         dc.DrawText(text, new Point(rect.X + (rect.Width - text.Width) / 2, rect.Y + (rect.Height - text.Height) / 2 - 0.5));
     }
 
-    private static void DrawEventLaneLabel(DrawingContext dc, Brush brush) {
+    private static void DrawEventLaneLabel(DrawingContext dc, Brush brush, Brush secondary, double maxWidth) {
+        dc.PushClip(new RectangleGeometry(new Rect(0, 0, Math.Max(1, maxWidth), 36)));
         dc.DrawText(Format("EVENTS", 8.5, brush, FontWeights.SemiBold), new Point(3, 2));
-        dc.DrawText(Format("G guide · S sky · B background · ! error", 8.1, brush, FontWeights.Normal), new Point(3, 16));
+        dc.DrawText(Format("G guide · S sky · B background · ! error", 8.1, secondary, FontWeights.Normal), new Point(3, 16));
+        dc.Pop();
     }
 
-    private static void DrawLegendItem(DrawingContext dc, double x, double y, Brush color, string name, string detail) {
+    private static void DrawLegendItem(DrawingContext dc, double x, double y, double maxWidth, Brush color, Brush secondary, string name, string detail) {
+        dc.PushClip(new RectangleGeometry(new Rect(x, y - 1, Math.Max(1, maxWidth), 23)));
         dc.DrawEllipse(color, null, new Point(x + 5, y + 6), 3.2, 3.2);
-        var nameText = Format(name, 9.1, color, FontWeights.SemiBold);
-        dc.DrawText(nameText, new Point(x + 13, y));
-        dc.DrawText(Format(detail, 7.8, FrozenBrush(132, 139, 148), FontWeights.Normal), new Point(x + 16 + nameText.Width, y + 1));
+        dc.DrawText(Format(name, 9.1, color, FontWeights.SemiBold), new Point(x + 13, y));
+        dc.DrawText(Format(detail, 7.7, secondary, FontWeights.Normal), new Point(x + 13, y + 11));
+        dc.Pop();
     }
 
-    private static void DrawReferenceLine(DrawingContext dc, double left, double width, double y, Pen pen, string label, Brush labelBrush) {
+    private static void DrawReferenceLine(DrawingContext dc, double left, double width, double y, Pen pen, string label, Brush labelBrush, Brush backgroundBrush) {
         dc.DrawLine(pen, new Point(left, y), new Point(left + width, y));
         if (string.IsNullOrWhiteSpace(label)) return;
         var text = Format(label, 8.0, labelBrush, FontWeights.SemiBold);
-        dc.DrawText(text, new Point(left + width - text.Width - 5, y - text.Height - 1));
+        double tx = left + width - text.Width - 7;
+        double ty = Math.Max(1, y - text.Height - 2);
+        dc.DrawRectangle(backgroundBrush, null, new Rect(tx - 3, ty - 1, text.Width + 6, text.Height + 2));
+        dc.DrawText(text, new Point(tx, ty));
     }
 
     private static void DrawScaleHint(DrawingContext dc, double x, double y, string text, Brush brush) =>
@@ -394,6 +413,19 @@ public sealed class QualityTimelineControl : FrameworkElement {
     private static string FormatPercent(double value) => Finite(value) ? value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "%" : "N/A";
     private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
     private static double AbsFinite(double value) => Finite(value) ? Math.Abs(value) : 0;
+
+    private static Brush ThemeBrush(string key, byte fallbackR, byte fallbackG, byte fallbackB) {
+        try {
+            if (Application.Current?.TryFindResource(key) is Brush brush) return brush;
+        } catch { }
+        return FrozenBrush(fallbackR, fallbackG, fallbackB);
+    }
+
+    private static Pen ThemePen(string key, byte fallbackR, byte fallbackG, byte fallbackB, double thickness) =>
+        new(ThemeBrush(key, fallbackR, fallbackG, fallbackB), thickness);
+
+    private static Pen ThemeDashedPen(string key, byte fallbackR, byte fallbackG, byte fallbackB, double thickness) =>
+        new(ThemeBrush(key, fallbackR, fallbackG, fallbackB), thickness) { DashStyle = DashStyles.Dash };
 
     private static SolidColorBrush FrozenBrush(byte r, byte g, byte b) {
         var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
