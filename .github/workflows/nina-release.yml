@@ -61,10 +61,24 @@ jobs:
           $resourcesCode = Get-Content UI/Resources.xaml.cs -Raw
           $optionsCode = Get-Content UI/OptionsHelpResources.xaml.cs -Raw
           $controlCenterCode = Get-Content UI/ControlCenterResources.xaml.cs -Raw
+          $frameAxis = Get-Content UI/TimelineFrameAxisAdorner.cs -Raw
 
-          foreach ($required in @('function drawTimeline','function drawGuide','Metric definitions','rolling 20 s')) {
+          foreach ($required in @(
+            'function drawTimeline',
+            'function drawGuide',
+            'function drawFrameAxis',
+            'function frameTickIndexes',
+            'adaptive Frame # axis',
+            'lastPreviewGeneration',
+            'function updatePreview',
+            'meta.generation',
+            'Metric definitions',
+            'rolling 20 s'
+          )) {
             if ($web -notmatch [regex]::Escape($required)) { throw "Dashboard contract missing: $required" }
           }
+          if ($web -match "setInterval\(preview") { throw "Official dashboard regressed to blind preview reloads instead of generation-aware preview updates." }
+
           foreach ($required in @('Content-Security-Policy','MaxConcurrentClients','MaxFailedLoginsPerWindow','ETag','previewAvailable')) {
             if ($server -notmatch [regex]::Escape($required)) { throw "Web server release contract missing: $required" }
           }
@@ -80,7 +94,7 @@ jobs:
           if ($resourcesCode -match 'BindingOperations\.SetBinding' -or $resourcesCode -match 'SolidColorBrush\.ColorProperty') {
             throw "Official release contains a cross-thread unsafe shared SolidColorBrush binding."
           }
-          foreach ($required in @('FreezeBrush("QsmCard")','SetResourceReference','CardLoaded')) {
+          foreach ($required in @('FreezeBrush("QsmCard")','SetResourceReference','CardLoaded','TimelineFrameAxisBehavior.Attach')) {
             if ($resourcesCode -notmatch [regex]::Escape($required)) { throw "WPF dispatcher-safety contract missing: $required" }
           }
           foreach ($required in @('TextAlignment = TextAlignment.Left','HorizontalContentAlignment = HorizontalAlignment.Left','ButtonForegroundBrush')) {
@@ -88,6 +102,9 @@ jobs:
           }
           foreach ($required in @('SecondaryBackgroundBrush','TertiaryBackgroundBrush','ButtonForegroundBrush','SetResourceReference')) {
             if ($controlCenterCode -notmatch [regex]::Escape($required)) { throw "Control Center theme contract missing: $required" }
+          }
+          foreach ($required in @('FRAME #','FrameIndex','BuildTickIndexes','TakeLast(160)','IsHitTestVisible = false')) {
+            if ($frameAxis -notmatch [regex]::Escape($required)) { throw "WPF frame-axis contract missing: $required" }
           }
 
       - name: Build immutable production plugin
