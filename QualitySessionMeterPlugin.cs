@@ -24,7 +24,7 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
     public IPluginOptionsAccessor PluginSettings { get; }
     public QualitySettings Settings { get; }
 
-    public string WebDashboardAddress => webServer?.AccessUrl ?? $"http://<NINA-PC-IP>:{Settings.WebDashboardPort}/";
+    public string WebDashboardAddress => LanAddressResolver.BuildDashboardUrl(webServer?.Port > 0 ? webServer.Port : Settings.WebDashboardPort);
     public string WebDashboardStatus => !Settings.WebDashboardEnabled
         ? "Disabled"
         : webServer?.Enabled == true
