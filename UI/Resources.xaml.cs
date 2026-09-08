@@ -61,6 +61,10 @@ public partial class Resources : ResourceDictionary {
     }
 
     private static void ThemeCardTree(DependencyObject root) {
+        if (root is QualityTimelineControl timeline) {
+            TimelineFrameAxisBehavior.Attach(timeline);
+        }
+
         if (root is TextBlock text && text.Foreground is SolidColorBrush brush) {
             if (ColorEquals(brush.Color, 0xF1, 0xF3, 0xF4)) {
                 text.SetResourceReference(TextBlock.ForegroundProperty, "ButtonForegroundBrush");
