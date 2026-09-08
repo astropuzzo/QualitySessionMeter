@@ -6,7 +6,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -20,23 +19,37 @@ using System.Windows.Media.Imaging;
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
 /// <summary>
-/// Optional self-contained read-only dashboard for browsers on the user's LAN/VPN.
+/// Optional, self-contained and read-only browser dashboard for the user's LAN/VPN.
 /// It is intentionally independent from QualitySessionHttpBridge, which remains the
-/// tokenized OpenAstro/companion API and therefore stays backward compatible.
+/// tokenized OpenAstro/companion API for backward compatibility.
+///
+/// Security boundary:
+/// - disabled by default;
+/// - no router/UPnP changes and no outbound network connections;
+/// - dashboard routes expose read-only snapshot/preview data only;
+/// - optional password sessions use HttpOnly + SameSite=Strict cookies;
+/// - direct Internet exposure is not a supported deployment model (use VPN/HTTPS proxy).
 /// </summary>
 public sealed class QualitySessionWebServer : IDisposable {
     private const int MaxRequestLine = 4096;
     private const int MaxHeaderLines = 64;
+    private const int MaxHeaderLine = 8192;
     private const int MaxBodyBytes = 8192;
     private const int PreviewMaxWidth = 1280;
     private const int PreviewJpegQuality = 82;
+    private const int MaxConcurrentClients = 24;
+    private const int MaxFailedLoginsPerWindow = 8;
+    private static readonly TimeSpan RequestLifetime = TimeSpan.FromSeconds(12);
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(24);
+    private static readonly TimeSpan LoginFailureWindow = TimeSpan.FromMinutes(1);
 
     private readonly IImageSaveMediator imageSaveMediator;
     private readonly QualitySettings settings;
     private readonly object lifecycleSync = new();
     private readonly object previewSync = new();
     private readonly ConcurrentDictionary<string, DateTimeOffset> sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, LoginFailureState> loginFailures = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim clientSlots = new(MaxConcurrentClients, MaxConcurrentClients);
 
     private TcpListener listener;
     private CancellationTokenSource listenerCancellation;
@@ -59,18 +72,7 @@ public sealed class QualitySessionWebServer : IDisposable {
         Reconfigure();
     }
 
-    public string AccessUrl {
-        get {
-            var port = Port > 0 ? Port : settings.WebDashboardPort;
-            try {
-                var address = Dns.GetHostAddresses(Dns.GetHostName())
-                    .FirstOrDefault(x => x.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(x));
-                return address == null ? $"http://<NINA-PC-IP>:{port}/" : $"http://{address}:{port}/";
-            } catch {
-                return $"http://<NINA-PC-IP>:{port}/";
-            }
-        }
-    }
+    public string AccessUrl => LanAddressResolver.BuildDashboardUrl(Port > 0 ? Port : settings.WebDashboardPort);
 
     private void SettingsChanged(object sender, PropertyChangedEventArgs e) {
         if (e == null || string.IsNullOrEmpty(e.PropertyName) ||
@@ -153,7 +155,18 @@ public sealed class QualitySessionWebServer : IDisposable {
             TcpClient client = null;
             try {
                 client = await listener.AcceptTcpClientAsync(cancellationToken);
-                _ = Task.Run(() => HandleClient(client, cancellationToken), cancellationToken);
+                await clientSlots.WaitAsync(cancellationToken);
+                var accepted = client;
+                client = null;
+                _ = Task.Run(async () => {
+                    try {
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                        timeout.CancelAfter(RequestLifetime);
+                        await HandleClient(accepted, timeout.Token);
+                    } catch (OperationCanceledException) { }
+                    catch { accepted?.Dispose(); }
+                    finally { clientSlots.Release(); }
+                });
             } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                 client?.Dispose();
                 break;
@@ -168,6 +181,10 @@ public sealed class QualitySessionWebServer : IDisposable {
     private async Task HandleClient(TcpClient client, CancellationToken cancellationToken) {
         using (client) {
             client.NoDelay = true;
+            client.ReceiveTimeout = (int)RequestLifetime.TotalMilliseconds;
+            client.SendTimeout = (int)RequestLifetime.TotalMilliseconds;
+            var remoteKey = (client.Client.RemoteEndPoint as IPEndPoint)?.Address?.ToString() ?? "unknown";
+
             using var stream = client.GetStream();
             using var reader = new StreamReader(stream, Encoding.UTF8, false, 4096, leaveOpen: true);
 
@@ -181,13 +198,25 @@ public sealed class QualitySessionWebServer : IDisposable {
             }
 
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var headersComplete = false;
             for (var i = 0; i < MaxHeaderLines; i++) {
                 string line;
                 try { line = await reader.ReadLineAsync(cancellationToken); }
                 catch { return; }
-                if (string.IsNullOrEmpty(line)) break;
+                if (line == null || line.Length > MaxHeaderLine) {
+                    await WriteJson(stream, 431, new { ok = false, error = "request headers too large" }, cancellationToken);
+                    return;
+                }
+                if (line.Length == 0) {
+                    headersComplete = true;
+                    break;
+                }
                 var separator = line.IndexOf(':');
                 if (separator > 0) headers[line[..separator].Trim()] = line[(separator + 1)..].Trim();
+            }
+            if (!headersComplete) {
+                await WriteJson(stream, 431, new { ok = false, error = "too many request headers" }, cancellationToken);
+                return;
             }
 
             var parts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -202,7 +231,10 @@ public sealed class QualitySessionWebServer : IDisposable {
             string body = "";
             if (method == "POST") {
                 var contentLength = 0;
-                if (headers.TryGetValue("Content-Length", out var rawLength)) int.TryParse(rawLength, out contentLength);
+                if (headers.TryGetValue("Content-Length", out var rawLength) && !int.TryParse(rawLength, out contentLength)) {
+                    await WriteJson(stream, 400, new { ok = false, error = "invalid content length" }, cancellationToken);
+                    return;
+                }
                 if (contentLength < 0 || contentLength > MaxBodyBytes) {
                     await WriteJson(stream, 413, new { ok = false, error = "request too large" }, cancellationToken);
                     return;
@@ -215,7 +247,11 @@ public sealed class QualitySessionWebServer : IDisposable {
                         if (count <= 0) break;
                         read += count;
                     }
-                    body = new string(buffer, 0, read);
+                    if (read != contentLength) {
+                        await WriteJson(stream, 400, new { ok = false, error = "incomplete request body" }, cancellationToken);
+                        return;
+                    }
+                    body = new string(buffer);
                 }
             }
 
@@ -231,7 +267,7 @@ public sealed class QualitySessionWebServer : IDisposable {
             }
 
             if (method == "POST" && path == "/dashboard/login") {
-                await HandleLogin(stream, headers, body, cancellationToken);
+                await HandleLogin(stream, headers, body, remoteKey, cancellationToken);
                 return;
             }
 
@@ -260,7 +296,7 @@ public sealed class QualitySessionWebServer : IDisposable {
                     await WriteHtml(stream, 200, LoginHtml, cancellationToken);
                     return;
                 }
-                await WriteHtml(stream, 200, DashboardHtml, cancellationToken);
+                await WriteHtml(stream, 200, WebDashboardPage.Html, cancellationToken);
                 return;
             }
 
@@ -301,7 +337,7 @@ public sealed class QualitySessionWebServer : IDisposable {
         }
     }
 
-    private async Task HandleLogin(NetworkStream stream, IDictionary<string, string> headers, string body, CancellationToken cancellationToken) {
+    private async Task HandleLogin(NetworkStream stream, IDictionary<string, string> headers, string body, string remoteKey, CancellationToken cancellationToken) {
         if (!settings.WebDashboardEnabled) {
             await WriteJson(stream, 404, new { ok = false, error = "dashboard disabled" }, cancellationToken);
             return;
@@ -315,17 +351,56 @@ public sealed class QualitySessionWebServer : IDisposable {
             return;
         }
 
-        var password = ParseFormValue(body, "password");
-        if (!settings.VerifyWebDashboardPassword(password)) {
-            await WriteJson(stream, 401, new { ok = false, error = "wrong password" }, cancellationToken);
+        if (!LoginAttemptAllowed(remoteKey, out var retryAfter)) {
+            await WriteJson(stream, 429, new { ok = false, error = "too many login attempts", retryAfterSeconds = retryAfter }, cancellationToken,
+                new Dictionary<string, string> { ["Retry-After"] = retryAfter.ToString() });
             return;
         }
 
+        var password = ParseFormValue(body, "password");
+        if (!settings.VerifyWebDashboardPassword(password)) {
+            RegisterLoginFailure(remoteKey);
+            // Small fixed delay makes rapid password guessing more expensive without making the UI annoying.
+            try { await Task.Delay(250, cancellationToken); } catch { }
+            await WriteJson(stream, 401, new { ok = false, error = "invalid credentials" }, cancellationToken);
+            return;
+        }
+
+        loginFailures.TryRemove(remoteKey, out _);
         CleanupSessions();
         var token = RandomToken(32);
         sessions[token] = DateTimeOffset.UtcNow.Add(SessionLifetime);
         await WriteJson(stream, 200, new { ok = true }, cancellationToken,
             new Dictionary<string, string> { ["Set-Cookie"] = $"qsm_session={token}; Path=/; Max-Age={(int)SessionLifetime.TotalSeconds}; HttpOnly; SameSite=Strict" });
+    }
+
+    private bool LoginAttemptAllowed(string remoteKey, out int retryAfterSeconds) {
+        retryAfterSeconds = 0;
+        if (!loginFailures.TryGetValue(remoteKey, out var state)) return true;
+        lock (state.Sync) {
+            var now = DateTimeOffset.UtcNow;
+            if (now - state.WindowStart >= LoginFailureWindow) {
+                state.WindowStart = now;
+                state.Failures = 0;
+                return true;
+            }
+            if (state.Failures < MaxFailedLoginsPerWindow) return true;
+            retryAfterSeconds = Math.Max(1, (int)Math.Ceiling((LoginFailureWindow - (now - state.WindowStart)).TotalSeconds));
+            return false;
+        }
+    }
+
+    private void RegisterLoginFailure(string remoteKey) {
+        var state = loginFailures.GetOrAdd(remoteKey, _ => new LoginFailureState { WindowStart = DateTimeOffset.UtcNow });
+        lock (state.Sync) {
+            var now = DateTimeOffset.UtcNow;
+            if (now - state.WindowStart >= LoginFailureWindow) {
+                state.WindowStart = now;
+                state.Failures = 1;
+            } else {
+                state.Failures++;
+            }
+        }
     }
 
     private bool DashboardAuthorized(IDictionary<string, string> headers) {
@@ -396,6 +471,8 @@ public sealed class QualitySessionWebServer : IDisposable {
             405 => "Method Not Allowed",
             409 => "Conflict",
             413 => "Payload Too Large",
+            429 => "Too Many Requests",
+            431 => "Request Header Fields Too Large",
             _ => "Error"
         };
         var builder = new StringBuilder()
@@ -406,7 +483,10 @@ public sealed class QualitySessionWebServer : IDisposable {
             .Append("Connection: close\r\n")
             .Append("X-Content-Type-Options: nosniff\r\n")
             .Append("X-Frame-Options: DENY\r\n")
-            .Append("Referrer-Policy: no-referrer\r\n");
+            .Append("Referrer-Policy: no-referrer\r\n")
+            .Append("Cross-Origin-Resource-Policy: same-origin\r\n")
+            .Append("Permissions-Policy: camera=(), microphone=(), geolocation=()\r\n")
+            .Append("Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'\r\n");
         if (extraHeaders != null) {
             foreach (var pair in extraHeaders) {
                 if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null || pair.Value.Contains('\r') || pair.Value.Contains('\n')) continue;
@@ -426,44 +506,29 @@ public sealed class QualitySessionWebServer : IDisposable {
         imageSaveMediator.ImageSaved -= ImageSaved;
         lock (lifecycleSync) StopListener();
         sessions.Clear();
+        loginFailures.Clear();
+        clientSlots.Dispose();
+    }
+
+    private sealed class LoginFailureState {
+        public object Sync { get; } = new();
+        public DateTimeOffset WindowStart { get; set; }
+        public int Failures { get; set; }
     }
 
     private const string DisabledHtml = """
-<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>QSM</title></head><body style="font-family:system-ui;background:#101114;color:#eee;padding:32px"><h2>QualitySessionMeter</h2><p>Web Dashboard is disabled in N.I.N.A. plugin settings.</p></body></html>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QSM</title></head><body style="font-family:system-ui;background:#101114;color:#eee;padding:32px"><h2>QualitySessionMeter</h2><p>Web Dashboard is disabled in N.I.N.A. plugin settings.</p></body></html>
 """;
 
     private const string PasswordNotConfiguredHtml = """
-<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>QSM</title></head><body style="font-family:system-ui;background:#101114;color:#eee;padding:32px"><h2>QualitySessionMeter</h2><p>Password protection is enabled, but no password has been configured yet. Set one in N.I.N.A. → Plugins → QualitySessionMeter.</p></body></html>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QSM</title></head><body style="font-family:system-ui;background:#101114;color:#eee;padding:32px"><h2>QualitySessionMeter</h2><p>Password protection is enabled, but no password has been configured yet. Set one in N.I.N.A. → Plugins → QualitySessionMeter.</p></body></html>
 """;
 
     private const string LoginHtml = """
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QSM Login</title>
-<style>body{margin:0;background:#0d0f12;color:#f3f5f7;font:15px system-ui;display:grid;place-items:center;min-height:100vh}.card{width:min(390px,calc(100vw - 40px));background:#15181d;border:1px solid #2a2f37;border-radius:18px;padding:28px;box-shadow:0 18px 55px #0008}h1{font-size:22px;margin:0 0 6px}p{color:#9aa4b2;margin:0 0 22px}input{box-sizing:border-box;width:100%;padding:13px 14px;border-radius:10px;border:1px solid #343b46;background:#0f1216;color:#fff;font-size:16px;outline:none}button{width:100%;margin-top:12px;padding:12px;border:0;border-radius:10px;background:#8ab4f8;color:#10141b;font-weight:700;font-size:15px}.err{min-height:20px;color:#f28b82;margin-top:10px;font-size:13px}</style></head>
-<body><div class="card"><h1>QualitySessionMeter</h1><p>Enter the dashboard password configured in N.I.N.A.</p><form id="f"><input id="p" type="password" autocomplete="current-password" autofocus placeholder="Password"><button>Open dashboard</button><div class="err" id="e"></div></form></div>
-<script>document.getElementById('f').addEventListener('submit',async(e)=>{e.preventDefault();const r=await fetch('/dashboard/login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'password='+encodeURIComponent(document.getElementById('p').value)});if(r.ok){location.reload()}else{document.getElementById('e').textContent='Wrong password'}})</script></body></html>
-""";
-
-    private const string DashboardHtml = """
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0d10"><title>QualitySessionMeter</title>
-<style>
-:root{color-scheme:dark;--bg:#0b0d10;--card:#13171c;--card2:#171c22;--line:#252c35;--muted:#8d98a6;--text:#eef2f6;--blue:#8ab4f8;--green:#81c995;--yellow:#fdd663;--red:#f28b82;--purple:#c58af9}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% -10%,#182133 0,transparent 34%),var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}.wrap{width:min(1240px,100%);margin:auto;padding:18px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.brand h1{margin:0;font-size:21px;letter-spacing:-.02em}.brand div{color:var(--muted);font-size:12px}.live{display:flex;align-items:center;gap:7px;color:var(--green);font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}.card{background:linear-gradient(180deg,#15191f,#11151a);border:1px solid var(--line);border-radius:15px;padding:15px;min-width:0}.summary{grid-column:span 2}.summary .n{font-size:27px;font-weight:760;letter-spacing:-.04em}.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}.current{grid-column:span 5}.preview{grid-column:span 7;min-height:280px;display:flex;flex-direction:column}.guide{grid-column:span 5}.timeline{grid-column:span 7}.history{grid-column:1/-1}.row{display:flex;justify-content:space-between;gap:14px;padding:6px 0;border-bottom:1px solid #20262e}.row:last-child{border:0}.row span:first-child{color:var(--muted)}.status{display:inline-flex;padding:5px 9px;border-radius:999px;font-weight:700;font-size:11px;letter-spacing:.04em;background:#232a33}.accepted{color:var(--green);background:#18271f}.rejected{color:var(--red);background:#301d1f}.warning{color:var(--yellow);background:#2d2819}.learning{color:var(--blue);background:#192536}.error{color:var(--red)}#preview{width:100%;height:100%;min-height:240px;object-fit:contain;border-radius:11px;background:#090b0e;margin-top:10px}canvas{display:block;width:100%;height:210px;margin-top:8px}table{width:100%;border-collapse:collapse;font-size:12px}th{color:var(--muted);font-weight:600;text-align:left;padding:8px 7px;border-bottom:1px solid var(--line)}td{padding:8px 7px;border-bottom:1px solid #20262e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}.section-title{font-size:14px;font-weight:700;margin-bottom:9px}.muted{color:var(--muted)}@media(max-width:850px){.wrap{padding:12px}.summary{grid-column:span 4}.current,.preview,.guide,.timeline{grid-column:1/-1}.preview{min-height:220px}.history{overflow:auto}.top{align-items:flex-start}.brand h1{font-size:19px}}@media(max-width:520px){.summary{grid-column:span 6}.summary .n{font-size:23px}.card{border-radius:13px;padding:12px}}
-</style></head><body><div class="wrap"><div class="top"><div class="brand"><h1>QualitySessionMeter</h1><div id="sub">Waiting for N.I.N.A. session data…</div></div><div class="live"><span class="dot"></span><span id="liveText">LOCAL</span></div></div>
-<div class="grid"><div class="card summary"><div class="label">Captured</div><div class="n" id="captured">—</div></div><div class="card summary"><div class="label">Usable</div><div class="n" id="usable">—</div></div><div class="card summary"><div class="label">Rejected</div><div class="n" id="rejected">—</div></div><div class="card summary"><div class="label">Acceptance</div><div class="n" id="acceptance">—</div></div><div class="card summary"><div class="label">Session Q</div><div class="n" id="sessionQ">—</div></div><div class="card summary"><div class="label">Confidence</div><div class="n" id="sessionC">—</div></div>
-<div class="card current"><div class="section-title">Current frame <span id="status" class="status">—</span></div><div class="row"><span>Quality</span><strong id="quality">—</strong></div><div class="row"><span>Target / Filter</span><strong id="target">—</strong></div><div class="row"><span>Guide RMS</span><strong id="rms">—</strong></div><div class="row"><span>Stars Δ</span><strong id="stars">—</strong></div><div class="row"><span>Background Δ</span><strong id="background">—</strong></div><div class="row"><span>Cause</span><strong id="cause">—</strong></div><div class="row"><span>File</span><strong id="file">—</strong></div></div>
-<div class="card preview"><div class="section-title">Latest LIGHT preview</div><div class="muted" id="previewState">Waiting for an image…</div><img id="preview" alt="Latest LIGHT preview"></div>
-<div class="card guide"><div class="section-title">Live guiding · last 20 s</div><div class="row"><span>Total RMS</span><strong id="grms">—</strong></div><div class="row"><span>RA / DEC RMS</span><strong id="axes">—</strong></div><div class="row"><span>Max excursion</span><strong id="gmax">—</strong></div><canvas id="guideCanvas"></canvas></div>
-<div class="card timeline"><div class="section-title">Quality timeline</div><canvas id="qualityCanvas"></canvas></div>
-<div class="card history"><div class="section-title">Recent frames</div><div style="overflow:auto"><table><thead><tr><th>#</th><th>Status</th><th>Quality</th><th>Confidence</th><th>RMS</th><th>Stars Δ</th><th>BG Δ</th><th>Filter</th><th>File</th><th>Cause</th></tr></thead><tbody id="frames"></tbody></table></div></div></div></div>
-<script>
-const $=id=>document.getElementById(id),num=(v,d=1)=>v==null?'—':Number(v).toFixed(d),pct=v=>v==null?'—':num(v,1)+'%',arc=v=>v==null?'—':num(v,2)+'″';
-function statusClass(v){return 'status '+String(v||'').toLowerCase().replace(/\s+/g,'-')}
-function drawSeries(canvas,items,getter,min,max,stroke){const dpr=devicePixelRatio||1,w=canvas.clientWidth||300,h=canvas.clientHeight||180;canvas.width=w*dpr;canvas.height=h*dpr;const c=canvas.getContext('2d');c.scale(dpr,dpr);c.clearRect(0,0,w,h);c.strokeStyle='#252c35';c.lineWidth=1;for(let i=0;i<4;i++){const y=12+(h-24)*i/3;c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke()}const pts=items.map((x,i)=>({x:items.length<2?w/2:i*w/(items.length-1),v:getter(x)})).filter(p=>p.v!=null&&Number.isFinite(Number(p.v)));if(!pts.length)return;c.strokeStyle=stroke;c.lineWidth=2;c.beginPath();pts.forEach((p,i)=>{const y=10+(h-20)*(1-(Number(p.v)-min)/(max-min));i?c.lineTo(p.x,y):c.moveTo(p.x,y)});c.stroke()}
-function render(s){const q=s.summary||{},f=s.currentFrame||{},g=s.guidingLive||{},frames=s.frames||[];$('captured').textContent=q.captured??0;$('usable').textContent=q.usable??0;$('rejected').textContent=q.rejected??0;$('acceptance').textContent=pct(q.acceptanceRate);$('sessionQ').textContent=num(q.sessionQuality,0);$('sessionC').textContent=num(q.sessionConfidence,0);$('status').textContent=f.status||'NO FRAME';$('status').className=statusClass(f.status);$('quality').textContent=f.quality==null?'—':num(f.quality,0)+' / 100';$('target').textContent=[f.target,f.filter].filter(Boolean).join(' · ')||'—';$('rms').textContent=arc(f.guideRmsArcsec);$('stars').textContent=pct(f.starDeltaPercent);$('background').textContent=pct(f.backgroundDeltaPercent);$('cause').textContent=f.probableCause||f.reason||'—';$('file').textContent=f.finalFileName||f.fileName||'—';$('grms').textContent=arc(g.rmsTotalArcsec);$('axes').textContent=arc(g.rmsRaArcsec)+' / '+arc(g.rmsDecArcsec);$('gmax').textContent=arc(g.maxExcursionArcsec);$('sub').textContent=(s.mode?.enabled?'QSM enabled':'QSM disabled')+' · '+(s.mode?.monitorOnly?'Monitor only':'Active file handling');$('frames').innerHTML=frames.slice().reverse().slice(0,30).map(x=>`<tr><td>${x.frameIndex??''}</td><td><span class="${statusClass(x.status)}">${x.status||''}</span></td><td>${num(x.quality,0)}</td><td>${num(x.confidence,0)}</td><td>${arc(x.guideRmsArcsec)}</td><td>${pct(x.starDeltaPercent)}</td><td>${pct(x.backgroundDeltaPercent)}</td><td>${x.filter||''}</td><td title="${x.finalFileName||x.fileName||''}">${x.finalFileName||x.fileName||''}</td><td title="${x.probableCause||x.reason||''}">${x.probableCause||x.reason||''}</td></tr>`).join('');drawSeries($('qualityCanvas'),frames,x=>x.quality,0,100,'#8ab4f8');const gs=g.series||[];const abs=Math.max(1,...gs.flatMap(x=>[Math.abs(Number(x.raArcsec)||0),Math.abs(Number(x.decArcsec)||0)]));drawSeries($('guideCanvas'),gs,x=>x.totalArcsec,0,Math.max(1,abs*1.25),'#81c995')}
-async function refresh(){try{const r=await fetch('/dashboard/api/snapshot',{cache:'no-store'});if(r.status===401){location.reload();return}if(!r.ok)throw 0;render(await r.json());$('liveText').textContent='LIVE'}catch{$('liveText').textContent='RECONNECTING'}}
-function preview(){const img=$('preview');img.src='/dashboard/api/preview.jpg?t='+Date.now();img.onload=()=>{$('previewState').textContent='Latest saved LIGHT'};img.onerror=()=>{$('previewState').textContent='Preview not available yet'}}
-refresh();preview();setInterval(refresh,2000);setInterval(preview,5000);addEventListener('resize',()=>refresh());
-</script></body></html>
+<style>body{margin:0;background:#0d0f12;color:#f3f5f7;font:15px system-ui;display:grid;place-items:center;min-height:100vh}.card{width:min(390px,calc(100vw - 40px));background:#15181d;border:1px solid #3b4551;border-radius:16px;padding:28px;box-shadow:0 18px 55px #0008}h1{font-size:22px;margin:0 0 6px}p{color:#b2bbc7;margin:0 0 22px}input{box-sizing:border-box;width:100%;padding:13px 14px;border-radius:9px;border:1px solid #4a5664;background:#0f1216;color:#fff;font-size:16px;outline:none}input:focus{border-color:#8ab4f8}button{width:100%;margin-top:12px;padding:12px;border:0;border-radius:9px;background:#8ab4f8;color:#10141b;font-weight:700;font-size:15px}.err{min-height:20px;color:#f28b82;margin-top:10px;font-size:13px}</style></head>
+<body><div class="card"><h1>QualitySessionMeter</h1><p>Enter the optional dashboard password configured in N.I.N.A.</p><form id="f"><input id="p" type="password" autocomplete="current-password" autofocus maxlength="512" placeholder="Password"><button>Open dashboard</button><div class="err" id="e" role="status"></div></form></div>
+<script>document.getElementById('f').addEventListener('submit',async(e)=>{e.preventDefault();const out=document.getElementById('e');out.textContent='';try{const r=await fetch('/dashboard/login',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'password='+encodeURIComponent(document.getElementById('p').value)});if(r.ok){location.reload();return}if(r.status===429){const d=await r.json();out.textContent='Too many attempts. Try again in '+(d.retryAfterSeconds||60)+' seconds.';return}out.textContent='Invalid password.'}catch{out.textContent='Dashboard connection error.'}})</script></body></html>
 """;
 }
