@@ -2,6 +2,18 @@
 
 All notable changes to QualitySessionMeter are documented here.
 
+## [1.1.0.2] - 2026-09-08
+
+### Synthetic Lab remote monitor fix
+
+- Fixed the OpenAstro/NINA remote snapshot reading only the live acquisition `SessionStore` while Synthetic Lab writes to its own isolated store.
+- Added an observable-session store selector: production/live mode still exposes the normal session, while field-test Synthetic Mode exposes the active synthetic session without mixing either store.
+- Synthetic Lab frames, counters, current frame, quality/confidence history and rejection results now flow through `/api/v1/snapshot`, allowing the online panel to treat a generated session as active data.
+- Production remains free of Synthetic Lab implementation and behavior.
+- Bumped plugin/file/assembly version to `1.1.0.2`.
+
+---
+
 ## [1.1.0.1] - 2026-09-08
 
 ### Local/GitHub synchronization and V3 safety hardening

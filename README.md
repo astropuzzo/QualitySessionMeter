@@ -10,7 +10,7 @@ The core idea is simple: a camera exposure being completed does not automaticall
 
 ## Status
 
-- **1.1.0.1 / V3 + OpenAstro remote monitor:** current synchronized field-test/production line on `main`. V3 quality-controlled acquisition is merged; the read-only OpenAstro HTTP bridge is included; this patch carries the final local provenance/token/package-isolation hardening.
+- **1.1.0.2 / V3 + OpenAstro remote monitor:** current synchronized field-test/production line on `main`. The remote snapshot now follows the active Synthetic Lab store in field-test builds, so generated sessions are visible in the OpenAstro/NINA web monitor as well as inside N.I.N.A.
 - Runtime target: **N.I.N.A. 3.3 NIGHTLY #057** (`3.3.0.1057`) / `NINA.Plugin 3.3.0.1057-nightly`.
 - Target framework: **.NET 10** / `net10.0-windows7.0`.
 - Default operating mode: **OFF until explicitly enabled**; when enabled, **Monitor Only** remains the safe default for file handling.

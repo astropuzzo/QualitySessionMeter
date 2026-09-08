@@ -33,6 +33,13 @@ public releases
   v1.0.0.1 — UI/usability hotfix
   v1.0.0.2 — timeline readability + in-process mobile contract
   v1.1.0.0 — OpenAstro read-only remote monitor bridge
+  v1.1.0.1 — final V3 provenance/token/package-isolation synchronization
+
+candidate version
+  1.1.0.2
+
+candidate purpose
+  make field-test Synthetic Lab sessions visible through the same read-only OpenAstro snapshot path
 
 active work
   synchronize final local V3 provenance/token/package-isolation hardening onto current main

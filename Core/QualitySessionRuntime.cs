@@ -68,6 +68,14 @@ public sealed class QualitySessionRuntime : IDisposable {
 
     public QualitySettings Settings => settings;
     public SessionStore Store => sessionStore;
+    public SessionStore ObservableStore {
+        get {
+#if QSM_DEVELOPMENT
+            if (IsSyntheticMode && syntheticSessionStore != null) return syntheticSessionStore;
+#endif
+            return sessionStore;
+        }
+    }
     public CalibrationSuggestion CurrentCalibrationSuggestion => currentCalibrationSuggestion;
 #if QSM_DEVELOPMENT
     public bool IsSyntheticMode { get; private set; }

@@ -59,7 +59,9 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
         }
 
         var settings = runtime.Settings;
-        var allFrames = runtime.Store?.Results?.ToArray() ?? Array.Empty<FrameQualityResult>();
+        // The remote monitor must follow the same active session the in-host UI is showing.
+        // In a field-test build Synthetic Lab writes to an isolated SessionStore, not the live one.
+        var allFrames = runtime.ObservableStore?.Results?.ToArray() ?? Array.Empty<FrameQualityResult>();
         var recentFrames = allFrames.TakeLast(DefaultRecentFrames).ToArray();
         var current = allFrames.LastOrDefault();
         var liveGuide = runtime.GetRecentGuideMetrics(LiveGuideWindowSeconds);
