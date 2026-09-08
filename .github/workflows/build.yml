@@ -59,6 +59,9 @@ jobs:
           $web = Get-Content Core/WebDashboardPage.cs -Raw
           $server = Get-Content Core/QualitySessionWebServer.cs -Raw
           $options = Get-Content UI/OptionsHelpResources.xaml -Raw
+          $optionsCode = Get-Content UI/OptionsHelpResources.xaml.cs -Raw
+          $resourcesCode = Get-Content UI/Resources.xaml.cs -Raw
+          $controlCenterCode = Get-Content UI/ControlCenterResources.xaml.cs -Raw
           $timeline = Get-Content UI/QualityTimelineControl.cs -Raw
 
           foreach ($required in @(
@@ -87,6 +90,23 @@ jobs:
           if ($options -match '<GroupBox') { throw "Plugin Options regressed to custom GroupBox/card layout instead of native N.I.N.A. rows." }
           if ($options -notmatch 'Background="\{DynamicResource BackgroundBrush\}"') { throw "Plugin Options are not bound to the active N.I.N.A. background theme." }
           if ($options -notmatch 'WebDashboardAddress, Mode=OneWay') { throw "Dashboard address must remain read-only/OneWay in Options." }
+
+          # WPF/AvalonDock safety: never bind a shared SolidColorBrush/Freezable to a host brush.
+          # A bound Freezable cannot be frozen and can crash when a dock template is materialized
+          # from another dispatcher. Theme resources must be resolved on the loaded UI element.
+          if ($resourcesCode -match 'BindingOperations\.SetBinding' -or $resourcesCode -match 'SolidColorBrush\.ColorProperty') {
+            throw "Cross-thread unsafe SolidColorBrush binding returned to shared QSM resources."
+          }
+          foreach ($required in @('FreezeBrush("QsmCard")', 'SetResourceReference', 'CardLoaded')) {
+            if ($resourcesCode -notmatch [regex]::Escape($required)) { throw "WPF brush safety contract missing: $required" }
+          }
+          foreach ($required in @('TextAlignment = TextAlignment.Left', 'HorizontalContentAlignment = HorizontalAlignment.Left', 'ButtonForegroundBrush')) {
+            if ($optionsCode -notmatch [regex]::Escape($required)) { throw "Options left-alignment/theme contract missing: $required" }
+          }
+          foreach ($required in @('SecondaryBackgroundBrush', 'TertiaryBackgroundBrush', 'ButtonForegroundBrush', 'SetResourceReference')) {
+            if ($controlCenterCode -notmatch [regex]::Escape($required)) { throw "Control Center theme contract missing: $required" }
+          }
+
           if ($timeline -notmatch 'PushClip') { throw "Timeline plot clipping is missing; labels/markers may overlap the graph." }
           if ($timeline -notmatch 'SecondaryBackgroundBrush' -or $timeline -notmatch 'ButtonForegroundBrush') { throw "Timeline structural colors are no longer tied to N.I.N.A. theme resources." }
 
