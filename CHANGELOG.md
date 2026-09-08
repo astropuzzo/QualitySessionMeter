@@ -6,6 +6,20 @@ The current `1.3.x` line is still a **pre-store field-test line**. During this p
 
 ---
 
+## [1.3.0.5] - 2026-09-08
+
+### WPF/AvalonDock crash hotfix and UI alignment
+
+- Fixed an unexpected N.I.N.A. Imaging-layout crash caused by data-binding shared QSM `SolidColorBrush` resources to host theme brushes. A bound `SolidColorBrush` is a non-freezable WPF `Freezable`; AvalonDock can later materialize a dock template on another dispatcher, producing `XamlParseException`, `StaticResourceHolder` failures and cross-thread `SolidColorBrush` access errors.
+- Removed cross-thread brush bindings entirely. Shared fallback brushes are now immutable/frozen and therefore safe to cross dispatcher boundaries.
+- Theme following is now applied with `SetResourceReference(...)` on the actual loaded UI element, on its owning UI dispatcher. This preserves live N.I.N.A. theme resources without sharing mutable `Freezable` objects between threads.
+- Fixed Plugin Options controls whose boxes were left-positioned but whose text/content could still inherit centered alignment from N.I.N.A. styles. TextBlock text, TextBox content, PasswordBox content, ComboBox content and ComboBox items are explicitly left-aligned while preserving native control styles.
+- Fixed inconsistent foreground colors in Plugin Options by resolving `ButtonForegroundBrush` on loaded controls rather than relying on inherited/hard-coded text colors.
+- Fixed Control Center hard-coded dark card chrome versus inherited host foreground colors. Cards/borders now resolve N.I.N.A. background/border resources on the UI dispatcher; ordinary text uses the host foreground resource and QSM accent text uses the host primary resource.
+- Added defensive freezing for Synthetic Lab fallback brushes in field-test builds.
+
+---
+
 ## [1.3.0.4] - 2026-09-08
 
 ### Unified latest-LIGHT preview and official N.I.N.A. publication path
