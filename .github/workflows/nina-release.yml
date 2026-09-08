@@ -1,0 +1,204 @@
+name: NINA catalog release
+
+# Official/store releases are immutable and tag-driven. Use a four-part tag without a leading v,
+# for example: 1.3.0.4. Do not use this workflow for ordinary pre-store field testing.
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+env:
+  PLUGIN_NAME: QualitySessionMeter
+  PLUGIN_DLL_NAME: QualitySessionMeter
+  NINA_MIN_VERSION: 3.3.0.1057
+  MANIFEST_PATH: Q/QualitySessionMeter/3.3.0.1057
+
+jobs:
+  build-validate-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Verify tag format and project release gate
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          if ($tag -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw "Official tag must be x.x.x.x" }
+          [xml]$project = Get-Content QualitySessionMeter.csproj
+          $projectVersion = ($project.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
+          if ($projectVersion -ne $tag) {
+            throw "Tag $tag does not match QualitySessionMeter.csproj version $projectVersion."
+          }
+
+      - name: Restore plugin
+        run: dotnet restore QualitySessionMeter.csproj
+
+      - name: Gate production source set
+        shell: pwsh
+        run: |
+          $compile = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=false -getItem:Compile
+          $pages = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=false -getItem:Page
+          $text = ($compile -join "`n") + "`n" + ($pages -join "`n")
+          $syntheticPattern = 'SyntheticSessionGenerator\.cs|SyntheticConfidenceOracle\.cs|SyntheticEventOracle\.cs|SyntheticGuidePatternOracle\.cs|SyntheticTrendOracle\.cs|SyntheticLabDockable\.cs|SyntheticResources\.xaml'
+          if ($text -match $syntheticPattern) { throw "Official production source set contains Synthetic Lab/test UI." }
+
+      - name: Gate dashboard/release contracts
+        shell: pwsh
+        run: |
+          $web = Get-Content Core/WebDashboardPage.cs -Raw
+          $server = Get-Content Core/QualitySessionWebServer.cs -Raw
+          $preview = Get-Content Core/LatestLightPreviewCache.cs -Raw
+          $assembly = Get-Content Properties/AssemblyInfo.cs -Raw
+          foreach ($required in @('function drawTimeline','function drawGuide','Metric definitions','rolling 20 s')) {
+            if ($web -notmatch [regex]::Escape($required)) { throw "Dashboard contract missing: $required" }
+          }
+          foreach ($required in @('Content-Security-Policy','MaxConcurrentClients','MaxFailedLoginsPerWindow','ETag','previewAvailable')) {
+            if ($server -notmatch [regex]::Escape($required)) { throw "Web server release contract missing: $required" }
+          }
+          foreach ($required in @('ImageSaved','CaptureSequence.ImageTypes.LIGHT','JpegBitmapEncoder','Clone','Freeze')) {
+            if ($preview -notmatch [regex]::Escape($required)) { throw "Shared LIGHT preview contract missing: $required" }
+          }
+          foreach ($required in @('MinimumApplicationVersion','LicenseURL','Repository','LongDescription')) {
+            if ($assembly -notmatch [regex]::Escape($required)) { throw "Manifest assembly metadata missing: $required" }
+          }
+
+      - name: Build immutable production plugin
+        run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=false -p:Version=${{ github.ref_name }} -p:AssemblyVersion=${{ github.ref_name }} -p:FileVersion=${{ github.ref_name }}
+
+      - name: Restore synthetic checker
+        run: dotnet restore QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj
+
+      - name: Run full V1/V2/V3 regression before release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/synthetic-check | Out-Null
+          dotnet run --project QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj -c Release --no-restore -- "$PWD/artifacts/synthetic-check"
+
+      - name: Prepare official package directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.dll" "package/QualitySessionMeter.dll" -Force
+          if (Test-Path "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb") {
+            Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb" "package/QualitySessionMeter.pdb" -Force
+          }
+          Copy-Item README.md, CHANGELOG.md, LICENSE, SECURITY.md "package/" -Force
+          if (Test-Path docs) { Copy-Item docs "package/docs" -Recurse -Force }
+
+      - name: Generate N.I.N.A. archive and manifest from final DLL
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://raw.githubusercontent.com/isbeorn/nina.plugin.manifests/main/tools/CreateManifest.ps1" -OutFile CreateManifest.ps1
+          $asset = "QualitySessionMeter.${{ github.ref_name }}.zip"
+          $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$asset"
+          pwsh ./CreateManifest.ps1 -file "package/QualitySessionMeter.dll" -installerUrl $url -createArchive -includeAll
+          Move-Item "QualitySessionMeter.zip" $asset -Force
+          Move-Item "manifest.json" "QualitySessionMeter.${{ github.ref_name }}.manifest.json" -Force
+
+      - name: Validate generated manifest with official repository
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/isbeorn/nina.plugin.manifests.git manifest-validation
+          $dest = "manifest-validation/manifests/${{ env.MANIFEST_PATH }}/${{ github.ref_name }}"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item "QualitySessionMeter.${{ github.ref_name }}.manifest.json" "$dest/manifest.json" -Force
+          Push-Location manifest-validation
+          npm ci
+          node gather.js
+          Pop-Location
+
+      - name: Upload manifest artifact for publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-manifest
+          path: QualitySessionMeter.${{ github.ref_name }}.manifest.json
+          if-no-files-found: error
+
+      - name: Create immutable official GitHub release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: QualitySessionMeter ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            QualitySessionMeter.${{ github.ref_name }}.zip
+            QualitySessionMeter.${{ github.ref_name }}.manifest.json
+
+  publish-manifest:
+    runs-on: ubuntu-latest
+    needs: build-validate-release
+    steps:
+      - name: Check optional automatic publishing prerequisites
+        id: prereq
+        env:
+          PAT: ${{ secrets.PAT }}
+        shell: bash
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "PAT secret is not configured; release is complete, manifest PR must be submitted manually."
+            exit 0
+          fi
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://api.github.com/repos/${{ github.repository_owner }}/nina.plugin.manifests")
+          if [ "$status" != "200" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Fork ${{ github.repository_owner }}/nina.plugin.manifests does not exist; manifest PR must be submitted manually."
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download generated manifest
+        if: steps.prereq.outputs.ready == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-manifest
+
+      - name: Clone maintainer manifest fork
+        if: steps.prereq.outputs.ready == 'true'
+        env:
+          PAT: ${{ secrets.PAT }}
+        shell: bash
+        run: |
+          git clone "https://x-access-token:${PAT}@github.com/${{ github.repository_owner }}/nina.plugin.manifests.git"
+          cd nina.plugin.manifests
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "QualitySessionMeter/${{ github.ref_name }}"
+
+      - name: Add manifest to fork
+        if: steps.prereq.outputs.ready == 'true'
+        shell: bash
+        run: |
+          dest="nina.plugin.manifests/manifests/${{ env.MANIFEST_PATH }}/${{ github.ref_name }}"
+          mkdir -p "$dest"
+          cp "QualitySessionMeter.${{ github.ref_name }}.manifest.json" "$dest/manifest.json"
+          cd nina.plugin.manifests
+          git add .
+          git commit -m "Add QualitySessionMeter ${{ github.ref_name }}"
+          git push origin "QualitySessionMeter/${{ github.ref_name }}"
+
+      - name: Open upstream N.I.N.A. manifest PR
+        if: steps.prereq.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        shell: bash
+        run: |
+          gh pr create \
+            --title "Add QualitySessionMeter ${{ github.ref_name }}" \
+            --body $'QualitySessionMeter release manifest generated from the immutable tagged production DLL and validated with gather.js.\n\nAI assistance disclosure: material AI assistance was used during development. The accountable human maintainer is astropuzzo. This official tag should only be created after the maintainer has personally reviewed, understood and tested the release and accepted responsibility for security, privacy, licensing, provenance, debugging and maintenance.' \
+            --head "${{ github.repository_owner }}:QualitySessionMeter/${{ github.ref_name }}" \
+            --base main \
+            --repo isbeorn/nina.plugin.manifests
