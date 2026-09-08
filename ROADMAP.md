@@ -6,7 +6,7 @@ This file is the operational handoff/source of truth. Material code/UI changes m
 
 ---
 
-# CURRENT HANDOFF STATE — 2026-09-07
+# CURRENT HANDOFF STATE — 2026-09-08
 
 ## Runtime target
 
@@ -25,24 +25,23 @@ main
   V1 + V2 + V3 merged
   1.0.0.1 UI/usability hotfix merged
   1.0.0.2 self-explanatory timeline/mobile broker foundation merged
-  current released main: 707fec90f381a9f2b64467ca643c406ede81b401
+  1.1.0.0 OpenAstro remote monitor bridge released
+  current released main before this patch: 3de5a209f31be6fd0b708ec0c91a473f97543797
 
 public releases
   v1.0.0.0 — V3
   v1.0.0.1 — UI/usability hotfix
   v1.0.0.2 — timeline readability + in-process mobile contract
+  v1.1.0.0 — OpenAstro read-only remote monitor bridge
 
-active branch
-  feature/openastro-mobile-http
-
-active PR
-  #6 — OpenAstro mobile bridge — read-only HTTP snapshot
+active work
+  synchronize final local V3 provenance/token/package-isolation hardening onto current main
 
 candidate version
-  1.1.0.0
+  1.1.0.1
 
 candidate status
-  FEATURE COMPLETE / FINAL VERSIONED CI + MERGE/RELEASE PENDING
+  LOCAL BUILD GATE → GITHUB WINDOWS CI / FIELD-TEST ARTIFACT
 ```
 
 Known non-blocking dependency warning:
@@ -137,7 +136,13 @@ Timeline/mobile foundation:
 
 ---
 
-# 1.1.0.0 OPENASTRO REMOTE MONITOR — RELEASE CANDIDATE
+# 1.1.0.1 — SYNCHRONIZED HARDENING CANDIDATE
+
+This patch keeps the 1.1 OpenAstro bridge and adds the final local V3 safety/package work that had not yet reached GitHub: frozen acquisition provenance, exact one-shot control-token matching, stronger state cleanup/persistence, full SyntheticCheck persistence coverage, and complete production-vs-field-test Synthetic Lab isolation.
+
+---
+
+# 1.1.0.0 OPENASTRO REMOTE MONITOR — RELEASED
 
 Goal: allow the user's modified ASIAIR/OpenAstro Control panel to become the single remote-facing session monitor while N.I.N.A./QSM remains private on the trusted LAN/Tailscale network.
 

@@ -122,7 +122,7 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
 
         if (previousItem != null && nextItem == null && !blockResultConsumed) {
             blockResultConsumed = true;
-            var result = WaitForNextLiveResult(blockStartFrameIndex);
+            var result = WaitForNextLiveResult(blockStartFrameIndex, controlToken);
             if (result == null) {
                 RuntimeFault = true;
                 RuntimeFaultText = $"No QSM classification arrived within {ClassificationTimeoutSeconds}s. Quality-controlled loop stopped fail-safe.";
@@ -140,12 +140,13 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         return !RuntimeFault && !IsComplete;
     }
 
-    private FrameQualityResult WaitForNextLiveResult(int afterFrameIndex) {
+    private FrameQualityResult WaitForNextLiveResult(int afterFrameIndex, string expectedControlToken) {
         var runtime = QualitySessionRuntimeRegistry.Current;
         if (runtime == null || runtime.IsSyntheticMode || !runtime.Settings.Enabled) return null;
 
         var existing = runtime.Store.Results
-            .Where(r => r.FrameIndex > Math.Max(afterFrameIndex, LastAccountedFrameIndex) && r.QsmControlled)
+            .Where(r => r.FrameIndex > Math.Max(afterFrameIndex, LastAccountedFrameIndex) &&
+                        r.QsmControlled && string.Equals(r.QsmControlToken, expectedControlToken, StringComparison.Ordinal))
             .OrderBy(r => r.FrameIndex)
             .FirstOrDefault();
         if (existing != null) return existing;
@@ -154,6 +155,7 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         EventHandler<FrameQualityResult> handler = null;
         handler = (_, result) => {
             if (result == null || runtime.IsSyntheticMode || !result.QsmControlled) return;
+            if (!string.Equals(result.QsmControlToken, expectedControlToken, StringComparison.Ordinal)) return;
             if (result.FrameIndex <= Math.Max(afterFrameIndex, LastAccountedFrameIndex)) return;
             tcs.TrySetResult(result);
         };
@@ -161,7 +163,8 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         runtime.FrameProcessed += handler;
         try {
             existing = runtime.Store.Results
-                .Where(r => r.FrameIndex > Math.Max(afterFrameIndex, LastAccountedFrameIndex) && r.QsmControlled)
+                .Where(r => r.FrameIndex > Math.Max(afterFrameIndex, LastAccountedFrameIndex) &&
+                        r.QsmControlled && string.Equals(r.QsmControlToken, expectedControlToken, StringComparison.Ordinal))
                 .OrderBy(r => r.FrameIndex)
                 .FirstOrDefault();
             if (existing != null) return existing;

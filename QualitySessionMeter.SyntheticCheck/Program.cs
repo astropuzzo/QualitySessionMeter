@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using NINA.Plugin.QualitySessionMeter.Core;
 using NINA.Plugin.QualitySessionMeter.Models;
 using NINA.Plugin.QualitySessionMeter.Sequencer;
@@ -86,6 +87,7 @@ failures.AddRange(SyntheticGuidePatternOracle.Run());
 failures.AddRange(SyntheticTrendOracle.Run());
 RunV3ValidTargetOracle(failures);
 RunV3SourcePolicyOracle(failures);
+RunV3ConditionPersistenceOracle(failures);
 await ValidateFileActions(outputRoot, failures);
 
 var verdict = failures.Count == 0 ? "PASS" : "FAIL";
@@ -105,7 +107,8 @@ await File.WriteAllLinesAsync(
         $"Frames exercised: {totalFrames}",
         $"Failures: {failures.Count}",
         "V3 valid-frame accounting oracle: executed",
-        "V3 source/file-action safety oracle: executed"
+        "V3 source/file-action safety oracle: executed",
+        "V3 condition persistence/clone oracle: executed"
     }.Concat(scenarios.Select(x => $"- {x.DisplayName}: {x.ExpectedSummary}"))
      .Concat(failures.Select(x => "FAIL: " + x)));
 
@@ -183,7 +186,7 @@ static void ValidateArtifacts(SyntheticSessionDefinition scenario, SessionStore 
             var frameCount = frames.GetArrayLength();
             if (captured != expectedFrames || frameCount != expectedFrames) failures.Add($"{scenario.DisplayName}: session.json expected {expectedFrames} frames, got captured={captured}, frames={frameCount}");
             if (frameCount > 0) {
-                foreach (var required in new[] { "ConfidenceScore", "GuidePattern", "StarTrendKind", "BackgroundTrendKind", "SourceKind", "SequenceTitle", "QsmControlled", "FileActionEligible" }) {
+                foreach (var required in new[] { "ConfidenceScore", "GuidePattern", "StarTrendKind", "BackgroundTrendKind", "SourceKind", "SequenceTitle", "QsmControlled", "ProvenanceFrozen", "FileActionEligible", "PredictiveWarning", "EnvironmentAvailable" }) {
                     if (!frames[0].TryGetProperty(required, out _)) failures.Add($"{scenario.DisplayName}: session.json missing frame field {required}");
                 }
             }
@@ -248,6 +251,23 @@ static void RunV3SourcePolicyOracle(List<string> failures) {
 
     var manualAll = FrameSourcePolicy.Resolve(MonitoringScope.AllLights, false, "");
     if (!manualAll.MonitoringEligible || manualAll.FileActionEligible) failures.Add("V3 AllLights should monitor manual LIGHTs but must never authorize their file mutation.");
+
+    var runningWithoutMetadata = FrameSourcePolicy.Resolve(MonitoringScope.AdvancedSequencerLights, false, "", true);
+    if (!runningWithoutMetadata.MonitoringEligible || runningWithoutMetadata.FileActionEligible) failures.Add("V3 live sequencer evidence may authorize monitoring but must not authorize file mutation without stable sequence metadata or explicit QSM arm.");
+}
+
+static void RunV3ConditionPersistenceOracle(List<string> failures) {
+    const string persistedJson = "{\"TargetValidFrames\":10,\"CountWarningsAsValid\":false,\"ClassificationTimeoutSeconds\":25,\"ValidFrames\":7,\"CapturedFrames\":12,\"RejectedFrames\":3,\"WarningFrames\":1,\"LearningFrames\":1,\"ErrorFrames\":0,\"LastAccountedFrameIndex\":42,\"LastStatus\":\"ACCEPTED\",\"LastCause\":\"STABLE\",\"RuntimeFault\":false,\"RuntimeFaultText\":\"\"}";
+    var restored = JsonConvert.DeserializeObject<QsmValidFrameTargetCondition>(persistedJson);
+    if (restored == null || restored.TargetValidFrames != 10 || restored.ValidFrames != 7 || restored.CapturedFrames != 12 || restored.RejectedFrames != 3 || restored.LastAccountedFrameIndex != 42 || restored.CountWarningsAsValid) {
+        failures.Add("V3 Valid Frame Target persistence oracle failed to restore progress/configuration from JSON.");
+        return;
+    }
+
+    var clone = restored.Clone() as QsmValidFrameTargetCondition;
+    if (clone == null || clone.TargetValidFrames != 10 || clone.ClassificationTimeoutSeconds != 25 || clone.CountWarningsAsValid || clone.ValidFrames != 0 || clone.CapturedFrames != 0) {
+        failures.Add("V3 Valid Frame Target clone oracle expected configuration to copy while runtime progress resets like N.I.N.A. built-in conditions.");
+    }
 }
 
 static async Task ValidateFileActions(string outputRoot, List<string> failures) {

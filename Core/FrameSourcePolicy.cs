@@ -24,8 +24,8 @@ public static class FrameSourcePolicy {
             _ => false
         };
 
-        // Monitoring may use transient evidence that Advanced Sequencer is currently running,
-        // but file mutation requires durable provenance: explicit QSM control or sequence metadata.
+        // Monitoring may use live Advanced Sequencer evidence, but filesystem mutation is stricter:
+        // require an explicit QSM arm or sequence metadata that survives asynchronous saving.
         bool fileActionEligible = monitoringEligible && (controlled || hasSequenceMetadata);
 
         return new FrameSourceInfo {

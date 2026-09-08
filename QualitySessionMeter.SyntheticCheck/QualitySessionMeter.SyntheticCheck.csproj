@@ -9,6 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\QualitySessionMeter.csproj" />
+    <ProjectReference Include="..\QualitySessionMeter.csproj" AdditionalProperties="QsmDevelopmentBuild=true" />
   </ItemGroup>
 </Project>

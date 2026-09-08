@@ -89,11 +89,14 @@ public sealed class SessionStore {
         if (!exists) {
             await writer.WriteLineAsync(
                 "Frame,TimestampUtc,Filename,Target,Filter,Exposure,Gain,BinX,BinY," +
+                "SourceKind,SequenceTitle,QsmControlled,ProvenanceFrozen,FileActionEligible," +
                 "Stars,StarsBaseline,StarsDeltaPct,StarTrendUsable,StarTrendExpected,StarTrendPctPerFrame,StarTrendR2,StarTrendResidualPct,StarTrendKind," +
                 "Background,BackgroundBaseline,BackgroundDeltaPct,BackgroundTrendUsable,BackgroundTrendExpected,BackgroundTrendPctPerFrame,BackgroundTrendR2,BackgroundTrendResidualPct,BackgroundTrendKind," +
                 "GuideSamples,GuideRMS,MaxGuideExcursion,SustainedExcursionSeconds,GuidePattern,GuidePatternConfidence,GuideDriftArcsecPerMinute,GuideOscillationRangeArcsec,GuidePatternSignChanges,GuidePatternBurstiness,GuidePatternDetail," +
                 "GuidingQuality,StabilityQuality,TransparencyQuality,BackgroundQuality,OverallQuality," +
                 "Confidence,ConfidenceLabel,ConfidenceDataCompleteness,ConfidenceBaselineMaturity,ConfidenceThresholdSeparation,ConfidenceAgreement,ConfidenceReason," +
+                "PredictiveWarning,PredictiveConfidence,PredictiveChannel,PredictiveMessage,PredictiveFramesToThreshold," +
+                "EnvironmentAvailable,CloudCover,Humidity,WindSpeed,WindGust,SkyQuality,AmbientTemperature,DewPoint,EnvironmentalHint," +
                 "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly");
         }
 
@@ -102,6 +105,7 @@ public sealed class SessionStore {
             r.TimestampUtc.ToString("O", CultureInfo.InvariantCulture),
             Csv(r.FinalPath ?? r.OriginalPath), Csv(r.Target), Csv(r.Filter), Num(r.ExposureSeconds),
             r.Gain.ToString(CultureInfo.InvariantCulture), r.BinX.ToString(CultureInfo.InvariantCulture), r.BinY.ToString(CultureInfo.InvariantCulture),
+            r.SourceKind.ToString(), Csv(r.SequenceTitle), Bool(r.QsmControlled), Bool(r.ProvenanceFrozen), Bool(r.FileActionEligible),
 
             r.StarCount.ToString(CultureInfo.InvariantCulture), Num(r.StarBaseline), Num(r.StarDeviationPercent), Bool(r.StarTrendUsable),
             Num(r.StarTrendExpected), Num(r.StarTrendPercentPerFrame), Num(r.StarTrendR2), Num(r.StarTrendResidualPercent), r.StarTrendKind.ToString(),
@@ -116,6 +120,9 @@ public sealed class SessionStore {
             Num(r.GuidingQuality), Num(r.StabilityQuality), Num(r.TransparencyQuality), Num(r.BackgroundQuality), Num(r.OverallQuality),
             Num(r.ConfidenceScore), Csv(r.ConfidenceLabel), Num(r.ConfidenceDataCompleteness), Num(r.ConfidenceBaselineMaturity),
             Num(r.ConfidenceThresholdSeparation), Num(r.ConfidenceAgreement), Csv(r.ConfidenceReason),
+            Bool(r.PredictiveWarning), Num(r.PredictiveConfidence), Csv(r.PredictiveChannel), Csv(r.PredictiveMessage), Num(r.PredictiveFramesToThreshold),
+            Bool(r.EnvironmentAvailable), Num(r.CloudCover), Num(r.Humidity), Num(r.WindSpeed), Num(r.WindGust), Num(r.SkyQuality),
+            Num(r.AmbientTemperature), Num(r.DewPoint), Csv(r.EnvironmentalHint),
             r.Status.ToString(), Csv(r.ReasonText), Csv(r.ProbableCause), Csv(r.ErrorMessage), Bool(r.MonitorOnly)
         };
         await writer.WriteLineAsync(string.Join(",", fields));

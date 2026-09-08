@@ -16,13 +16,17 @@
     <Description>Real-time quality control, smart session analysis and accepted-frame acquisition for N.I.N.A.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
-    <Version>1.1.0.0</Version>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
+    <Version>1.1.0.1</Version>
+    <AssemblyVersion>1.1.0.1</AssemblyVersion>
+    <FileVersion>1.1.0.1</FileVersion>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
     <QsmDevelopmentBuild Condition="'$(QsmDevelopmentBuild)' == ''">false</QsmDevelopmentBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(QsmDevelopmentBuild)' == 'true'">
+    <DefineConstants>$(DefineConstants);QSM_DEVELOPMENT</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,6 +35,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(QsmDevelopmentBuild)' != 'true'">
+    <Compile Remove="Synthetic\**\*.cs" />
     <Compile Remove="UI\SyntheticLabDockable.cs" />
     <Compile Remove="UI\SyntheticResources.xaml.cs" />
     <Page Remove="UI\SyntheticResources.xaml" />

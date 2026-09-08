@@ -4,7 +4,9 @@ using NINA.Equipment.Model;
 using NINA.Image.ImageAnalysis;
 using NINA.Plugin.QualitySessionMeter.Models;
 using NINA.Plugin.QualitySessionMeter.Settings;
+#if QSM_DEVELOPMENT
 using NINA.Plugin.QualitySessionMeter.Synthetic;
+#endif
 using NINA.Profile.Interfaces;
 using NINA.Sequencer.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.Mediator;
@@ -34,6 +36,9 @@ public sealed class QualitySessionRuntime : IDisposable {
     private readonly SemaphoreSlim processingLock = new(1, 1);
     private readonly object controlSync = new();
     private readonly HashSet<string> controlTokens = new(StringComparer.Ordinal);
+    private readonly HashSet<string> reservedControlTokens = new(StringComparer.Ordinal);
+    private readonly object sourceSync = new();
+    private readonly List<PendingFrameSource> pendingSources = new();
     private readonly HashSet<string> appliedCalibrationContexts = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> ignoredCalibrationContexts = new(StringComparer.OrdinalIgnoreCase);
     private IWeatherDataMediator weatherDataMediator;
@@ -41,6 +46,7 @@ public sealed class QualitySessionRuntime : IDisposable {
     private bool disposed;
     private CalibrationSuggestion currentCalibrationSuggestion = new();
 
+#if QSM_DEVELOPMENT
     private CancellationTokenSource syntheticCts;
     private BaselineEngine syntheticBaseline;
     private SessionStore syntheticSessionStore;
@@ -52,14 +58,18 @@ public sealed class QualitySessionRuntime : IDisposable {
     private string syntheticLastScenario = "";
     private string syntheticFailureSummary = "";
     private string syntheticSessionName = "";
+#endif
 
     public event EventHandler<FrameQualityResult> FrameProcessed;
+#if QSM_DEVELOPMENT
     public event EventHandler SyntheticStateChanged;
+#endif
     public event EventHandler CalibrationSuggestionChanged;
 
     public QualitySettings Settings => settings;
     public SessionStore Store => sessionStore;
     public CalibrationSuggestion CurrentCalibrationSuggestion => currentCalibrationSuggestion;
+#if QSM_DEVELOPMENT
     public bool IsSyntheticMode { get; private set; }
     public bool IsSyntheticRunning { get; private set; }
     public int SyntheticProcessed => syntheticProcessed;
@@ -72,6 +82,11 @@ public sealed class QualitySessionRuntime : IDisposable {
     public string ActiveSessionFolder => IsSyntheticMode
         ? syntheticSessionStore?.SessionFolder ?? ""
         : sessionStore.SessionFolder;
+#else
+    public bool IsSyntheticMode => false;
+    public bool IsSyntheticRunning => false;
+    public string ActiveSessionFolder => sessionStore.SessionFolder;
+#endif
     public bool IsSequencerControlArmed { get { lock (controlSync) return controlTokens.Count > 0; } }
 
     public QualitySessionRuntime(
@@ -103,7 +118,10 @@ public sealed class QualitySessionRuntime : IDisposable {
 
     public void DisarmSequencerControl(string token) {
         if (string.IsNullOrWhiteSpace(token)) return;
-        lock (controlSync) controlTokens.Remove(token);
+        lock (controlSync) {
+            controlTokens.Remove(token);
+            reservedControlTokens.Remove(token);
+        }
     }
 
     public GuideExposureMetrics GetRecentGuideMetrics(double lookbackSeconds = 10) =>
@@ -141,15 +159,78 @@ public sealed class QualitySessionRuntime : IDisposable {
         if (Finite(s.SuggestedBackgroundDecreasePercent)) settings.MaxBackgroundDecreasePercent = Math.Min(s.SuggestedBackgroundDecreasePercent, settings.AutoSafetyMaxBackgroundPercent);
     }
 
-    private FrameSourceInfo ResolveSource(string sequenceTitle) =>
-        FrameSourcePolicy.Resolve(settings.MonitoringScope, IsSequencerControlArmed, sequenceTitle);
+    private bool TryReserveControlToken(out string token) {
+        lock (controlSync) {
+            token = controlTokens.FirstOrDefault(x => !reservedControlTokens.Contains(x)) ?? "";
+            if (string.IsNullOrWhiteSpace(token)) return false;
+            reservedControlTokens.Add(token);
+            return true;
+        }
+    }
+
+    private bool HasAdvancedSequenceEvidence() {
+        try {
+            if (!sequenceMediator.IsAdvancedSequenceRunning()) return false;
+            var running = sequenceMediator.GetAdvancedSequencerCurrentRunningItems();
+            return running != null && running.Count > 0;
+        } catch {
+            return false;
+        }
+    }
+
+    private FrameSourceInfo CaptureSource(string sequenceTitle) {
+        bool controlled = TryReserveControlToken(out var token);
+        var resolved = FrameSourcePolicy.Resolve(
+            settings.MonitoringScope,
+            controlled,
+            sequenceTitle,
+            HasAdvancedSequenceEvidence());
+        return new FrameSourceInfo {
+            Kind = resolved.Kind,
+            SequenceTitle = resolved.SequenceTitle,
+            QsmControlled = resolved.QsmControlled,
+            MonitoringEligible = resolved.MonitoringEligible,
+            FileActionEligible = resolved.FileActionEligible,
+            ControlToken = token,
+            ProvenanceFrozen = true
+        };
+    }
+
+    private void FreezeSource(int imageId, int exposureNumber, DateTime exposureStart, FrameSourceInfo source) {
+        lock (sourceSync) {
+            var cutoff = DateTime.UtcNow.AddMinutes(-10);
+            pendingSources.RemoveAll(x => x.CapturedUtc < cutoff);
+            pendingSources.Add(new PendingFrameSource(
+                imageId,
+                exposureNumber,
+                NormalizeUtc(exposureStart),
+                source,
+                DateTime.UtcNow));
+        }
+    }
+
+    private bool TryTakeFrozenSource(int imageId, int exposureNumber, DateTime exposureStart, out FrameSourceInfo source) {
+        source = null;
+        var normalized = NormalizeUtc(exposureStart);
+        lock (sourceSync) {
+            var cutoff = DateTime.UtcNow.AddMinutes(-10);
+            pendingSources.RemoveAll(x => x.CapturedUtc < cutoff);
+            int index = pendingSources.FindIndex(x => x.Matches(imageId, exposureNumber, normalized));
+            if (index < 0) return false;
+            source = pendingSources[index].Source;
+            pendingSources.RemoveAt(index);
+            return true;
+        }
+    }
 
     private async Task BeforeFinalizeImageSaved(object sender, BeforeFinalizeImageSavedEventArgs e) {
         if (IsSyntheticMode) return;
         if (!settings.Enabled || e?.Image?.RawImageData?.MetaData?.Image == null) return;
         if (e.Image.RawImageData.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
 
-        var source = ResolveSource(e.Image.RawImageData.MetaData.Sequence?.Title ?? "");
+        var meta = e.Image.RawImageData.MetaData;
+        var source = CaptureSource(meta.Sequence?.Title ?? "");
+        FreezeSource(meta.Image.Id, meta.Image.ExposureNumber, meta.Image.ExposureStart, source);
         if (!source.MonitoringEligible) return;
 
         try {
@@ -177,7 +258,14 @@ public sealed class QualitySessionRuntime : IDisposable {
         if (!settings.Enabled || e?.MetaData?.Image == null) return;
         if (e.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
 
-        var source = ResolveSource(e.MetaData.Sequence?.Title ?? "");
+        if (!TryTakeFrozenSource(
+                e.MetaData.Image.Id,
+                e.MetaData.Image.ExposureNumber,
+                e.MetaData.Image.ExposureStart,
+                out var source)) {
+            Logger.Warning("QualitySessionMeter ignored a LIGHT because its acquisition provenance was not frozen before finalization.");
+            return;
+        }
         if (!source.MonitoringEligible) {
             Logger.Debug($"QualitySessionMeter ignored LIGHT from {source.SourceText}; scope={settings.MonitoringScope}.");
             return;
@@ -235,6 +323,8 @@ public sealed class QualitySessionRuntime : IDisposable {
             result.SequenceTitle = source.SequenceTitle;
             result.QsmControlled = source.QsmControlled;
             result.FileActionEligible = source.FileActionEligible;
+            result.ProvenanceFrozen = source.ProvenanceFrozen;
+            result.QsmControlToken = source.ControlToken;
 
             var prediction = predictiveEngine.Evaluate(sessionStore.Results, result, settings);
             result.PredictiveWarning = prediction.Warning;
@@ -281,6 +371,8 @@ public sealed class QualitySessionRuntime : IDisposable {
                 SequenceTitle = source.SequenceTitle,
                 QsmControlled = source.QsmControlled,
                 FileActionEligible = source.FileActionEligible,
+                ProvenanceFrozen = source.ProvenanceFrozen,
+                QsmControlToken = source.ControlToken,
                 Status = FrameStatus.Error,
                 OverallQuality = 0,
                 ErrorMessage = ex.Message,
@@ -317,6 +409,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         }
     }
 
+#if QSM_DEVELOPMENT
     public Task RunCanonicalSyntheticSessionAsync(int frameDelayMs = 150) =>
         RunSyntheticSessionAsync(SyntheticSessionGenerator.CanonicalScenarioId, frameDelayMs);
 
@@ -516,6 +609,7 @@ public sealed class QualitySessionRuntime : IDisposable {
     }
 
     private void RaiseSyntheticStateChanged() => SyntheticStateChanged?.Invoke(this, EventArgs.Empty);
+#endif
 
     public void ResetSession() {
         processingLock.Wait();
@@ -526,6 +620,11 @@ public sealed class QualitySessionRuntime : IDisposable {
             appliedCalibrationContexts.Clear();
             ignoredCalibrationContexts.Clear();
             currentCalibrationSuggestion = new CalibrationSuggestion();
+            lock (sourceSync) pendingSources.Clear();
+            lock (controlSync) {
+                controlTokens.Clear();
+                reservedControlTokens.Clear();
+            }
         } finally {
             processingLock.Release();
         }
@@ -543,15 +642,36 @@ public sealed class QualitySessionRuntime : IDisposable {
 
     private static bool Finite(double x) => !double.IsNaN(x) && !double.IsInfinity(x);
 
+    private sealed record PendingFrameSource(
+        int ImageId,
+        int ExposureNumber,
+        DateTime ExposureStartUtc,
+        FrameSourceInfo Source,
+        DateTime CapturedUtc) {
+
+        public bool Matches(int imageId, int exposureNumber, DateTime exposureStartUtc) {
+            if (ImageId >= 0 && imageId >= 0) return ImageId == imageId;
+            if (ExposureNumber >= 0 && exposureNumber >= 0 && ExposureNumber != exposureNumber) return false;
+            if (ExposureStartUtc == DateTime.MinValue || exposureStartUtc == DateTime.MinValue) return ExposureNumber == exposureNumber;
+            return Math.Abs((ExposureStartUtc - exposureStartUtc).TotalSeconds) <= 1.0;
+        }
+    }
+
     public void Dispose() {
         if (disposed) return;
         disposed = true;
+#if QSM_DEVELOPMENT
         syntheticCts?.Cancel();
         syntheticCts?.Dispose();
+#endif
         imageSaveMediator.BeforeFinalizeImageSaved -= BeforeFinalizeImageSaved;
         imageSaveMediator.ImageSaved -= ImageSaved;
         guideCollector.Dispose();
-        lock (controlSync) controlTokens.Clear();
+        lock (controlSync) {
+            controlTokens.Clear();
+            reservedControlTokens.Clear();
+        }
+        lock (sourceSync) pendingSources.Clear();
         processingLock.Dispose();
     }
 }

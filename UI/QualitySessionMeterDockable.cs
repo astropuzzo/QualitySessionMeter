@@ -24,7 +24,9 @@ namespace NINA.Plugin.QualitySessionMeter.UI;
 [Export(typeof(IDockableVM))]
 public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     private readonly QualitySessionRuntime runtime;
+#if QSM_DEVELOPMENT
     private bool lastSyntheticMode;
+#endif
 
     public override bool IsTool { get; } = true;
 
@@ -40,12 +42,14 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         private set { currentFrame = value; RaisePropertyChanged(); RaiseAllSummary(); }
     }
 
+#if QSM_DEVELOPMENT
     private int syntheticDelayMs = 150;
     public int SyntheticDelayMs {
         get => syntheticDelayMs;
         set { syntheticDelayMs = Math.Clamp(value, 0, 5000); RaisePropertyChanged(); }
     }
 
+#endif
     public int Captured => Frames.Count;
     public int Accepted => Frames.Count(x => x.Status == FrameStatus.Accepted);
     public int Warning => Frames.Count(x => x.Status == FrameStatus.Warning);
@@ -58,6 +62,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public double SessionQuality => Frames.Where(x => x.IsUsable).Select(x => x.OverallQuality).DefaultIfEmpty(0).Average();
     public double SessionConfidence => Frames.Where(x => x.IsUsable && !double.IsNaN(x.ConfidenceScore) && !double.IsInfinity(x.ConfidenceScore)).Select(x => x.ConfidenceScore).DefaultIfEmpty(0).Average();
     public string SessionFolder => runtime.ActiveSessionFolder;
+#if QSM_DEVELOPMENT
     public bool IsSyntheticMode => runtime.IsSyntheticMode;
     public bool IsSyntheticRunning => runtime.IsSyntheticRunning;
     public bool IsLiveMode => !runtime.IsSyntheticMode;
@@ -65,20 +70,28 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public string SyntheticProgress => runtime.SyntheticTotal <= 0 ? "0 / 0" : $"{runtime.SyntheticProcessed} / {runtime.SyntheticTotal}";
     public string SyntheticLastScenario => runtime.SyntheticLastScenario;
     public string SyntheticFailureSummary => runtime.SyntheticFailureSummary;
-    public string ModeText => runtime.IsSyntheticMode
-        ? "SYNTHETIC LAB — NO CAMERA / NO REAL FILES"
-        : !Settings.Enabled
-            ? "QSM OFF — NO ANALYSIS / NO FILE ACTIONS"
-            : Settings.MonitorOnly
-                ? $"MONITOR ONLY · {Settings.MonitoringScope}"
-                : $"ACTIVE REJECT HANDLING · {Settings.MonitoringScope}";
+#endif
+    public string ModeText {
+        get {
+#if QSM_DEVELOPMENT
+            if (runtime.IsSyntheticMode) return "SYNTHETIC LAB — NO CAMERA / NO REAL FILES";
+#endif
+            return !Settings.Enabled
+                ? "QSM OFF — NO ANALYSIS / NO FILE ACTIONS"
+                : Settings.MonitorOnly
+                    ? $"MONITOR ONLY · {Settings.MonitoringScope}"
+                    : $"ACTIVE REJECT HANDLING · {Settings.MonitoringScope}";
+        }
+    }
 
     public ICommand ResetSessionCommand { get; }
     public ICommand OpenSessionFolderCommand { get; }
     public ICommand OpenReportCommand { get; }
+#if QSM_DEVELOPMENT
     public ICommand RunSyntheticSessionCommand { get; }
     public ICommand StopSyntheticSessionCommand { get; }
     public ICommand ReturnToLiveCommand { get; }
+#endif
 
     [ImportingConstructor]
     public QualitySessionMeterDockable(
@@ -93,22 +106,29 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         var accessor = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         var settings = new QualitySettings(accessor);
         runtime = QualitySessionRuntimeRegistry.GetOrCreate(profileService, imageSaveMediator, guiderMediator, sequenceMediator, settings);
+#if QSM_DEVELOPMENT
         lastSyntheticMode = runtime.IsSyntheticMode;
+#endif
 
         ReloadLiveFrames();
 
         runtime.FrameProcessed += RuntimeFrameProcessed;
+#if QSM_DEVELOPMENT
         runtime.SyntheticStateChanged += RuntimeSyntheticStateChanged;
+#endif
         Settings.PropertyChanged += SettingsChanged;
 
         ResetSessionCommand = new RelayCommand(ResetSession);
         OpenSessionFolderCommand = new RelayCommand(OpenSessionFolder);
         OpenReportCommand = new RelayCommand(OpenReport);
+#if QSM_DEVELOPMENT
         RunSyntheticSessionCommand = new AsyncRelayCommand(RunSyntheticSessionAsync);
         StopSyntheticSessionCommand = new RelayCommand(runtime.StopSyntheticSession);
         ReturnToLiveCommand = new RelayCommand(ReturnToLive);
+#endif
     }
 
+#if QSM_DEVELOPMENT
     private async Task RunSyntheticSessionAsync() {
         if (!runtime.IsSyntheticMode) {
             Frames.Clear();
@@ -122,6 +142,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
 
     private void ReturnToLive() => runtime.ExitSyntheticMode();
 
+#endif
     private void ReloadLiveFrames() {
         Frames.Clear();
         foreach (var frame in runtime.Store.Results.TakeLast(500)) Frames.Add(frame);
@@ -144,6 +165,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         else Apply();
     }
 
+#if QSM_DEVELOPMENT
     private void RuntimeSyntheticStateChanged(object sender, EventArgs e) {
         void Apply() {
             bool nowSynthetic = runtime.IsSyntheticMode;
@@ -175,6 +197,8 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         else Apply();
     }
 
+#endif
+
     private void SettingsChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e) => RaisePropertyChanged(nameof(ModeText));
 
     private void RefreshDerivedViews() {
@@ -196,7 +220,9 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     }
 
     private void ResetSession() {
+#if QSM_DEVELOPMENT
         if (runtime.IsSyntheticMode) return;
+#endif
         runtime.ResetSession();
         Frames.Clear();
         CurrentFrame = null;
@@ -232,6 +258,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         RaisePropertyChanged(nameof(SessionConfidence));
         RaisePropertyChanged(nameof(SessionFolder));
         RaisePropertyChanged(nameof(ModeText));
+#if QSM_DEVELOPMENT
         RaisePropertyChanged(nameof(IsSyntheticMode));
         RaisePropertyChanged(nameof(IsSyntheticRunning));
         RaisePropertyChanged(nameof(IsLiveMode));
@@ -239,11 +266,14 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         RaisePropertyChanged(nameof(SyntheticProgress));
         RaisePropertyChanged(nameof(SyntheticLastScenario));
         RaisePropertyChanged(nameof(SyntheticFailureSummary));
+#endif
     }
 
     public void Dispose() {
         runtime.FrameProcessed -= RuntimeFrameProcessed;
+#if QSM_DEVELOPMENT
         runtime.SyntheticStateChanged -= RuntimeSyntheticStateChanged;
+#endif
         Settings.PropertyChanged -= SettingsChanged;
     }
 }

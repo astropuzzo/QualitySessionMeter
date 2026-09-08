@@ -2,6 +2,33 @@
 
 All notable changes to QualitySessionMeter are documented here.
 
+## [1.1.0.1] - 2026-09-08
+
+### Local/GitHub synchronization and V3 safety hardening
+
+- Synchronized the final local V3 hardening work onto the released `1.1.0.0` OpenAstro bridge line instead of regressing to the older 1.0 branch.
+- Production builds now compile out the complete `Synthetic/**` implementation plus Synthetic Lab dockable/resources; field-test builds retain the full simulator behind `QSM_DEVELOPMENT`.
+- Acquisition provenance is frozen before asynchronous image saving and paired with one-shot QSM control tokens, so `QSM Valid Frame Target` consumes only the classification belonging to its own controlled iteration.
+- Added reserved-token and pending-source cleanup across disarm/reset/dispose paths.
+- Expanded CSV/session persistence for provenance, prediction and environment diagnostics.
+- Extended SyntheticCheck with frozen-provenance fields, live-sequencer source-policy coverage and Valid Frame Target persistence/clone regression.
+- Strengthened GitHub Actions source-set gates so production fails if Synthetic Lab implementation leaks in, while field-test must contain the complete simulator.
+- Keeps the `1.1.0.0` tokenized read-only OpenAstro HTTP bridge, live guider telemetry and latest-LIGHT JPEG preview intact.
+- Bumped plugin/file/assembly version to `1.1.0.1`.
+
+---
+
+## [1.1.0.0] - 2026-09-08
+
+### OpenAstro remote monitor bridge
+
+- Added the optional tokenized read-only HTTP bridge for the modified OpenAstro/ASIAIR monitor path.
+- Added authenticated snapshot telemetry, true live guider samples and an in-memory latest-LIGHT JPEG preview without exposing raw FITS/XISF files.
+- Bridge remains disabled unless `QSM_REMOTE_TOKEN` is configured; no remote write/control routes are exposed.
+- Bumped plugin/file/assembly version to `1.1.0.0`.
+
+---
+
 ## [1.0.0.2] - 2026-09-07
 
 ### Timeline readability / reference model

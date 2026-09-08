@@ -10,11 +10,14 @@ The core idea is simple: a camera exposure being completed does not automaticall
 
 ## Status
 
-- **V1:** implemented and compiling against `NINA.Plugin 3.2.0.9001`
-- Target framework: `.NET 8` / `net8.0-windows7.0`
-- CI: Windows build through GitHub Actions
-- Default operating mode: **Monitor Only**
-- V2/V3: planned; see [ROADMAP.md](ROADMAP.md)
+- **1.1.0.1 / V3 + OpenAstro remote monitor:** current synchronized field-test/production line on `main`. V3 quality-controlled acquisition is merged; the read-only OpenAstro HTTP bridge is included; this patch carries the final local provenance/token/package-isolation hardening.
+- Runtime target: **N.I.N.A. 3.3 NIGHTLY #057** (`3.3.0.1057`) / `NINA.Plugin 3.3.0.1057-nightly`.
+- Target framework: **.NET 10** / `net10.0-windows7.0`.
+- Default operating mode: **OFF until explicitly enabled**; when enabled, **Monitor Only** remains the safe default for file handling.
+- Production package excludes Synthetic Lab code and UI; the field-test/development package retains the complete lab for deterministic host validation.
+- CI: Windows build + full V1/V2/V3 synthetic regression + production/field-test packaging gates through GitHub Actions.
+- OpenAstro remote monitor bridge: tokenized read-only snapshot, true live guider telemetry and in-memory latest-LIGHT JPEG preview.
+- See [ROADMAP.md](ROADMAP.md) for the exact release-hardening state and safety constraints.
 
 ## Why this plugin exists
 
