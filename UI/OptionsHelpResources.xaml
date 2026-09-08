@@ -156,7 +156,7 @@
                     </StackPanel>
                 </GroupBox>
 
-                <GroupBox Header="Quality score &amp; rejected files">
+                <GroupBox Header="Quality score &amp; rejected files" Margin="0,0,0,10">
                     <StackPanel Margin="10">
                         <Grid Margin="0,3">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
@@ -177,6 +177,58 @@
                             </ComboBox>
                         </Grid>
                         <TextBlock Margin="0,9,0,0" Style="{StaticResource QsmOptHint}" Text="Safety: QSM never deletes frames. File actions require Monitor only OFF and eligible V3 acquisition provenance."/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Web Dashboard" Margin="0,0,0,10">
+                    <StackPanel Margin="10">
+                        <Grid ToolTip="Starts a self-contained, read-only QSM dashboard on this N.I.N.A. computer. Open the shown address from a phone, tablet or another computer that can reach this machine over LAN or VPN.">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Enable Web Dashboard" FontWeight="SemiBold"/>
+                                <TextBlock Text="Serve the QSM mobile dashboard directly from this PC." Style="{StaticResource QsmOptHint}"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Settings.WebDashboardEnabled}" VerticalAlignment="Center" Margin="18,0,0,0"/>
+                        </Grid>
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="Port" VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1" Text="{Binding Settings.WebDashboardPort, UpdateSourceTrigger=LostFocus}" ToolTip="Local TCP port used by the browser dashboard. Default: 18974."/>
+                            <TextBlock Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center" Style="{StaticResource QsmOptHint}" Text="Default 18974"/>
+                        </Grid>
+
+                        <Border Height="1" Opacity="0.15" Background="White" Margin="0,12"/>
+
+                        <Grid ToolTip="Optional. Leave this OFF for one-tap access on your own LAN/VPN. Turn it ON only if you want the dashboard itself to require a password.">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Require password" FontWeight="SemiBold"/>
+                                <TextBlock Text="Optional login for the browser dashboard." Style="{StaticResource QsmOptHint}"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Settings.WebDashboardRequirePassword}" VerticalAlignment="Center" Margin="18,0,0,0"/>
+                        </Grid>
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="210"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Set / replace password"/>
+                                <TextBlock Text="{Binding Settings.WebDashboardPasswordStatus}" Style="{StaticResource QsmOptHint}"/>
+                            </StackPanel>
+                            <PasswordBox Grid.Column="1" IsEnabled="{Binding Settings.WebDashboardRequirePassword}"
+                                         LostKeyboardFocus="DashboardPasswordLostFocus"
+                                         ToolTip="Type a new password, then leave this field. QSM stores only a salted PBKDF2 hash, not the clear-text password."/>
+                            <Button Grid.Column="2" Margin="8,0,0,0" Padding="10,4" Content="Clear saved password"
+                                    IsEnabled="{Binding Settings.WebDashboardPasswordConfigured}"
+                                    Click="ClearDashboardPassword"/>
+                        </Grid>
+
+                        <Border Height="1" Opacity="0.15" Background="White" Margin="0,12"/>
+
+                        <TextBlock Text="Dashboard address" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding WebDashboardAddress}" Margin="0,3,0,0" FontFamily="Consolas" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding WebDashboardStatus, StringFormat=Status: {0}}" Margin="0,3,0,0" Style="{StaticResource QsmOptHint}"/>
+                        <TextBlock Margin="0,8,0,0" Style="{StaticResource QsmOptHint}" Text="The dashboard is read-only. QSM does not open router ports or expose itself to the Internet. For access away from home, use your existing VPN/reverse-proxy setup. The existing tokenized OpenAstro API remains separate and unchanged."/>
                     </StackPanel>
                 </GroupBox>
             </StackPanel>
