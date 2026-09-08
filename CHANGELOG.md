@@ -2,6 +2,21 @@
 
 All notable changes to QualitySessionMeter are documented here.
 
+## [1.2.0.0] - 2026-09-08
+
+### Rejected-frame review and rich remote session visibility
+
+- Added a dedicated **Rejected Review** surface inside the N.I.N.A. dockable with filename, file disposition, Quality, Confidence, Guide RMS, star/background deltas and probable cause.
+- Selecting a real rejected row now loads its FITS/XISF into N.I.N.A.'s Image view through N.I.N.A.'s own `IImageDataFactory` + `IImagingMediator` pipeline for visual inspection.
+- Added **Undo BAD / restore filename** for QSM file actions. It restores the physical file to its original filename/location without deleting data.
+- Undoing a BAD file action deliberately does **not** rewrite the automatic QSM verdict or retroactively alter Advanced Sequencer valid-frame accounting; the original rejection remains an auditable automatic decision.
+- Added collision protection: restore refuses to overwrite an existing original filename.
+- Added regression coverage for restoring both `BAD_` prefixed files and files moved into the `Rejected` subfolder.
+- Expanded the read-only OpenAstro snapshot with current/original/final filenames, file-action state, sequence title, max guide excursion, guide-pattern diagnostics and synthetic-session name/status.
+- Bumped plugin/file/assembly version to `1.2.0.0`.
+
+---
+
 ## [1.1.0.2] - 2026-09-08
 
 ### Synthetic Lab remote monitor fix

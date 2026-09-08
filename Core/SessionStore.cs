@@ -61,6 +61,19 @@ public sealed class SessionStore {
         }
     }
 
+    public async Task RefreshArtifactsAsync() {
+        if (string.IsNullOrWhiteSpace(SessionFolder)) return;
+        await ioLock.WaitAsync();
+        try {
+            await WriteSummaryAsync();
+            await WriteEventsCsvAsync();
+            await WriteSvgAsync();
+            await WriteHtmlReportAsync();
+        } finally {
+            ioLock.Release();
+        }
+    }
+
     private void EnsureSession() {
         lock (sync) {
             if (!string.IsNullOrWhiteSpace(sessionFolder)) return;

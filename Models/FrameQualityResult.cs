@@ -154,6 +154,39 @@ public sealed class FrameQualityResult {
         ? "(unknown)"
         : System.IO.Path.GetFileName(FinalPath ?? OriginalPath);
 
+    public string OriginalFileName => string.IsNullOrWhiteSpace(OriginalPath)
+        ? "(unknown)"
+        : System.IO.Path.GetFileName(OriginalPath);
+
+    public string FinalFileName => string.IsNullOrWhiteSpace(FinalPath)
+        ? OriginalFileName
+        : System.IO.Path.GetFileName(FinalPath);
+
+    public bool IsSyntheticFile => (OriginalPath ?? "").StartsWith("SYNTHETIC://", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsBadFileApplied {
+        get {
+            if (Status != FrameStatus.Rejected || IsSyntheticFile) return false;
+            var path = FinalPath ?? OriginalPath ?? "";
+            var file = System.IO.Path.GetFileName(path);
+            var directory = System.IO.Path.GetDirectoryName(path) ?? "";
+            return file.StartsWith("BAD_", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(System.IO.Path.GetFileName(directory), "Rejected", StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(OriginalPath) && !string.Equals(path, OriginalPath, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public string FileDispositionText {
+        get {
+            if (IsSyntheticFile) return "SYNTHETIC";
+            if (Status != FrameStatus.Rejected) return "NORMAL";
+            var path = FinalPath ?? OriginalPath ?? "";
+            if (System.IO.Path.GetFileName(path).StartsWith("BAD_", StringComparison.OrdinalIgnoreCase)) return "BAD_ PREFIX";
+            if (string.Equals(System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(path) ?? ""), "Rejected", StringComparison.OrdinalIgnoreCase)) return "REJECTED FOLDER";
+            return IsBadFileApplied ? "FILE MOVED" : "KEPT";
+        }
+    }
+
     public string QualityText => Status is FrameStatus.Learning or FrameStatus.Error
         ? "—"
         : OverallQuality.ToString("0", CultureInfo.InvariantCulture);

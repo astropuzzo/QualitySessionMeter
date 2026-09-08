@@ -260,6 +260,37 @@
 
                 <Border Style="{StaticResource QsmCardStyle}">
                     <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="220"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <DockPanel>
+                            <TextBlock Text="REJECTED REVIEW — click a row to load the real FITS/XISF in N.I.N.A. Image" Style="{StaticResource QsmSectionTitle}"/>
+                            <TextBlock DockPanel.Dock="Right" Text="Automatic verdict is preserved for audit" Foreground="{StaticResource QsmSecondaryText}" FontSize="10"/>
+                        </DockPanel>
+                        <TextBlock Grid.Row="1" Text="{Binding ReviewMessage}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,0,0,7"/>
+                        <DataGrid Grid.Row="2" ItemsSource="{Binding RejectedFrames}" SelectedItem="{Binding SelectedRejectedFrame, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False" SelectionMode="Single">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/>
+                                <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="2*"/>
+                                <DataGridTextColumn Header="File action" Binding="{Binding FileDispositionText}" Width="105"/>
+                                <DataGridTextColumn Header="Q" Binding="{Binding QualityText}" Width="45"/>
+                                <DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="60"/>
+                                <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="66"/>
+                                <DataGridTextColumn Header="Stars Δ" Binding="{Binding StarDeltaText}" Width="72"/>
+                                <DataGridTextColumn Header="BG Δ" Binding="{Binding BackgroundDeltaText}" Width="72"/>
+                                <DataGridTextColumn Header="Cause" Binding="{Binding ProbableCause}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+                            <TextBlock Text="Selecting a real rejected file loads it for visual inspection; synthetic frames have no image file." Foreground="{StaticResource QsmSecondaryText}" FontSize="10" VerticalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                <Button Content="Open in N.I.N.A. Image" Command="{Binding OpenSelectedRejectedCommand}" IsEnabled="{Binding CanReviewSelectedRejected}" Margin="4,0" Padding="10,4"/>
+                                <Button Content="Undo BAD / restore filename" Command="{Binding RestoreSelectedRejectedCommand}" IsEnabled="{Binding CanRestoreSelectedRejected}" Margin="4,0" Padding="10,4" ToolTip="Restores the physical file to its original name/location. The QSM automatic rejection remains recorded in session history and does not retroactively change sequencer accounting."/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource QsmCardStyle}">
+                    <Grid>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="260"/></Grid.RowDefinitions>
                         <TextBlock Text="FRAME HISTORY" Style="{StaticResource QsmSectionTitle}"/>
                         <DataGrid Grid.Row="1" ItemsSource="{Binding Frames}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
@@ -268,6 +299,7 @@
                                 <DataGridTextColumn Header="Q" Binding="{Binding QualityText}" Width="45"/>
                                 <DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="58"/>
                                 <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="88"/>
+                                <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="180"/>
                                 <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="65"/>
                                 <DataGridTextColumn Header="Pattern" Binding="{Binding GuidePatternText}" Width="110"/>
                                 <DataGridTextColumn Header="Trend" Binding="{Binding TrendText}" Width="68"/>

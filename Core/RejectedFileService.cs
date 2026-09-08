@@ -32,6 +32,36 @@ public sealed class RejectedFileService {
         throw new IOException("Could not apply the configured rejected-file action after three attempts.", lastIo);
     }
 
+
+    public Task<string> RestoreAsync(FrameQualityResult frame) {
+        if (frame == null) throw new ArgumentNullException(nameof(frame));
+        if (frame.Status != FrameStatus.Rejected) throw new InvalidOperationException("Only rejected frames can have their BAD file action undone.");
+        if (frame.IsSyntheticFile) throw new InvalidOperationException("Synthetic frames do not have a real image file to restore.");
+
+        var current = !string.IsNullOrWhiteSpace(frame.FinalPath) ? frame.FinalPath : frame.OriginalPath;
+        if (string.IsNullOrWhiteSpace(current)) throw new InvalidOperationException("The rejected frame has no file path.");
+        if (!File.Exists(current)) throw new FileNotFoundException("The rejected image file no longer exists.", current);
+
+        string target = null;
+        if (!string.IsNullOrWhiteSpace(frame.OriginalPath) && !string.Equals(current, frame.OriginalPath, StringComparison.OrdinalIgnoreCase)) {
+            target = frame.OriginalPath;
+        } else {
+            var directory = Path.GetDirectoryName(current) ?? "";
+            var file = Path.GetFileName(current);
+            if (file.StartsWith("BAD_", StringComparison.OrdinalIgnoreCase)) {
+                target = Path.Combine(directory, file.Substring(4));
+            } else if (string.Equals(Path.GetFileName(directory), "Rejected", StringComparison.OrdinalIgnoreCase)) {
+                target = Path.Combine(Path.GetDirectoryName(directory) ?? directory, file);
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(target) || string.Equals(target, current, StringComparison.OrdinalIgnoreCase)) return Task.FromResult(current);
+        Directory.CreateDirectory(Path.GetDirectoryName(target) ?? "");
+        if (File.Exists(target)) throw new IOException($"Cannot undo BAD because the original filename already exists: {target}");
+        File.Move(current, target);
+        return Task.FromResult(target);
+    }
+
     private static string PrefixBad(string path) {
         var directory = Path.GetDirectoryName(path) ?? "";
         var file = Path.GetFileName(path);

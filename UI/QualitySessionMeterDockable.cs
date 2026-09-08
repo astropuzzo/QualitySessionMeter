@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.Input;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Interfaces.ViewModel;
+using PrepareImageParameters = NINA.Core.Utility.PrepareImageParameters;
+using NINA.Image.Interfaces;
 using NINA.Plugin.QualitySessionMeter.Core;
 using NINA.Plugin.QualitySessionMeter.Models;
 using NINA.Plugin.QualitySessionMeter.Settings;
@@ -15,6 +17,7 @@ using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -24,6 +27,8 @@ namespace NINA.Plugin.QualitySessionMeter.UI;
 [Export(typeof(IDockableVM))]
 public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     private readonly QualitySessionRuntime runtime;
+    private readonly IImagingMediator imagingMediator;
+    private readonly IImageDataFactory imageDataFactory;
 #if QSM_DEVELOPMENT
     private bool lastSyntheticMode;
 #endif
@@ -34,7 +39,30 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public ObservableCollection<SessionEvent> Events { get; } = new();
     public ObservableCollection<FrameQualityResult> BestAccepted { get; } = new();
     public ObservableCollection<FrameQualityResult> WorstAccepted { get; } = new();
+    public ObservableCollection<FrameQualityResult> RejectedFrames { get; } = new();
     public QualitySettings Settings => runtime.Settings;
+
+    private FrameQualityResult selectedRejectedFrame;
+    public FrameQualityResult SelectedRejectedFrame {
+        get => selectedRejectedFrame;
+        set {
+            if (ReferenceEquals(selectedRejectedFrame, value)) return;
+            selectedRejectedFrame = value;
+            RaisePropertyChanged();
+            RaisePropertyChanged(nameof(CanReviewSelectedRejected));
+            RaisePropertyChanged(nameof(CanRestoreSelectedRejected));
+            if (value != null) _ = OpenFrameInImageTabAsync(value);
+        }
+    }
+
+    private string reviewMessage = "Select a rejected frame to review it in N.I.N.A.'s Image view.";
+    public string ReviewMessage {
+        get => reviewMessage;
+        private set { reviewMessage = value ?? ""; RaisePropertyChanged(); }
+    }
+
+    public bool CanReviewSelectedRejected => SelectedRejectedFrame != null && !SelectedRejectedFrame.IsSyntheticFile;
+    public bool CanRestoreSelectedRejected => CanReviewSelectedRejected && SelectedRejectedFrame.IsBadFileApplied;
 
     private FrameQualityResult currentFrame;
     public FrameQualityResult CurrentFrame {
@@ -87,6 +115,8 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public ICommand ResetSessionCommand { get; }
     public ICommand OpenSessionFolderCommand { get; }
     public ICommand OpenReportCommand { get; }
+    public ICommand OpenSelectedRejectedCommand { get; }
+    public ICommand RestoreSelectedRejectedCommand { get; }
 #if QSM_DEVELOPMENT
     public ICommand RunSyntheticSessionCommand { get; }
     public ICommand StopSyntheticSessionCommand { get; }
@@ -98,10 +128,14 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         IProfileService profileService,
         IImageSaveMediator imageSaveMediator,
         IGuiderMediator guiderMediator,
-        ISequenceMediator sequenceMediator) : base(profileService) {
+        ISequenceMediator sequenceMediator,
+        IImagingMediator imagingMediator,
+        IImageDataFactory imageDataFactory) : base(profileService) {
 
         Title = PluginConstants.DisplayName;
         ImageGeometry = PluginIcon.CreateMeterGeometry();
+        this.imagingMediator = imagingMediator ?? throw new ArgumentNullException(nameof(imagingMediator));
+        this.imageDataFactory = imageDataFactory ?? throw new ArgumentNullException(nameof(imageDataFactory));
 
         var accessor = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         var settings = new QualitySettings(accessor);
@@ -113,6 +147,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         ReloadLiveFrames();
 
         runtime.FrameProcessed += RuntimeFrameProcessed;
+        runtime.FrameReviewChanged += RuntimeFrameReviewChanged;
 #if QSM_DEVELOPMENT
         runtime.SyntheticStateChanged += RuntimeSyntheticStateChanged;
 #endif
@@ -121,6 +156,8 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         ResetSessionCommand = new RelayCommand(ResetSession);
         OpenSessionFolderCommand = new RelayCommand(OpenSessionFolder);
         OpenReportCommand = new RelayCommand(OpenReport);
+        OpenSelectedRejectedCommand = new AsyncRelayCommand(OpenSelectedRejectedAsync);
+        RestoreSelectedRejectedCommand = new AsyncRelayCommand(RestoreSelectedRejectedAsync);
 #if QSM_DEVELOPMENT
         RunSyntheticSessionCommand = new AsyncRelayCommand(RunSyntheticSessionAsync);
         StopSyntheticSessionCommand = new RelayCommand(runtime.StopSyntheticSession);
@@ -143,6 +180,75 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     private void ReturnToLive() => runtime.ExitSyntheticMode();
 
 #endif
+    private async Task OpenSelectedRejectedAsync() {
+        if (SelectedRejectedFrame == null) return;
+        await OpenFrameInImageTabAsync(SelectedRejectedFrame);
+    }
+
+    private async Task OpenFrameInImageTabAsync(FrameQualityResult frame) {
+        if (frame == null) return;
+        if (frame.IsSyntheticFile) {
+            ReviewMessage = "Synthetic frame: there is no FITS/XISF file to load into the Image view.";
+            return;
+        }
+
+        var path = ResolveExistingFramePath(frame);
+        if (string.IsNullOrWhiteSpace(path)) {
+            ReviewMessage = $"File not found for frame #{frame.FrameIndex}: {frame.FileName}";
+            return;
+        }
+
+        try {
+            ReviewMessage = $"Loading {Path.GetFileName(path)} into N.I.N.A. Image…";
+            var data = await imageDataFactory.CreateFromFile(path, 16, false, CancellationToken.None);
+            var rendered = await imagingMediator.PrepareImage(data, new PrepareImageParameters(true, false), CancellationToken.None);
+            if (rendered?.Image != null) imagingMediator.SetImage(rendered.Image);
+            ReviewMessage = $"Loaded {Path.GetFileName(path)} · auto verdict {frame.StatusText} · {frame.ProbableCause}";
+        } catch (Exception ex) {
+            ReviewMessage = $"Could not load {frame.FileName}: {ex.Message}";
+        }
+    }
+
+    private async Task RestoreSelectedRejectedAsync() {
+        var frame = SelectedRejectedFrame;
+        if (frame == null) return;
+        if (frame.IsSyntheticFile) {
+            ReviewMessage = "Synthetic frames do not have a real BAD_ file to restore.";
+            return;
+        }
+        if (!frame.IsBadFileApplied) {
+            ReviewMessage = $"{frame.FileName} has no BAD_/Rejected file action to undo.";
+            return;
+        }
+
+        try {
+            var restored = await runtime.RestoreRejectedFileAsync(frame);
+            ReviewMessage = $"BAD file action undone: {Path.GetFileName(restored)}. The automatic QSM verdict remains REJECTED for audit/history.";
+            RefreshDerivedViews();
+            RaisePropertyChanged(nameof(CanRestoreSelectedRejected));
+        } catch (Exception ex) {
+            ReviewMessage = $"Could not undo BAD for {frame.FileName}: {ex.Message}";
+        }
+    }
+
+    private static string ResolveExistingFramePath(FrameQualityResult frame) {
+        foreach (var candidate in new[] { frame?.FinalPath, frame?.OriginalPath }) {
+            if (!string.IsNullOrWhiteSpace(candidate) && File.Exists(candidate)) return candidate;
+        }
+        return "";
+    }
+
+    private void RuntimeFrameReviewChanged(object sender, FrameQualityResult frame) {
+        void Apply() {
+            RefreshDerivedViews();
+            RaisePropertyChanged(nameof(CanRestoreSelectedRejected));
+            RaiseAllSummary();
+        }
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke((Action)Apply);
+        else Apply();
+    }
+
     private void ReloadLiveFrames() {
         Frames.Clear();
         foreach (var frame in runtime.Store.Results.TakeLast(500)) Frames.Add(frame);
@@ -210,6 +316,14 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         foreach (var frame in Frames.Where(x => x.Status == FrameStatus.Accepted)
                      .OrderBy(x => x.OverallQuality).ThenBy(x => x.ConfidenceScore).Take(5)) WorstAccepted.Add(frame);
 
+        var selectedIndex = SelectedRejectedFrame?.FrameIndex;
+        RejectedFrames.Clear();
+        foreach (var frame in Frames.Where(x => x.Status == FrameStatus.Rejected).OrderByDescending(x => x.FrameIndex).Take(80)) RejectedFrames.Add(frame);
+        if (selectedIndex.HasValue) selectedRejectedFrame = RejectedFrames.FirstOrDefault(x => x.FrameIndex == selectedIndex.Value);
+        RaisePropertyChanged(nameof(SelectedRejectedFrame));
+        RaisePropertyChanged(nameof(CanReviewSelectedRejected));
+        RaisePropertyChanged(nameof(CanRestoreSelectedRejected));
+
         var grouper = new EventGroupingEngine();
         foreach (var frame in Frames) grouper.Add(frame);
         Events.Clear();
@@ -271,6 +385,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
 
     public void Dispose() {
         runtime.FrameProcessed -= RuntimeFrameProcessed;
+        runtime.FrameReviewChanged -= RuntimeFrameReviewChanged;
 #if QSM_DEVELOPMENT
         runtime.SyntheticStateChanged -= RuntimeSyntheticStateChanged;
 #endif

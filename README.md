@@ -10,7 +10,7 @@ The core idea is simple: a camera exposure being completed does not automaticall
 
 ## Status
 
-- **1.1.0.2 / V3 + OpenAstro remote monitor:** current synchronized field-test/production line on `main`. The remote snapshot now follows the active Synthetic Lab store in field-test builds, so generated sessions are visible in the OpenAstro/NINA web monitor as well as inside N.I.N.A.
+- **1.2.0.0 / V3 + review workflow + OpenAstro monitor:** current candidate line. Rejected real frames can be opened directly in N.I.N.A. Image for inspection and QSM-applied `BAD_`/`Rejected` file moves can be physically undone without rewriting the original automatic verdict. The remote snapshot now exposes filenames and richer per-frame diagnostics for the OpenAstro monitor.
 - Runtime target: **N.I.N.A. 3.3 NIGHTLY #057** (`3.3.0.1057`) / `NINA.Plugin 3.3.0.1057-nightly`.
 - Target framework: **.NET 10** / `net10.0-windows7.0`.
 - Default operating mode: **OFF until explicitly enabled**; when enabled, **Monitor Only** remains the safe default for file handling.

@@ -26,29 +26,25 @@ main
   1.0.0.1 UI/usability hotfix merged
   1.0.0.2 self-explanatory timeline/mobile broker foundation merged
   1.1.0.0 OpenAstro remote monitor bridge released
-  current released main before this patch: 3de5a209f31be6fd0b708ec0c91a473f97543797
+  1.1.0.1 V3 provenance/token/package-isolation synchronization released
+  1.1.0.2 Synthetic Lab remote snapshot fix released
 
 public releases
   v1.0.0.0 — V3
   v1.0.0.1 — UI/usability hotfix
   v1.0.0.2 — timeline readability + in-process mobile contract
   v1.1.0.0 — OpenAstro read-only remote monitor bridge
-  v1.1.0.1 — final V3 provenance/token/package-isolation synchronization
+  v1.1.0.1 — final V3 hardening synchronization
+  v1.1.0.2 — Synthetic Lab visible in remote snapshot
 
 candidate version
-  1.1.0.2
+  1.2.0.0
 
 candidate purpose
-  make field-test Synthetic Lab sessions visible through the same read-only OpenAstro snapshot path
-
-active work
-  synchronize final local V3 provenance/token/package-isolation hardening onto current main
-
-candidate version
-  1.1.0.1
+  rejected-frame visual review inside N.I.N.A. + reversible QSM BAD file actions + filename-rich OpenAstro telemetry
 
 candidate status
-  LOCAL BUILD GATE → GITHUB WINDOWS CI / FIELD-TEST ARTIFACT
+  LOCAL BUILD PASS → WINDOWS CI / FIELD-TEST ARTIFACT / HOST VISUAL TEST
 ```
 
 Known non-blocking dependency warning:
@@ -56,6 +52,17 @@ Known non-blocking dependency warning:
 - `NINA.Image 3.3.0.1057-nightly` requests `NINA.Accord.Imaging >= 3.5.3-alpha`; NuGet resolves `3.5.3` (`NU1603`).
 
 ---
+
+
+## 1.2 review workflow — IMPLEMENTED / HOST VALIDATION PENDING
+
+- Rejected Review lists rejected real frames with filename, automatic cause and core metrics.
+- Selecting a row loads the existing FITS/XISF into N.I.N.A. Image using N.I.N.A.'s image-data/imaging services; Synthetic Lab rows remain non-openable because they have no real image file.
+- `Undo BAD / restore filename` reverses only the physical QSM file action (`BAD_` prefix or move to `Rejected`).
+- The automatic `REJECTED` record is immutable for audit and the already-consumed sequencer decision is not retroactively changed.
+- Restore is collision-safe and refuses to overwrite an existing original file.
+- OpenAstro snapshot now includes filename/disposition and deeper per-frame diagnostics; the browser monitor can render real frame tables instead of an anonymous chart-only view.
+
 
 # V1 — CLOSED / MERGED
 

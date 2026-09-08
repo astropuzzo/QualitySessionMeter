@@ -61,6 +61,7 @@ public sealed class QualitySessionRuntime : IDisposable {
 #endif
 
     public event EventHandler<FrameQualityResult> FrameProcessed;
+    public event EventHandler<FrameQualityResult> FrameReviewChanged;
 #if QSM_DEVELOPMENT
     public event EventHandler SyntheticStateChanged;
 #endif
@@ -93,6 +94,8 @@ public sealed class QualitySessionRuntime : IDisposable {
 #else
     public bool IsSyntheticMode => false;
     public bool IsSyntheticRunning => false;
+    public string SyntheticStatus => "OFF";
+    public string SyntheticSessionName => "";
     public string ActiveSessionFolder => sessionStore.SessionFolder;
 #endif
     public bool IsSequencerControlArmed { get { lock (controlSync) return controlTokens.Count > 0; } }
@@ -134,6 +137,19 @@ public sealed class QualitySessionRuntime : IDisposable {
 
     public GuideExposureMetrics GetRecentGuideMetrics(double lookbackSeconds = 10) =>
         guideCollector.GetRecentMetrics(lookbackSeconds, settings.ExcursionThreshold);
+
+
+    public async Task<string> RestoreRejectedFileAsync(FrameQualityResult frame) {
+#if QSM_DEVELOPMENT
+        if (IsSyntheticMode) throw new InvalidOperationException("Synthetic Lab frames do not have real files to restore.");
+#endif
+        if (frame == null) throw new ArgumentNullException(nameof(frame));
+        var restored = await rejectedFileService.RestoreAsync(frame);
+        frame.FinalPath = restored;
+        await sessionStore.RefreshArtifactsAsync();
+        FrameReviewChanged?.Invoke(this, frame);
+        return restored;
+    }
 
     public bool HasPersistentControlledDegradation() {
         int required = settings.SmartPauseRejectStreak;

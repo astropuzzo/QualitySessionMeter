@@ -290,10 +290,14 @@ static async Task ValidateFileActions(string outputRoot, List<string> failures) 
     settings.RejectedFileAction = RejectedFileAction.PrefixBad;
     var prefixResult = await service.ApplyAsync(prefixSource, settings, true);
     if (!File.Exists(prefixResult) || File.Exists(prefixSource) || !Path.GetFileName(prefixResult).StartsWith("BAD_", StringComparison.OrdinalIgnoreCase)) failures.Add("PrefixBad file action failed its authorized isolated temp-file test.");
+    var prefixRestored = await service.RestoreAsync(new FrameQualityResult { Status = FrameStatus.Rejected, OriginalPath = prefixSource, FinalPath = prefixResult });
+    if (!string.Equals(prefixRestored, prefixSource, StringComparison.OrdinalIgnoreCase) || !File.Exists(prefixSource) || File.Exists(prefixResult)) failures.Add("Undo BAD failed to restore an authorized BAD_ prefixed file to its original path.");
 
     var moveSource = Path.Combine(root, "move_test.fits");
     await File.WriteAllTextAsync(moveSource, "synthetic frame");
     settings.RejectedFileAction = RejectedFileAction.MoveToRejectedFolder;
     var moveResult = await service.ApplyAsync(moveSource, settings, true);
     if (!File.Exists(moveResult) || File.Exists(moveSource) || !string.Equals(Path.GetFileName(Path.GetDirectoryName(moveResult)), "Rejected", StringComparison.OrdinalIgnoreCase)) failures.Add("MoveToRejectedFolder file action failed its authorized isolated temp-file test.");
+    var moveRestored = await service.RestoreAsync(new FrameQualityResult { Status = FrameStatus.Rejected, OriginalPath = moveSource, FinalPath = moveResult });
+    if (!string.Equals(moveRestored, moveSource, StringComparison.OrdinalIgnoreCase) || !File.Exists(moveSource) || File.Exists(moveResult)) failures.Add("Undo BAD failed to restore a file from the Rejected subfolder to its original path.");
 }
