@@ -1,4 +1,3 @@
-using NINA.Equipment.Model;
 using NINA.Plugin.QualitySessionMeter.Settings;
 using NINA.WPF.Base.Interfaces.Mediator;
 using System;
@@ -13,8 +12,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
@@ -35,18 +32,16 @@ public sealed class QualitySessionWebServer : IDisposable {
     private const int MaxHeaderLines = 64;
     private const int MaxHeaderLine = 8192;
     private const int MaxBodyBytes = 8192;
-    private const int PreviewMaxWidth = 1280;
-    private const int PreviewJpegQuality = 82;
     private const int MaxConcurrentClients = 24;
     private const int MaxFailedLoginsPerWindow = 8;
     private static readonly TimeSpan RequestLifetime = TimeSpan.FromSeconds(12);
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(24);
     private static readonly TimeSpan LoginFailureWindow = TimeSpan.FromMinutes(1);
 
-    private readonly IImageSaveMediator imageSaveMediator;
+    private readonly LatestLightPreviewCache previewCache;
+    private readonly bool ownsPreviewCache;
     private readonly QualitySettings settings;
     private readonly object lifecycleSync = new();
-    private readonly object previewSync = new();
     private readonly ConcurrentDictionary<string, DateTimeOffset> sessions = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, LoginFailureState> loginFailures = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim clientSlots = new(MaxConcurrentClients, MaxConcurrentClients);
@@ -54,20 +49,27 @@ public sealed class QualitySessionWebServer : IDisposable {
     private TcpListener listener;
     private CancellationTokenSource listenerCancellation;
     private Task acceptLoop;
-    private byte[] previewJpeg = Array.Empty<byte>();
-    private DateTimeOffset previewUtc;
-    private string previewImageId = "";
     private bool disposed;
 
     public bool Enabled { get; private set; }
     public int Port { get; private set; }
     public string LastError { get; private set; } = "";
 
-    public QualitySessionWebServer(IImageSaveMediator imageSaveMediator, QualitySettings settings) {
-        this.imageSaveMediator = imageSaveMediator ?? throw new ArgumentNullException(nameof(imageSaveMediator));
-        this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    // Compatibility constructor. The plugin composition root uses the shared-cache overload so
+    // the universal dashboard and OpenAstro serve the same preview bytes.
+    public QualitySessionWebServer(IImageSaveMediator imageSaveMediator, QualitySettings settings)
+        : this(new LatestLightPreviewCache(imageSaveMediator), settings, ownsPreviewCache: true) {
+    }
 
-        imageSaveMediator.ImageSaved += ImageSaved;
+    public QualitySessionWebServer(LatestLightPreviewCache previewCache, QualitySettings settings)
+        : this(previewCache, settings, ownsPreviewCache: false) {
+    }
+
+    private QualitySessionWebServer(LatestLightPreviewCache previewCache, QualitySettings settings, bool ownsPreviewCache) {
+        this.previewCache = previewCache ?? throw new ArgumentNullException(nameof(previewCache));
+        this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        this.ownsPreviewCache = ownsPreviewCache;
+
         settings.PropertyChanged += SettingsChanged;
         Reconfigure();
     }
@@ -88,9 +90,7 @@ public sealed class QualitySessionWebServer : IDisposable {
         lock (lifecycleSync) {
             StopListener();
 
-            // A configuration/authentication change starts a fresh browser security context.
-            // This guarantees that changing/clearing a password, toggling auth, changing port,
-            // switching profile, or disabling/re-enabling the server revokes prior sessions.
+            // Any listener/authentication change starts a fresh browser security context.
             sessions.Clear();
             loginFailures.Clear();
 
@@ -126,34 +126,6 @@ public sealed class QualitySessionWebServer : IDisposable {
         if (listenerCancellation != null) {
             listenerCancellation.Dispose();
             listenerCancellation = null;
-        }
-    }
-
-    private void ImageSaved(object sender, ImageSavedEventArgs e) {
-        if (disposed || e?.Image == null || e.MetaData?.Image == null) return;
-        if (e.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
-
-        try {
-            BitmapSource rendered = e.Image;
-            if (rendered.PixelWidth <= 0 || rendered.PixelHeight <= 0) return;
-            var scale = Math.Min(1.0, PreviewMaxWidth / (double)rendered.PixelWidth);
-            if (scale < 1.0) rendered = new TransformedBitmap(rendered, new ScaleTransform(scale, scale));
-            if (rendered.Format != PixelFormats.Bgr24) rendered = new FormatConvertedBitmap(rendered, PixelFormats.Bgr24, null, 0);
-
-            var encoder = new JpegBitmapEncoder { QualityLevel = PreviewJpegQuality };
-            encoder.Frames.Add(BitmapFrame.Create(rendered));
-            using var memory = new MemoryStream();
-            encoder.Save(memory);
-            var bytes = memory.ToArray();
-            if (bytes.Length == 0) return;
-
-            lock (previewSync) {
-                previewJpeg = bytes;
-                previewUtc = DateTimeOffset.UtcNow;
-                previewImageId = e.MetaData.Image.Id.ToString();
-            }
-        } catch {
-            // Display-only preview generation must never affect acquisition.
         }
     }
 
@@ -263,18 +235,21 @@ public sealed class QualitySessionWebServer : IDisposable {
             }
 
             if (method == "GET" && path == "/dashboard/healthz") {
+                var preview = previewCache.Snapshot();
                 await WriteJson(stream, 200, new {
                     ok = true,
                     service = "QualitySessionMeter Web Dashboard",
                     readOnly = true,
                     passwordRequired = settings.WebDashboardRequirePassword,
-                    passwordConfigured = settings.WebDashboardPasswordConfigured
+                    passwordConfigured = settings.WebDashboardPasswordConfigured,
+                    previewAvailable = preview.Available,
+                    previewUtc = preview.CapturedUtc == default ? null : preview.CapturedUtc.ToString("O")
                 }, cancellationToken);
                 return;
             }
 
             if (method == "POST" && path == "/dashboard/login") {
-                await HandleLogin(stream, headers, body, remoteKey, cancellationToken);
+                await HandleLogin(stream, body, remoteKey, cancellationToken);
                 return;
             }
 
@@ -312,7 +287,17 @@ public sealed class QualitySessionWebServer : IDisposable {
                     await WriteJson(stream, 401, new { ok = false, error = "unauthorized" }, cancellationToken);
                     return;
                 }
-                await WriteJson(stream, 200, QualitySessionMobileBridge.BuildSnapshot(), cancellationToken);
+
+                var payload = QualitySessionMobileBridge.BuildSnapshot();
+                var preview = previewCache.Snapshot();
+                payload["preview"] = new Dictionary<string, object> {
+                    ["available"] = preview.Available,
+                    ["capturedUtc"] = preview.CapturedUtc == default ? null : preview.CapturedUtc.ToString("O"),
+                    ["imageId"] = preview.ImageId,
+                    ["generation"] = preview.Generation,
+                    ["generationError"] = !string.IsNullOrWhiteSpace(preview.LastError)
+                };
+                await WriteJson(stream, 200, payload, cancellationToken);
                 return;
             }
 
@@ -321,22 +306,26 @@ public sealed class QualitySessionWebServer : IDisposable {
                     await WriteJson(stream, 401, new { ok = false, error = "unauthorized" }, cancellationToken);
                     return;
                 }
-                byte[] preview;
-                DateTimeOffset time;
-                string imageId;
-                lock (previewSync) {
-                    preview = previewJpeg;
-                    time = previewUtc;
-                    imageId = previewImageId;
-                }
-                if (preview.Length == 0) {
+
+                var preview = previewCache.Snapshot();
+                if (!preview.Available) {
                     await WriteJson(stream, 404, new { ok = false, error = "preview not available" }, cancellationToken);
                     return;
                 }
-                await WriteBytes(stream, 200, "image/jpeg", preview, cancellationToken, new Dictionary<string, string> {
-                    ["X-QSM-Preview-Utc"] = time.ToString("O"),
-                    ["X-QSM-Image-Id"] = imageId
-                });
+
+                var previewHeaders = new Dictionary<string, string> {
+                    ["X-QSM-Preview-Utc"] = preview.CapturedUtc.ToString("O"),
+                    ["X-QSM-Image-Id"] = preview.ImageId,
+                    ["ETag"] = preview.EntityTag
+                };
+
+                if (headers.TryGetValue("If-None-Match", out var etag) &&
+                    string.Equals(etag?.Trim(), preview.EntityTag, StringComparison.Ordinal)) {
+                    await WriteBytes(stream, 304, "image/jpeg", Array.Empty<byte>(), cancellationToken, previewHeaders);
+                    return;
+                }
+
+                await WriteBytes(stream, 200, "image/jpeg", preview.Jpeg, cancellationToken, previewHeaders);
                 return;
             }
 
@@ -344,7 +333,7 @@ public sealed class QualitySessionWebServer : IDisposable {
         }
     }
 
-    private async Task HandleLogin(NetworkStream stream, IDictionary<string, string> headers, string body, string remoteKey, CancellationToken cancellationToken) {
+    private async Task HandleLogin(NetworkStream stream, string body, string remoteKey, CancellationToken cancellationToken) {
         if (!settings.WebDashboardEnabled) {
             await WriteJson(stream, 404, new { ok = false, error = "dashboard disabled" }, cancellationToken);
             return;
@@ -471,6 +460,7 @@ public sealed class QualitySessionWebServer : IDisposable {
     private static async Task WriteBytes(NetworkStream stream, int statusCode, string contentType, byte[] body, CancellationToken cancellationToken, IDictionary<string, string> extraHeaders = null) {
         var reason = statusCode switch {
             200 => "OK",
+            304 => "Not Modified",
             400 => "Bad Request",
             401 => "Unauthorized",
             404 => "Not Found",
@@ -492,7 +482,7 @@ public sealed class QualitySessionWebServer : IDisposable {
             .Append("Referrer-Policy: no-referrer\r\n")
             .Append("Cross-Origin-Resource-Policy: same-origin\r\n")
             .Append("Permissions-Policy: camera=(), microphone=(), geolocation=()\r\n")
-            .Append("Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'\r\n");
+            .Append("Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'\r\n");
         if (extraHeaders != null) {
             foreach (var pair in extraHeaders) {
                 if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null || pair.Value.Contains('\r') || pair.Value.Contains('\n')) continue;
@@ -509,15 +499,14 @@ public sealed class QualitySessionWebServer : IDisposable {
         if (disposed) return;
         disposed = true;
         settings.PropertyChanged -= SettingsChanged;
-        imageSaveMediator.ImageSaved -= ImageSaved;
         lock (lifecycleSync) StopListener();
         sessions.Clear();
         loginFailures.Clear();
+        if (ownsPreviewCache) previewCache?.Dispose();
 
         // Do not dispose clientSlots here. In-flight request tasks are intentionally allowed to
         // finish their finally/Release path after listener cancellation; disposing the semaphore
         // synchronously can turn a clean plugin unload into an ObjectDisposedException race.
-        // SemaphoreSlim.WaitAsync does not allocate its AvailableWaitHandle in this usage.
     }
 
     private sealed class LoginFailureState {
