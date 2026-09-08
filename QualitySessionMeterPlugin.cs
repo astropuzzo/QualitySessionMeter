@@ -18,6 +18,7 @@ namespace NINA.Plugin.QualitySessionMeter;
 public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChanged {
     private readonly IProfileService profileService;
     private readonly QualitySessionMobileBridge mobileBridge;
+    private readonly LatestLightPreviewCache previewCache;
     private readonly QualitySessionHttpBridge httpBridge;
     private readonly QualitySessionWebServer webServer;
 
@@ -62,12 +63,17 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
         // Read-only in-process companion contract for N.I.N.A. plugins.
         mobileBridge = new QualitySessionMobileBridge(messageBroker);
 
-        // Existing tokenized OpenAstro/companion bridge. Kept unchanged for backward compatibility.
-        httpBridge = new QualitySessionHttpBridge(imageSaveMediator);
+        // Capture each real saved LIGHT exactly once. Both web frontends consume this same
+        // in-memory JPEG snapshot, so the universal dashboard and OpenAstro cannot diverge.
+        previewCache = new LatestLightPreviewCache(imageSaveMediator);
+
+        // Existing tokenized OpenAstro/companion bridge. API routes and token behaviour remain
+        // backward compatible; only the internal preview source is now shared.
+        httpBridge = new QualitySessionHttpBridge(previewCache);
 
         // Optional self-contained browser dashboard for a user's own LAN/VPN.
         // This has independent settings and does not require OpenAstro or QSM_REMOTE_TOKEN.
-        webServer = new QualitySessionWebServer(imageSaveMediator, Settings);
+        webServer = new QualitySessionWebServer(previewCache, Settings);
 
         profileService.ProfileChanged += ProfileChanged;
         Settings.PropertyChanged += SettingsChanged;
@@ -94,6 +100,7 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
         Settings.PropertyChanged -= SettingsChanged;
         webServer?.Dispose();
         httpBridge?.Dispose();
+        previewCache?.Dispose();
         mobileBridge?.Dispose();
         QualitySessionRuntimeRegistry.DisposeCurrent();
         return base.Teardown();
