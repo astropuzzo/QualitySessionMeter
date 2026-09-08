@@ -1,7 +1,9 @@
 using NINA.Plugin.QualitySessionMeter.Models;
 using NINA.Profile.Interfaces;
+using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 
 namespace NINA.Plugin.QualitySessionMeter.Settings;
 
@@ -174,6 +176,64 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueInt32(nameof(RejectedFileAction), Clamp((int)value, 0, 2)); Raise(); Raise(nameof(RejectedFileActionIndex)); }
     }
     public int RejectedFileActionIndex { get => (int)RejectedFileAction; set => RejectedFileAction = (RejectedFileAction)Clamp(value, 0, 2); }
+
+    // Optional self-contained mobile/web dashboard. This is deliberately separate from
+    // the tokenized OpenAstro integration bridge so existing installations remain untouched.
+    public bool WebDashboardEnabled {
+        get => accessor.GetValueBoolean(nameof(WebDashboardEnabled), false);
+        set { accessor.SetValueBoolean(nameof(WebDashboardEnabled), value); Raise(); }
+    }
+
+    public int WebDashboardPort {
+        get => Clamp(accessor.GetValueInt32(nameof(WebDashboardPort), 18974), 1024, 65535);
+        set { accessor.SetValueInt32(nameof(WebDashboardPort), Clamp(value, 1024, 65535)); Raise(); }
+    }
+
+    public bool WebDashboardRequirePassword {
+        get => accessor.GetValueBoolean(nameof(WebDashboardRequirePassword), false);
+        set { accessor.SetValueBoolean(nameof(WebDashboardRequirePassword), value); Raise(); }
+    }
+
+    public bool WebDashboardPasswordConfigured =>
+        !string.IsNullOrWhiteSpace(accessor.GetValueString("WebDashboardPasswordSalt", string.Empty)) &&
+        !string.IsNullOrWhiteSpace(accessor.GetValueString("WebDashboardPasswordHash", string.Empty));
+
+    public string WebDashboardPasswordStatus => WebDashboardPasswordConfigured ? "Password configured" : "No password configured";
+
+    public void SetWebDashboardPassword(string password) {
+        if (string.IsNullOrEmpty(password)) return;
+        var salt = RandomNumberGenerator.GetBytes(16);
+        byte[] hash;
+        using (var derive = new Rfc2898DeriveBytes(password, salt, 120000, HashAlgorithmName.SHA256)) {
+            hash = derive.GetBytes(32);
+        }
+        accessor.SetValueString("WebDashboardPasswordSalt", Convert.ToBase64String(salt));
+        accessor.SetValueString("WebDashboardPasswordHash", Convert.ToBase64String(hash));
+        Raise(nameof(WebDashboardPasswordConfigured));
+        Raise(nameof(WebDashboardPasswordStatus));
+    }
+
+    public void ClearWebDashboardPassword() {
+        accessor.SetValueString("WebDashboardPasswordSalt", string.Empty);
+        accessor.SetValueString("WebDashboardPasswordHash", string.Empty);
+        Raise(nameof(WebDashboardPasswordConfigured));
+        Raise(nameof(WebDashboardPasswordStatus));
+    }
+
+    public bool VerifyWebDashboardPassword(string password) {
+        if (!WebDashboardPasswordConfigured || password == null) return false;
+        try {
+            var salt = Convert.FromBase64String(accessor.GetValueString("WebDashboardPasswordSalt", string.Empty));
+            var expected = Convert.FromBase64String(accessor.GetValueString("WebDashboardPasswordHash", string.Empty));
+            byte[] actual;
+            using (var derive = new Rfc2898DeriveBytes(password, salt, 120000, HashAlgorithmName.SHA256)) {
+                actual = derive.GetBytes(expected.Length);
+            }
+            return CryptographicOperations.FixedTimeEquals(actual, expected);
+        } catch {
+            return false;
+        }
+    }
 
     public void NotifyProfileChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
     public event PropertyChangedEventHandler PropertyChanged;

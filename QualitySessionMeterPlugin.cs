@@ -19,9 +19,17 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
     private readonly IProfileService profileService;
     private readonly QualitySessionMobileBridge mobileBridge;
     private readonly QualitySessionHttpBridge httpBridge;
+    private readonly QualitySessionWebServer webServer;
 
     public IPluginOptionsAccessor PluginSettings { get; }
     public QualitySettings Settings { get; }
+
+    public string WebDashboardAddress => webServer?.AccessUrl ?? $"http://<NINA-PC-IP>:{Settings.WebDashboardPort}/";
+    public string WebDashboardStatus => !Settings.WebDashboardEnabled
+        ? "Disabled"
+        : webServer?.Enabled == true
+            ? "Running"
+            : string.IsNullOrWhiteSpace(webServer?.LastError) ? "Stopped" : $"Stopped: {webServer.LastError}";
 
     [ImportingConstructor]
     public QualitySessionMeterPlugin(
@@ -47,12 +55,26 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
         // Read-only in-process companion contract for N.I.N.A. plugins.
         mobileBridge = new QualitySessionMobileBridge(messageBroker);
 
-        // Optional read-only LAN/Tailscale bridge for OpenAstro Control or another trusted companion.
-        // It remains disabled unless QSM_REMOTE_TOKEN is present in the N.I.N.A. process environment.
-        // The image-save mediator supplies an in-memory, downscaled JPEG preview without re-reading FITS files.
+        // Existing tokenized OpenAstro/companion bridge. Kept unchanged for backward compatibility.
         httpBridge = new QualitySessionHttpBridge(imageSaveMediator);
 
+        // Optional self-contained browser dashboard for a user's own LAN/VPN.
+        // This has independent settings and does not require OpenAstro or QSM_REMOTE_TOKEN.
+        webServer = new QualitySessionWebServer(imageSaveMediator, Settings);
+
         profileService.ProfileChanged += ProfileChanged;
+        Settings.PropertyChanged += SettingsChanged;
+    }
+
+    private void SettingsChanged(object sender, PropertyChangedEventArgs e) {
+        if (e == null || string.IsNullOrEmpty(e.PropertyName) ||
+            e.PropertyName == nameof(QualitySettings.WebDashboardEnabled) ||
+            e.PropertyName == nameof(QualitySettings.WebDashboardPort) ||
+            e.PropertyName == nameof(QualitySettings.WebDashboardRequirePassword) ||
+            e.PropertyName == nameof(QualitySettings.WebDashboardPasswordConfigured)) {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(WebDashboardAddress)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(WebDashboardStatus)));
+        }
     }
 
     private void ProfileChanged(object sender, EventArgs e) {
@@ -62,6 +84,8 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
 
     public override Task Teardown() {
         profileService.ProfileChanged -= ProfileChanged;
+        Settings.PropertyChanged -= SettingsChanged;
+        webServer?.Dispose();
         httpBridge?.Dispose();
         mobileBridge?.Dispose();
         QualitySessionRuntimeRegistry.DisposeCurrent();
