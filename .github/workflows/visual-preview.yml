@@ -1,0 +1,56 @@
+name: visual preview
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-visuals:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore WPF visual harness
+        run: dotnet restore QualitySessionMeter.VisualHarness/QualitySessionMeter.VisualHarness.csproj
+
+      - name: Render real QSM WPF templates
+        run: dotnet run --project QualitySessionMeter.VisualHarness/QualitySessionMeter.VisualHarness.csproj -c Release --no-restore -- artifacts/visual
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Render actual Web Dashboard HTML
+        run: node tools/visual/render-web.mjs artifacts/visual
+
+      - name: List generated visual evidence
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts/visual | Sort-Object Name | Format-Table Name, Length
+          $pngs = Get-ChildItem artifacts/visual -Filter *.png
+          if ($pngs.Count -lt 10) { throw "Expected at least 10 visual-regression PNGs, found $($pngs.Count)." }
+
+      - name: Upload QSM visual preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: qsm-visual-preview-${{ github.sha }}
+          path: artifacts/visual/
+          if-no-files-found: error
+          retention-days: 14
