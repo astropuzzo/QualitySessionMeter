@@ -18,6 +18,7 @@ namespace NINA.Plugin.QualitySessionMeter;
 public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChanged {
     private readonly IProfileService profileService;
     private readonly QualitySessionMobileBridge mobileBridge;
+    private readonly QualitySessionHttpBridge httpBridge;
 
     public IPluginOptionsAccessor PluginSettings { get; }
     public QualitySettings Settings { get; }
@@ -43,9 +44,13 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
             Settings);
         runtime.AttachWeatherMediator(weatherDataMediator);
 
-        // Read-only V1 companion contract. This lets Touch 'n' Stars (or another N.I.N.A. plugin)
-        // request QSM state through N.I.N.A.'s process-local broker without QSM opening a network port.
+        // Read-only in-process companion contract for N.I.N.A. plugins.
         mobileBridge = new QualitySessionMobileBridge(messageBroker);
+
+        // Optional read-only LAN/Tailscale bridge for OpenAstro Control or another trusted companion.
+        // It remains disabled unless QSM_REMOTE_TOKEN is present in the N.I.N.A. process environment.
+        // The image-save mediator supplies an in-memory, downscaled JPEG preview without re-reading FITS files.
+        httpBridge = new QualitySessionHttpBridge(imageSaveMediator);
 
         profileService.ProfileChanged += ProfileChanged;
     }
@@ -57,6 +62,7 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
 
     public override Task Teardown() {
         profileService.ProfileChanged -= ProfileChanged;
+        httpBridge?.Dispose();
         mobileBridge?.Dispose();
         QualitySessionRuntimeRegistry.DisposeCurrent();
         return base.Teardown();
