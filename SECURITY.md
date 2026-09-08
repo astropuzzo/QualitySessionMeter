@@ -39,17 +39,18 @@ Password protection is optional by design because many users operate N.I.N.A. on
 
 When password protection is enabled:
 
-- QSM stores a salted PBKDF2-derived password hash, not the plaintext password;
-- successful login creates a random session token;
+- QSM stores a random salt and a PBKDF2-HMAC-SHA256 derived password hash, not the plaintext password;
+- successful login creates a cryptographically random session token;
 - the browser receives the token in an `HttpOnly`, `SameSite=Strict` cookie;
 - failed login attempts are rate-limited per remote IP;
-- sessions expire and are kept only in memory.
+- sessions expire and are kept only in memory;
+- changing/clearing the password, changing the auth setting, changing the dashboard port, switching profile, or disabling/re-enabling the listener invalidates existing browser sessions.
 
-Because the built-in dashboard listener uses HTTP rather than TLS, password-protected access across an untrusted network should still be placed behind a VPN or HTTPS reverse proxy.
+Because the built-in dashboard listener uses HTTP rather than TLS, password-protected access across an untrusted network should still be placed behind a VPN or HTTPS reverse proxy. The optional password authenticates the application session; it does not turn plain HTTP into encrypted transport.
 
 ## HTTP hardening
 
-The dashboard server applies bounded request sizes, a concurrent-client limit and a per-request timeout. Responses include restrictive browser headers including:
+The dashboard server applies bounded request/header/body sizes, a concurrent-client limit and a per-request timeout. Responses include restrictive browser headers including:
 
 - `Content-Security-Policy`;
 - `X-Content-Type-Options: nosniff`;
@@ -58,7 +59,9 @@ The dashboard server applies bounded request sizes, a concurrent-client limit an
 - `Cross-Origin-Resource-Policy: same-origin`;
 - a restrictive `Permissions-Policy`.
 
-Dynamic values such as filenames, target names and diagnostic strings are HTML-escaped before they are inserted into dashboard markup.
+Dynamic values such as filenames, target names and diagnostic strings are HTML-escaped or written through text-safe DOM operations before they are inserted into dashboard markup.
+
+The server cancels its listener during reconfiguration/unload and allows already-running request tasks to finish their cleanup path instead of disposing synchronization primitives underneath them.
 
 ## Preview handling
 
@@ -98,8 +101,9 @@ Before an official N.I.N.A. catalog submission, the release candidate should pas
 3. clean install and upgrade testing in the supported N.I.N.A. host;
 4. Web Dashboard disabled-by-default verification;
 5. LAN dashboard test with and without optional password protection;
-6. browser markup-injection tests using adversarial filenames/target strings;
-7. loss/reconnect tests for PHD2 and Web Dashboard clients;
-8. rejected-file collision/restore tests;
-9. plugin unload/reload and N.I.N.A. shutdown tests;
-10. verification that the production package excludes Synthetic Lab and test-only code.
+6. password/session-revocation test after auth/config changes;
+7. browser markup-injection tests using adversarial filenames/target strings;
+8. loss/reconnect tests for PHD2 and Web Dashboard clients;
+9. rejected-file collision/restore tests;
+10. plugin unload/reload, profile-switch and N.I.N.A. shutdown tests;
+11. verification that the production package excludes Synthetic Lab and test-only code.
