@@ -18,6 +18,16 @@ The current `1.3.x` line is still a **pre-store field-test line**. During this p
 - Fixed Control Center hard-coded dark card chrome versus inherited host foreground colors. Cards/borders now resolve N.I.N.A. background/border resources on the UI dispatcher; ordinary text uses the host foreground resource and QSM accent text uses the host primary resource.
 - Added defensive freezing for Synthetic Lab fallback brushes in field-test builds.
 
+### Timeline usability and latest-LIGHT preview resiliency
+
+- Added an adaptive **Frame # axis** to the N.I.N.A. multichannel timeline using the same chronological `FrameIndex` shown in Recent frames and tooltips.
+- Frame-number tick density adapts to available plot width while preserving first/latest frame identity; the axis uses the previously unused lower half of the event lane so it does not steal vertical space from the three metric bands.
+- Added the same Frame # axis to the universal Web Dashboard timeline and added Frame # to the Current frame card.
+- Browser timeline hover now includes the corresponding filename as well as frame index, status and metrics.
+- Replaced blind periodic preview-image reloads with snapshot-generation-aware preview updates. The browser downloads the JPEG only when QSM reports a new preview generation.
+- A temporary preview fetch/reconnect failure now keeps the last valid LIGHT visible instead of replacing it with a broken image.
+- Added pre-store and official-release CI gates for Frame # axis presence, generation-aware preview behavior and the WPF Freezable/dispatcher safety contract.
+
 ---
 
 ## [1.3.0.4] - 2026-09-08
