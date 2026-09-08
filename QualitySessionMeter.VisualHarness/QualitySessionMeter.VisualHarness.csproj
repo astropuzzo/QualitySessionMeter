@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
+    <DefineConstants>$(DefineConstants);QSM_DEVELOPMENT</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
