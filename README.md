@@ -1,230 +1,196 @@
 # QualitySessionMeter
 
-**Real-time subframe quality control for N.I.N.A.**
+**Real-time subframe quality control and session diagnostics for N.I.N.A.**
 
-QualitySessionMeter watches LIGHT frames as they are acquired and assigns every exposure a **Quality Score from 0 to 100**, while independently applying user-configurable hard rejection rules for guiding instability, sudden transparency loss, and background changes.
+QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combines exposure-specific guiding analysis with rolling, same-context image-signal baselines, then presents a **Quality score (0–100)** while independently applying explicit hard rejection rules.
 
-The core idea is simple: a camera exposure being completed does not automatically mean that the exposure is useful.
+> **QSM never deletes rejected images in its normal workflow.** It can monitor only, keep a rejected file in place, prefix it with `BAD_`, or move it into a `Rejected` subfolder when the frame is eligible for file mutation.
 
-> **No rejected frame is ever deleted.** QualitySessionMeter can monitor only, keep rejected files in place, prefix them with `BAD_`, or move them into a `Rejected` subfolder.
+## Publication status
 
-## Status
+QSM is currently in **pre-store validation** and is **not yet an official N.I.N.A. catalog plugin**.
 
-- **1.2.0.0 / V3 + review workflow + OpenAstro monitor:** current candidate line. Rejected real frames can be opened directly in N.I.N.A. Image for inspection and QSM-applied `BAD_`/`Rejected` file moves can be physically undone without rewriting the original automatic verdict. The remote snapshot now exposes filenames and richer per-frame diagnostics for the OpenAstro monitor.
-- Runtime target: **N.I.N.A. 3.3 NIGHTLY #057** (`3.3.0.1057`) / `NINA.Plugin 3.3.0.1057-nightly`.
-- Target framework: **.NET 10** / `net10.0-windows7.0`.
-- Default operating mode: **OFF until explicitly enabled**; when enabled, **Monitor Only** remains the safe default for file handling.
-- Production package excludes Synthetic Lab code and UI; the field-test/development package retains the complete lab for deterministic host validation.
-- CI: Windows build + full V1/V2/V3 synthetic regression + production/field-test packaging gates through GitHub Actions.
-- OpenAstro remote monitor bridge: tokenized read-only snapshot, true live guider telemetry and in-memory latest-LIGHT JPEG preview.
-- See [ROADMAP.md](ROADMAP.md) for the exact release-hardening state and safety constraints.
+Current compatibility target:
 
-## Why this plugin exists
+- N.I.N.A. **3.3 NIGHTLY #057** (`3.3.0.1057`);
+- `NINA.Plugin 3.3.0.1057-nightly`;
+- .NET **10** / `net10.0-windows7.0`;
+- Windows.
 
-Long astrophotography sequences regularly contain individual subs damaged by conditions that are temporary enough to escape normal sequence logic:
+Two packages are generated during pre-store development:
 
-- wind gusts and short mount excursions;
-- clouds crossing the field;
-- haze or fog;
-- sudden transparency loss;
-- rapid sky-background brightening or darkening.
+- **field-test-with-synthetic-lab** — the package to use during current validation; includes Synthetic Lab;
+- **production** — generated in parallel to continuously prove that the future catalog package builds without Synthetic Lab/test UI.
 
-HFR, FWHM, and eccentricity are deliberately **not used as V1 rejection criteria**. In real acquisition tests, visibly wind-damaged stars with a point–streak–point profile can still report deceptively similar HFR or eccentricity values. QualitySessionMeter therefore focuses on temporal guiding behaviour and robust session-relative image statistics.
+The official N.I.N.A. package will use the production source set only.
 
-## V1 quality signals
+## What QSM is designed to catch
 
-### Exposure guiding RMS
+Long imaging sequences can contain individual subs damaged by temporary conditions that normal sequence control may not detect reliably, including:
 
-Guide samples falling inside the actual exposure interval are collected and converted to arcseconds using the guider pixel scale. Their combined error is used to calculate an exposure-specific RMS.
+- wind gusts and tracking disturbances;
+- prolonged or severe guide excursions;
+- cloud/transparency loss;
+- haze/fog and abrupt sky-background changes.
 
-Default hard limit:
+QSM deliberately does **not** make the current hard-rejection decision from HFR/FWHM/eccentricity alone. Scalar star-shape metrics can remain deceptively similar on some visibly wind-damaged point–streak–point stars. QSM therefore prioritizes exposure guiding behaviour and robust session-relative image statistics.
+
+## Decision model: score and rejection are separate
+
+A central design rule is:
 
 ```text
-Maximum exposure RMS: 1.50"
+Quality score != reject switch
+```
+
+The 0–100 Quality score summarizes measured channels for a human operator. Hard rules remain independent:
+
+```text
+ANY enabled hard rule fails -> REJECTED
+```
+
+A numerically reasonable Quality score cannot override a configured hard-limit failure.
+
+Frame states are:
+
+- `LEARNING` — same-context baseline is still being established;
+- `ACCEPTED` — no enabled hard rule failed;
+- `WARNING` — no hard rule failed, but overall quality is degraded;
+- `REJECTED` — at least one enabled hard rule failed;
+- `ERROR` — QSM could not assess the frame safely.
+
+See **[docs/METRICS.md](docs/METRICS.md)** for the normative definition of every metric, summary value and baseline rule.
+
+## Measured channels
+
+### Exposure Guide RMS
+
+QSM uses guide samples whose timestamps fall inside the actual camera exposure and computes an exposure-specific RMS in arcseconds.
+
+Default maximum:
+
+```text
+1.50"
 ```
 
 ### Sustained guide excursion
 
-A single noisy guide sample should not automatically destroy a sub. QualitySessionMeter therefore measures **how long** the total guide error remains above a configured threshold.
+QSM measures how long the **total vector guide-error magnitude** remains above the configured threshold. A single isolated spike has sustained duration zero and cannot satisfy the duration rule by itself.
 
-Default:
+Defaults:
 
 ```text
-Excursion threshold: 2.00"
-Minimum duration:     2.0 s
+Threshold: 2.00"
+Duration:  2.0 s
 ```
 
 ### Hard guide excursion
 
-A sufficiently severe guide excursion can reject a frame even if it is short.
+A sufficiently severe individual total-error excursion can reject a frame even when it is too short for the sustained-duration rule.
 
 Default:
 
 ```text
-Hard excursion: 5.00"
+5.00"
 ```
 
-### Relative star-count loss
+### Stars Δ vs rolling baseline
 
-The current detected-star count is compared with a rolling robust baseline built from previous good frames in the same acquisition context.
+Detected stars are compared with the clean rolling baseline for the same target/filter/exposure/gain/binning/camera context.
 
-Default:
+Default maximum loss:
 
 ```text
-Maximum star loss: 35%
+-35%
 ```
 
-A sudden 40–50% drop is a strong indicator of a cloud or major transparency event.
+### Background Δ vs rolling baseline
 
-### Relative background deviation
+The image background is compared with its own same-context rolling baseline.
 
-The image median/background is compared with its own rolling baseline. Both brightening and darkening can be rejected.
-
-Default:
+Defaults:
 
 ```text
 Maximum increase: +30%
 Maximum decrease: -30%
 ```
 
-This helps catch illuminated clouds, haze, fog, or other abrupt sky-background changes.
+Only clean `LEARNING` and `ACCEPTED` frames train the baseline. `WARNING`, `REJECTED` and `ERROR` frames do not, preventing degraded conditions from becoming the new definition of normal.
 
-## Adaptive baseline
+## N.I.N.A. Imaging panel
 
-QualitySessionMeter does **not** use the first frame as a permanent reference.
+The dockable QSM panel provides:
 
-The V1 baseline uses a rolling median of previous clean frames:
+- current Quality and Confidence;
+- frame state and explicit rejection reason;
+- probable-cause diagnostics;
+- exposure Guide RMS and guide-pattern diagnostics;
+- Stars Δ and Background Δ against rolling baselines;
+- captured / usable / rejected / acceptance summaries;
+- Session Quality and Session Confidence;
+- a **three-band multichannel timeline**:
+  - Quality + Confidence;
+  - exposure Guide RMS and current RMS limit;
+  - Stars Δ + Background Δ, rolling zero baseline and active limits;
+- vertical WARNING / REJECTED / ERROR markers with cause codes;
+- recent-frame history;
+- rejected-frame review/open-in-N.I.N.A. workflow;
+- session artifact/report access.
 
-```text
-Window:                  8 frames
-Minimum learning frames: 4
-Statistic:               median
-```
+The custom timeline follows the active N.I.N.A. theme for structural colors and reserves/clips its legend lane so labels cannot be drawn over the plot.
 
-Baselines are isolated by:
+## Web Dashboard
 
-- target;
-- filter;
-- exposure duration;
-- gain;
-- binning;
-- camera.
+QSM can optionally serve a self-contained **read-only Web Dashboard** directly from the Windows computer running N.I.N.A.
 
-A 300-second OIII frame therefore never becomes the reference for a 60-second Luminance frame.
+Default behaviour:
 
-### Baseline contamination protection
+- Web Dashboard: **OFF**;
+- port: `18974`;
+- password: **optional and OFF by default**;
+- no cloud account;
+- no router/UPnP changes;
+- no automatic public-Internet exposure.
 
-Only clean `LEARNING` frames and `ACCEPTED` frames update the baseline.
-
-`REJECTED`, `WARNING`, and `ERROR` frames do not.
-
-This prevents a cloud event from gradually becoming the plugin's new definition of normal conditions.
-
-## Quality Meter 0–100
-
-The Quality Meter is a first-class V1 feature, not a later add-on.
-
-Available sub-scores are:
-
-- **Guiding Quality**
-- **Guiding Stability**
-- **Transparency Quality**
-- **Background Quality**
-
-The total is intentionally **not a plain arithmetic mean**. A disastrous value in one dimension must not be hidden by three excellent values.
-
-V1 uses:
+When enabled, the plugin settings display a copyable URL such as:
 
 ```text
-Overall Quality =
-    WorstMetric × 0.70
-  + AverageMetric × 0.30
+http://192.168.1.50:18974/
 ```
 
-The worst-metric weight is configurable.
+The address resolver prefers an active physical Ethernet/Wi-Fi RFC1918 LAN address with a real IPv4 gateway and rejects common VPN/tunnel/virtual adapters for the displayed convenience URL.
 
-Labels:
+The dashboard includes:
 
-| Score | Label |
-|---:|---|
-| 90–100 | EXCELLENT |
-| 80–89 | GOOD |
-| 65–79 | FAIR |
-| 50–64 | POOR |
-| 0–49 | BAD |
+- current-frame diagnostics and latest LIGHT preview;
+- session counters and metric definitions;
+- the same three-band multichannel session timeline used conceptually by the N.I.N.A. panel;
+- live guiding with:
+  - signed RA/DEC error around zero;
+  - a separate total-error-magnitude plot;
+  - true sustained/hard excursion thresholds drawn only where they are semantically valid;
+  - real sample timestamps and per-sample hover/touch details.
 
-### Quality score is not the reject switch
+The rolling 20-second dashboard RMS is a **live diagnostic window**. The completed-frame Guide RMS remains exposure-specific and is the value used by the exposure-RMS hard rule.
 
-Hard rules and the Quality Meter are deliberately separate.
+For access outside a trusted LAN, use an existing VPN or HTTPS reverse proxy. Directly forwarding the plain HTTP dashboard port to the public Internet is not a supported deployment model.
 
-For example, a frame can have a numerical score of 64 but still be rejected because the configured maximum guide excursion was exceeded.
+See **[SECURITY.md](SECURITY.md)** for the complete network/security model.
 
-```text
-ANY enabled hard rule fails -> REJECTED
-```
+## OpenAstro / companion integration
 
-No second failing metric is required.
+The existing OpenAstro companion bridge remains separate from the universal Web Dashboard.
 
-## Frame states
+- it is opt-in;
+- it uses a dedicated tokenized read-only API;
+- it preserves the existing `/api/v1/...` contract;
+- enabling the normal Web Dashboard does **not** connect an installation to the maintainer's server or to another user's server.
 
-V1 uses five states:
+This separation allows the same QSM build to support both ordinary LAN/VPN users and advanced companion-server integrations without maintaining divergent plugin builds.
 
-- `LEARNING` — baseline still being established;
-- `ACCEPTED` — no hard rule failed;
-- `WARNING` — no hard rule failed, but overall Quality < 65;
-- `REJECTED` — at least one enabled hard rule failed;
-- `ERROR` — the frame could not be assessed safely.
+## Rejected-file safety and review
 
-In Monitor Only mode a rejected result is displayed as **WOULD REJECT** and no file is touched.
-
-## Probable cause
-
-V1 also provides a basic explanation layer. Examples:
-
-```text
-Guide excursion severe
-Stars normal
-Background normal
-=> WIND / GUIDING DISTURBANCE
-```
-
-```text
-Stars strongly reduced
-Background increased
-Guide normal
-=> CLOUD / BRIGHT SKY EVENT
-```
-
-```text
-Stars strongly reduced
-Guide normal
-=> CLOUD / TRANSPARENCY LOSS
-```
-
-This classification is diagnostic, not a substitute for the hard-rule result.
-
-## Live N.I.N.A. panel
-
-The dockable Imaging panel contains:
-
-- current Quality Score and label;
-- ACCEPTED / WARNING / REJECTED / LEARNING state;
-- probable cause and rejection reason;
-- exposure RMS;
-- maximum guide excursion;
-- star count and relative deviation;
-- background median and relative deviation;
-- captured / usable / rejected counters;
-- acceptance rate;
-- accepted-frame session quality;
-- live Quality timeline;
-- per-frame history table;
-- session-folder shortcut;
-- session reset control.
-
-## Rejected-file handling
-
-Available modes:
+Available file-handling modes are:
 
 ```text
 Monitor Only
@@ -233,113 +199,147 @@ Prefix BAD_
 Move to Rejected subfolder
 ```
 
-QualitySessionMeter does not contain a normal workflow that deletes rejected images.
+Safety rules:
 
-File operations are collision-safe and happen only after N.I.N.A. has completed saving the image.
+- QSM does not delete rejected images;
+- file operations occur only after N.I.N.A. has completed the save;
+- rename/move operations are collision-safe;
+- `Monitor Only` suppresses every physical file action;
+- V3 provenance/source policy protects manual or unknown frames from automatic mutation when they are not eligible;
+- QSM-applied `BAD_` / `Rejected` actions can be physically undone without rewriting the original automatic verdict in the session history.
 
-## Persistent session output
+## Sequencer integration
 
-A session folder is created under:
+QSM includes V3 sequence-control primitives for accepted-frame acquisition, including valid-frame progress tracking and Smart Recovery behaviour.
+
+A critical compatibility rule for a published plugin is that serialized sequencer type names/namespaces must remain stable. QSM therefore treats its public sequencer types as compatibility-sensitive API once officially released.
+
+## Session artifacts
+
+QSM stores session diagnostics under:
 
 ```text
 %LOCALAPPDATA%\NINA\QualitySessionMeter\Sessions\YYYY-MM-DD_HH-mm-ss\
 ```
 
-It contains:
+Artifacts include structured frame/session data and human-readable reports such as:
 
-### `frames.csv`
+- `frames.csv`;
+- `events.csv`;
+- `session.json`;
+- `quality.svg`;
+- `report.html`.
 
-One row per evaluated exposure, including source metrics, baselines, deviations, sub-scores, total quality, status, reasons and probable cause.
+Reports can contain filenames, target/filter/camera metadata and diagnostics. Review them before sharing publicly.
 
-### `session.json`
+## Pre-store installation for testing
 
-Structured session state and frame results for later tooling and future V2 analysis.
-
-### `quality.svg`
-
-A persistent session Quality timeline that can be opened in any modern browser or vector viewer.
-
-## Installation for testing
-
-V1 is currently a development build rather than an official N.I.N.A. plugin-store release.
-
-1. Open the latest successful GitHub Actions **build** run.
-2. Download the `QualitySessionMeter-v1` artifact.
-3. Create:
+For the current validation cycle, use the latest release asset whose name contains:
 
 ```text
-%LOCALAPPDATA%\NINA\Plugins\3.0.0\QualitySessionMeter\
+field-test-with-synthetic-lab
 ```
 
-4. Copy the artifact contents into that folder.
-5. Restart N.I.N.A.
-6. Open the QualitySessionMeter plugin settings and leave **Monitor Only** enabled for the first real-night calibration run.
-
-## Recommended first-night settings
+1. Close N.I.N.A.
+2. Remove the previous QSM test DLL/package from the active plugin folder to avoid loading an old copy.
+3. Extract the field-test package under the active N.I.N.A. plugin directory. For the current plugin API floor this is normally below:
 
 ```text
-Baseline window:            8 good frames
-Minimum learning frames:    4
+%LOCALAPPDATA%\NINA\Plugins\3.0.0\
+```
 
-Guide RMS max:              1.50"
+N.I.N.A. loads plugin DLLs from that version folder and one plugin subdirectory level below it.
+4. Start N.I.N.A. and confirm the loaded QSM version in the plugin/log output.
+5. Keep **Monitor Only** enabled for real-sky validation until file handling has been intentionally tested.
+6. Use **Synthetic Lab** for deterministic regression scenarios before testing destructive-adjacent workflows such as rename/move/restore.
+
+The exact versioned plugin folder is controlled by N.I.N.A.'s plugin API floor and can change in a future N.I.N.A. major/plugin-API revision.
+
+## Recommended starting values
+
+These are conservative starting points, **not universal astrophotography constants**:
+
+```text
+Baseline window:            8 clean frames
+Minimum learning frames:    4
+Guide RMS maximum:          1.50"
 Excursion threshold:        2.00"
 Excursion minimum duration: 2.0 s
 Hard excursion:             5.00"
-
 Maximum star loss:          35%
-Background increase:        +30%
-Background decrease:        -30%
-
+Background increase:        30%
+Background decrease:        30%
 Worst metric weight:        0.70
-Mode:                       Monitor Only
+File mode:                  Monitor Only
 ```
 
-These are starting values, not universal astrophotography constants. Mount scale, focal length, seeing, guider cadence, filters and sky quality all affect sensible thresholds.
+Image scale, focal length, seeing, guider cadence, filters, mount behaviour and sky conditions all affect sensible limits.
 
 ## Build from source
 
 Requirements:
 
-- Windows;
-- .NET 8 SDK;
-- N.I.N.A. 3.2-compatible environment for runtime testing.
+- Windows build/runtime environment;
+- .NET **10 SDK**;
+- compatible N.I.N.A. 3.3 host for runtime validation.
 
-Build:
+Production build:
 
 ```powershell
 dotnet restore QualitySessionMeter.csproj
-dotnet build QualitySessionMeter.csproj -c Release
+dotnet build QualitySessionMeter.csproj -c Release -p:QsmDevelopmentBuild=false
 ```
 
-The project references:
+Field-test build with Synthetic Lab:
+
+```powershell
+dotnet build QualitySessionMeter.csproj -c Release -p:QsmDevelopmentBuild=true
+```
+
+The project currently references:
 
 ```text
-NINA.Plugin 3.2.0.9001
+NINA.Plugin 3.3.0.1057-nightly
 ```
 
-GitHub Actions builds the same project on a Windows runner and publishes the Release output as an artifact.
+## CI / release gates
 
-## What V1 intentionally does not do
+Every release candidate is expected to pass:
 
-V1 does not:
+- production source-set isolation (Synthetic Lab excluded);
+- field-test source-set completeness (Synthetic Lab included);
+- production build;
+- field-test build;
+- full deterministic V1/V2/V3 synthetic regression;
+- UI/dashboard static release-contract gates;
+- pre-store packaging of both source sets.
 
-- reject on HFR;
-- reject on FWHM;
-- reject on eccentricity;
-- delete rejected files;
-- pause or resume the sequence automatically;
-- alter sequence progress based on accepted frames.
+Additional host validation is still required before an official catalog submission; CI does not substitute for visual/runtime testing inside N.I.N.A.
 
-The last item is a planned V3 capability. In V3 the acquisition goal becomes **N valid frames**, so if 203 frames have physically been captured and 8 were rejected, sequence progress should read `195 / target`, not `203 / target`.
+## Official N.I.N.A. catalog plan
 
-## Documentation
+The official plugin manager is driven by the central `isbeorn/nina.plugin.manifests` repository. The final publication flow will be:
 
-- [Roadmap](ROADMAP.md)
-- [Changelog](CHANGELOG.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Quality algorithm](docs/QUALITY_ALGORITHM.md)
-- [Full project specification](docs/PROJECT_SPEC.md)
-- [V1 real-night validation plan](docs/REAL_NIGHT_TEST_PLAN.md)
+1. finish real-host release validation;
+2. create an immutable production build from a version tag;
+3. generate `manifest.json` from that final DLL/archive;
+4. validate the manifest against the official schema;
+5. submit the manifest to the official repository;
+6. address maintainer review before merge.
+
+The DLL must not be rebuilt after manifest/checksum generation.
+
+Store metadata is kept in assembly metadata so the official manifest generator can consume it directly rather than relying on hand-edited manifest values.
+
+## Development disclosure and maintenance responsibility
+
+QSM has used **material AI-assisted development**. This is disclosed explicitly in preparation for the current N.I.N.A. manifest-repository policy.
+
+The repository owner is the accountable human maintainer. An official manifest should be submitted only after the human maintainer has personally reviewed, understood and tested the release candidate and is prepared to explain, debug and maintain the implementation, including its security/privacy/licensing/provenance implications.
+
+## Security
+
+Read **[SECURITY.md](SECURITY.md)** before exposing the Web Dashboard outside a trusted local network.
 
 ## License
 
