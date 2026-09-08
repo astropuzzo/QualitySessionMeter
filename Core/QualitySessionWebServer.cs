@@ -87,6 +87,13 @@ public sealed class QualitySessionWebServer : IDisposable {
     private void Reconfigure() {
         lock (lifecycleSync) {
             StopListener();
+
+            // A configuration/authentication change starts a fresh browser security context.
+            // This guarantees that changing/clearing a password, toggling auth, changing port,
+            // switching profile, or disabling/re-enabling the server revokes prior sessions.
+            sessions.Clear();
+            loginFailures.Clear();
+
             LastError = "";
             Port = settings.WebDashboardPort;
             if (disposed || !settings.WebDashboardEnabled) return;
@@ -360,7 +367,6 @@ public sealed class QualitySessionWebServer : IDisposable {
         var password = ParseFormValue(body, "password");
         if (!settings.VerifyWebDashboardPassword(password)) {
             RegisterLoginFailure(remoteKey);
-            // Small fixed delay makes rapid password guessing more expensive without making the UI annoying.
             try { await Task.Delay(250, cancellationToken); } catch { }
             await WriteJson(stream, 401, new { ok = false, error = "invalid credentials" }, cancellationToken);
             return;
@@ -507,7 +513,11 @@ public sealed class QualitySessionWebServer : IDisposable {
         lock (lifecycleSync) StopListener();
         sessions.Clear();
         loginFailures.Clear();
-        clientSlots.Dispose();
+
+        // Do not dispose clientSlots here. In-flight request tasks are intentionally allowed to
+        // finish their finally/Release path after listener cancellation; disposing the semaphore
+        // synchronously can turn a clean plugin unload into an ObjectDisposedException race.
+        // SemaphoreSlim.WaitAsync does not allocate its AvailableWaitHandle in this usage.
     }
 
     private sealed class LoginFailureState {
