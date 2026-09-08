@@ -24,7 +24,14 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
     public IPluginOptionsAccessor PluginSettings { get; }
     public QualitySettings Settings { get; }
 
-    public string WebDashboardAddress => LanAddressResolver.BuildDashboardUrl(webServer?.Port > 0 ? webServer.Port : Settings.WebDashboardPort);
+    // The Options UI displays this value in a read-only TextBox so the URL remains selectable.
+    // WPF TextBox.Text binds TwoWay by default, therefore a public no-op setter is intentionally
+    // provided as a compatibility guard. The value itself is always derived from the active LAN/port.
+    public string WebDashboardAddress {
+        get => LanAddressResolver.BuildDashboardUrl(webServer?.Port > 0 ? webServer.Port : Settings.WebDashboardPort);
+        set { }
+    }
+
     public string WebDashboardStatus => !Settings.WebDashboardEnabled
         ? "Disabled"
         : webServer?.Enabled == true
