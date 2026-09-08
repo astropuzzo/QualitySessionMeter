@@ -100,7 +100,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: QualitySessionMeter-v${{ env.QSM_VERSION }}-field-test-nina-3.3-nightly-057
+          name: QualitySessionMeter-v${{ env.QSM_VERSION }}-field-test-with-synthetic-lab-nina-3.3-nightly-057
           path: artifacts/field-test/
           if-no-files-found: error
 
@@ -112,21 +112,23 @@ jobs:
           path: artifacts/synthetic-check/
           if-no-files-found: warn
 
-      - name: Create public production release
+      - name: Create public pre-store test release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $zip = "QualitySessionMeter-$env:QSM_VERSION-production-nina-3.3-nightly-057.zip"
-          Compress-Archive -Path artifacts/production/* -DestinationPath $zip -Force
+          $fieldZip = "QualitySessionMeter-$env:QSM_VERSION-field-test-with-synthetic-lab-nina-3.3-nightly-057.zip"
+          $prodZip = "QualitySessionMeter-$env:QSM_VERSION-production-nina-3.3-nightly-057.zip"
+          Compress-Archive -Path artifacts/field-test/* -DestinationPath $fieldZip -Force
+          Compress-Archive -Path artifacts/production/* -DestinationPath $prodZip -Force
           if (gh release view "$env:QSM_TAG" --repo "${{ github.repository }}" *> $null) {
             Write-Host "Release $env:QSM_TAG already exists; leaving it unchanged."
           } else {
-            gh release create "$env:QSM_TAG" $zip `
+            gh release create "$env:QSM_TAG" $fieldZip $prodZip `
               --repo "${{ github.repository }}" `
               --target "$env:GITHUB_SHA" `
-              --title "QualitySessionMeter $env:QSM_VERSION" `
-              --generate-notes `
+              --title "QualitySessionMeter $env:QSM_VERSION (pre-store test)" `
+              --notes "Pre-store test release. Install the field-test-with-synthetic-lab ZIP for current validation. The production ZIP is generated in parallel to verify the future N.I.N.A. store package and intentionally excludes Synthetic Lab." `
               --latest
           }
