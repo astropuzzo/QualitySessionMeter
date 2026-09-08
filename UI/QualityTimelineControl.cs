@@ -157,11 +157,14 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
         // Structural colors follow the active N.I.N.A. profile theme. Diagnostic series keep
         // stable semantic colors so Quality/Confidence/Guide/Stars/Background remain recognizable.
+        // Secondary timeline text intentionally uses the normal host foreground too: N.I.N.A.'s
+        // disabled-control foreground can be extremely dim in night/dark profiles and these labels
+        // are explanatory data, not disabled UI.
         var background = ThemeBrush("SecondaryBackgroundBrush", 18, 22, 28);
         var borderPen = ThemePen("BorderBrush", 48, 54, 61, 1.0);
         var gridPen = ThemePen("BorderBrush", 56, 62, 70, 0.7);
         var textBrush = ThemeBrush("ButtonForegroundBrush", 220, 224, 230);
-        var secondaryText = ThemeBrush("ButtonForegroundDisabledBrush", 150, 158, 168);
+        var secondaryText = ThemeBrush("ButtonForegroundBrush", 190, 196, 204);
         var qualityBrush = FrozenBrush(138, 180, 248);
         var confidenceBrush = FrozenBrush(197, 138, 249);
         var guideBrush = FrozenBrush(129, 201, 149);
