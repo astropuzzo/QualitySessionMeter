@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -20,6 +21,22 @@ public partial class OptionsHelpResources : ResourceDictionary {
     private void ClearDashboardPassword(object sender, RoutedEventArgs e) {
         if (sender is Button button && button.DataContext is QualitySessionMeterPlugin plugin) {
             plugin.Settings.ClearWebDashboardPassword();
+        }
+    }
+
+    private void CopyDashboardAddress(object sender, RoutedEventArgs e) {
+        if (sender is not Button button || button.DataContext is not QualitySessionMeterPlugin plugin) return;
+        var address = plugin.WebDashboardAddress;
+        if (string.IsNullOrWhiteSpace(address) || address.Contains('<')) {
+            button.Content = "No LAN IP";
+            return;
+        }
+
+        try {
+            Clipboard.SetText(address);
+            button.Content = "Copied";
+        } catch {
+            button.Content = "Copy failed";
         }
     }
 }
