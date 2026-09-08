@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="System.IO" />
     <ProjectReference Include="..\QualitySessionMeter.csproj" AdditionalProperties="QsmDevelopmentBuild=true" />
   </ItemGroup>
 </Project>
