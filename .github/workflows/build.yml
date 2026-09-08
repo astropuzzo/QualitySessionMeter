@@ -53,6 +53,43 @@ jobs:
             throw "Field-test source set does not contain the complete Synthetic Lab."
           }
 
+      - name: Gate release UI and dashboard safety contracts
+        shell: pwsh
+        run: |
+          $web = Get-Content Core/WebDashboardPage.cs -Raw
+          $server = Get-Content Core/QualitySessionWebServer.cs -Raw
+          $options = Get-Content UI/OptionsHelpResources.xaml -Raw
+          $timeline = Get-Content UI/QualityTimelineControl.cs -Raw
+
+          foreach ($required in @(
+            'function drawTimeline',
+            'function drawGuide',
+            'const esc=',
+            'Metric definitions',
+            'Total error magnitude',
+            'rolling 20 s'
+          )) {
+            if ($web -notmatch [regex]::Escape($required)) { throw "Web Dashboard release contract missing: $required" }
+          }
+          if ($web -match 'qualityCanvas') { throw "Legacy simplified qualityCanvas graph returned to the Web Dashboard." }
+
+          foreach ($required in @(
+            'LanAddressResolver.BuildDashboardUrl',
+            'Content-Security-Policy',
+            'Cross-Origin-Resource-Policy',
+            'MaxConcurrentClients',
+            'MaxFailedLoginsPerWindow',
+            'WebDashboardPage.Html'
+          )) {
+            if ($server -notmatch [regex]::Escape($required)) { throw "Web server hardening contract missing: $required" }
+          }
+
+          if ($options -match '<GroupBox') { throw "Plugin Options regressed to custom GroupBox/card layout instead of native N.I.N.A. rows." }
+          if ($options -notmatch 'Background="\{DynamicResource BackgroundBrush\}"') { throw "Plugin Options are not bound to the active N.I.N.A. background theme." }
+          if ($options -notmatch 'WebDashboardAddress, Mode=OneWay') { throw "Dashboard address must remain read-only/OneWay in Options." }
+          if ($timeline -notmatch 'PushClip') { throw "Timeline plot clipping is missing; labels/markers may overlap the graph." }
+          if ($timeline -notmatch 'SecondaryBackgroundBrush' -or $timeline -notmatch 'ButtonForegroundBrush') { throw "Timeline structural colors are no longer tied to N.I.N.A. theme resources." }
+
       - name: Build production plugin
         run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=false
 
@@ -64,7 +101,8 @@ jobs:
           if (Test-Path "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb") {
             Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb" "artifacts/production/QualitySessionMeter.pdb" -Force
           }
-          Copy-Item README.md, CHANGELOG.md, LICENSE "artifacts/production/" -Force
+          Copy-Item README.md, CHANGELOG.md, LICENSE, SECURITY.md "artifacts/production/" -Force
+          if (Test-Path docs) { Copy-Item docs "artifacts/production/docs" -Recurse -Force }
 
       - name: Build field-test plugin with Synthetic Lab
         run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=true
@@ -77,7 +115,8 @@ jobs:
           if (Test-Path "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb") {
             Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb" "artifacts/field-test/QualitySessionMeter.pdb" -Force
           }
-          Copy-Item README.md, CHANGELOG.md, LICENSE "artifacts/field-test/" -Force
+          Copy-Item README.md, CHANGELOG.md, LICENSE, SECURITY.md "artifacts/field-test/" -Force
+          if (Test-Path docs) { Copy-Item docs "artifacts/field-test/docs" -Recurse -Force }
 
       - name: Restore synthetic checker
         run: dotnet restore QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj
