@@ -6,6 +6,30 @@ The current `1.3.x` line is still a **pre-store field-test line**. During this p
 
 ---
 
+## [1.3.0.4] - 2026-09-08
+
+### Unified latest-LIGHT preview and official N.I.N.A. publication path
+
+- Added a single shared in-memory latest-LIGHT preview cache used by both the universal Web Dashboard and the existing tokenized OpenAstro/companion bridge.
+- A real saved LIGHT is cloned/frozen from N.I.N.A.'s `ImageSaved` payload, then JPEG-encoded asynchronously so preview encoding is isolated from the acquisition/save path.
+- Preview generation is display-only: it never reads, writes, renames, moves or deletes the acquisition FITS/XISF file and never participates in frame classification.
+- Added generation ordering so an older, slower asynchronous JPEG encode cannot overwrite a newer preview.
+- Added preview generation/version metadata, capture timestamp, image ID and ETag support to the universal dashboard routes.
+- OpenAstro keeps its existing `/api/v1/...` routes and token authentication; only the internal preview source is now shared, preventing the two dashboards from diverging.
+- Synthetic Lab still contains no real camera image pixels by design, so it cannot manufacture an astronomical preview. The cached preview updates on the next real saved LIGHT.
+
+### N.I.N.A. catalog release pipeline
+
+- Added `.github/workflows/nina-release.yml`, a separate official-release pipeline triggered only by a four-part tag such as `1.3.0.4` (without the pre-store `v` prefix).
+- The official pipeline builds the production source set only, verifies that Synthetic Lab is excluded, runs the complete V1/V2/V3 regression suite and generates the manifest from the final immutable DLL.
+- The generated manifest is validated against a checkout of the current `isbeorn/nina.plugin.manifests` repository before the release is published.
+- Official release assets contain the archive plus the exact generated manifest/checksum pair.
+- Optional automatic manifest submission is supported after the maintainer creates the `astropuzzo/nina.plugin.manifests` fork and configures the `PAT` repository secret; otherwise the manifest remains available for manual submission.
+- Added `docs/PUBLISHING.md` with release blockers, AI-assistance disclosure requirements, one-time GitHub setup, store-artwork slots, exact manifest path and manual/automatic publication procedures.
+- Official catalog submission remains blocked until real N.I.N.A. host validation and current final store artwork/screenshots are complete.
+
+---
+
 ## [1.3.0.3] - 2026-09-08
 
 ### N.I.N.A. release-readiness, chart correctness, theme consistency and dashboard hardening
