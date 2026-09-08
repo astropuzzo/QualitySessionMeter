@@ -63,10 +63,17 @@ jobs:
           $resourcesCode = Get-Content UI/Resources.xaml.cs -Raw
           $controlCenterCode = Get-Content UI/ControlCenterResources.xaml.cs -Raw
           $timeline = Get-Content UI/QualityTimelineControl.cs -Raw
+          $frameAxis = Get-Content UI/TimelineFrameAxisAdorner.cs -Raw
 
           foreach ($required in @(
             'function drawTimeline',
             'function drawGuide',
+            'function drawFrameAxis',
+            'function frameTickIndexes',
+            'adaptive Frame # axis',
+            'lastPreviewGeneration',
+            'function updatePreview',
+            'meta.generation',
             'const esc=',
             'Metric definitions',
             'Total error magnitude',
@@ -75,6 +82,7 @@ jobs:
             if ($web -notmatch [regex]::Escape($required)) { throw "Web Dashboard release contract missing: $required" }
           }
           if ($web -match 'qualityCanvas') { throw "Legacy simplified qualityCanvas graph returned to the Web Dashboard." }
+          if ($web -match "setInterval\(preview") { throw "Web preview regressed to blind periodic img reloads instead of generation-aware updates." }
 
           foreach ($required in @(
             'LanAddressResolver.BuildDashboardUrl',
@@ -97,14 +105,17 @@ jobs:
           if ($resourcesCode -match 'BindingOperations\.SetBinding' -or $resourcesCode -match 'SolidColorBrush\.ColorProperty') {
             throw "Cross-thread unsafe SolidColorBrush binding returned to shared QSM resources."
           }
-          foreach ($required in @('FreezeBrush("QsmCard")', 'SetResourceReference', 'CardLoaded')) {
-            if ($resourcesCode -notmatch [regex]::Escape($required)) { throw "WPF brush safety contract missing: $required" }
+          foreach ($required in @('FreezeBrush("QsmCard")', 'SetResourceReference', 'CardLoaded', 'TimelineFrameAxisBehavior.Attach')) {
+            if ($resourcesCode -notmatch [regex]::Escape($required)) { throw "WPF brush/timeline safety contract missing: $required" }
           }
           foreach ($required in @('TextAlignment = TextAlignment.Left', 'HorizontalContentAlignment = HorizontalAlignment.Left', 'ButtonForegroundBrush')) {
             if ($optionsCode -notmatch [regex]::Escape($required)) { throw "Options left-alignment/theme contract missing: $required" }
           }
           foreach ($required in @('SecondaryBackgroundBrush', 'TertiaryBackgroundBrush', 'ButtonForegroundBrush', 'SetResourceReference')) {
             if ($controlCenterCode -notmatch [regex]::Escape($required)) { throw "Control Center theme contract missing: $required" }
+          }
+          foreach ($required in @('FRAME #', 'FrameIndex', 'BuildTickIndexes', 'TakeLast(160)', 'IsHitTestVisible = false')) {
+            if ($frameAxis -notmatch [regex]::Escape($required)) { throw "WPF frame-axis contract missing: $required" }
           }
 
           if ($timeline -notmatch 'PushClip') { throw "Timeline plot clipping is missing; labels/markers may overlap the graph." }
