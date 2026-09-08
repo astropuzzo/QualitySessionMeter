@@ -71,8 +71,12 @@ internal sealed class TimelineFrameAxisAdorner : Adorner, IDisposable {
         var labelWidth = Math.Clamp(width * 0.27, 150, 215);
         var plotWidth = Math.Max(1, width - labelWidth - 1);
         const double markerLane = 38;
-        const double tickTop = 31;
-        const double labelY = 20.5;
+
+        // EVENT badges occupy roughly y=3..18 and the explanatory event legend occupies y=2..25.
+        // Keep the Frame # axis in the bottom row of the reserved lane so the two concepts never
+        // visually collide, even at 100% DPI on a narrow AvalonDock panel.
+        const double labelY = 26.0;
+        const double tickTop = 31.5;
 
         var foreground = ThemeBrush("ButtonForegroundBrush", 220, 224, 230);
         var secondary = ThemeBrush("ButtonForegroundBrush", 190, 196, 204);
@@ -81,7 +85,7 @@ internal sealed class TimelineFrameAxisAdorner : Adorner, IDisposable {
         var tickPen = new Pen(border, 0.8);
 
         // Explicit axis name in the legend lane so the numbers are not ambiguous.
-        dc.DrawText(Format("FRAME #", 7.8, secondary, FontWeights.SemiBold), new Point(3, labelY + 1));
+        dc.DrawText(Format("FRAME #", 7.6, secondary, FontWeights.SemiBold), new Point(3, labelY));
 
         // A subtle baseline visually associates the labels with the timeline's x positions.
         dc.DrawLine(tickPen, new Point(labelWidth, markerLane - 0.5), new Point(labelWidth + plotWidth, markerLane - 0.5));
@@ -104,7 +108,7 @@ internal sealed class TimelineFrameAxisAdorner : Adorner, IDisposable {
 
             var isLatest = index == frames.Length - 1;
             var label = Format("#" + frames[index].FrameIndex.ToString(CultureInfo.InvariantCulture),
-                isLatest ? 8.4 : 8.0,
+                isLatest ? 8.2 : 7.8,
                 isLatest ? accent : foreground,
                 isLatest ? FontWeights.SemiBold : FontWeights.Normal);
 
