@@ -226,9 +226,15 @@
                         <Border Height="1" Opacity="0.15" Background="White" Margin="0,12"/>
 
                         <TextBlock Text="Dashboard address" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding WebDashboardAddress}" Margin="0,3,0,0" FontFamily="Consolas" TextWrapping="Wrap"/>
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding WebDashboardAddress}" IsReadOnly="True" FontFamily="Consolas"
+                                     VerticalContentAlignment="Center" ToolTip="The preferred physical LAN address detected for this N.I.N.A. PC. You can also select and copy it manually."/>
+                            <Button Grid.Column="1" Margin="8,0,0,0" Padding="12,4" Content="Copy address"
+                                    Click="CopyDashboardAddress" ToolTip="Copy the complete dashboard URL to the Windows clipboard."/>
+                        </Grid>
                         <TextBlock Text="{Binding WebDashboardStatus, StringFormat=Status: {0}}" Margin="0,3,0,0" Style="{StaticResource QsmOptHint}"/>
-                        <TextBlock Margin="0,8,0,0" Style="{StaticResource QsmOptHint}" Text="The dashboard is read-only. QSM does not open router ports or expose itself to the Internet. For access away from home, use your existing VPN/reverse-proxy setup. The existing tokenized OpenAstro API remains separate and unchanged."/>
+                        <TextBlock Margin="0,8,0,0" Style="{StaticResource QsmOptHint}" Text="QSM prefers the physical Ethernet/Wi-Fi LAN address for this link and ignores common VPN/virtual adapters. The dashboard is read-only. QSM does not open router ports or expose itself to the Internet. For access away from home, use your existing VPN/reverse-proxy setup. The existing tokenized OpenAstro API remains separate and unchanged."/>
                     </StackPanel>
                 </GroupBox>
             </StackPanel>
