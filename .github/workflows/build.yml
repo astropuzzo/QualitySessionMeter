@@ -38,13 +38,18 @@ jobs:
         run: |
           $prodCompile = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=false -getItem:Compile
           $prodPage = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=false -getItem:Page
-          if (($prodCompile -join "`n") -match 'Synthetic[\/].*\.cs|SyntheticLabDockable\.cs|SyntheticResources\.xaml\.cs' -or ($prodPage -join "`n") -match 'SyntheticResources\.xaml') {
+          $prodText = $prodCompile -join "`n"
+          $prodPages = $prodPage -join "`n"
+          $syntheticCodePattern = 'SyntheticSessionGenerator\.cs|SyntheticConfidenceOracle\.cs|SyntheticEventOracle\.cs|SyntheticGuidePatternOracle\.cs|SyntheticTrendOracle\.cs|SyntheticLabDockable\.cs|SyntheticResources\.xaml\.cs'
+          if ($prodText -match $syntheticCodePattern -or $prodPages -match 'SyntheticResources\.xaml') {
             throw "Production source set still contains Synthetic Lab code or UI."
           }
 
           $devCompile = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=true -getItem:Compile
           $devPage = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=true -getItem:Page
-          if (($devCompile -join "`n") -notmatch 'Synthetic[\/].*\.cs' -or ($devCompile -join "`n") -notmatch 'SyntheticLabDockable\.cs' -or ($devPage -join "`n") -notmatch 'SyntheticResources\.xaml') {
+          $devText = $devCompile -join "`n"
+          $devPages = $devPage -join "`n"
+          if ($devText -notmatch 'SyntheticSessionGenerator\.cs' -or $devText -notmatch 'SyntheticConfidenceOracle\.cs' -or $devText -notmatch 'SyntheticLabDockable\.cs' -or $devPages -notmatch 'SyntheticResources\.xaml') {
             throw "Field-test source set does not contain the complete Synthetic Lab."
           }
 
