@@ -86,7 +86,7 @@ Before tagging, `QualitySessionMeter.csproj` must contain the exact same four-pa
 6. assembles the production package;
 7. downloads the current upstream `CreateManifest.ps1`;
 8. generates the archive and manifest from the **final already-built DLL**;
-9. validates that manifest by placing it into a checkout of `isbeorn/nina.plugin.manifests` and running `npm ci` + `node gather.js`;
+9. validates that manifest by placing it into a checkout of `isbeorn/nina.plugin.manifests` and running `npm install` + `node gather.js`;
 10. creates a GitHub release containing both the ZIP and generated manifest;
 11. if the fork + `PAT` exist, creates a manifest branch in the fork and opens the upstream pull request automatically.
 
