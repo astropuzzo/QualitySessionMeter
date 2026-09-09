@@ -13,8 +13,7 @@ function Remove-Style([string]$s, [string]$key) {
     return [regex]::Replace($s, $pattern, "`r`n", 1)
 }
 
-# Main QSM dockable. Keep only immutable/freezable resources in the dictionary; former Style
-# properties become local template values and host theme references remain DynamicResource.
+# Main QSM dockable: remove shared Style objects and expand their presentation locally.
 $p = 'UI/Resources.xaml'
 $s = Read-Text $p
 $s = Remove-Style $s 'QsmCardStyle'
@@ -25,7 +24,7 @@ $s = Replace-Checked $s '<ScrollViewer VerticalScrollBarVisibility="Auto" Horizo
 if ($s -match 'QsmCardStyle|QsmSectionTitle') { throw 'Shared main dockable style reference remains.' }
 Write-Text $p $s
 
-# Native N.I.N.A.-style options page. All former helper styles are expanded locally.
+# Native N.I.N.A.-style options.
 $p = 'UI/OptionsHelpResources.xaml'
 $s = Read-Text $p
 foreach ($key in @('QsmSectionHeader','QsmSubHeader','QsmHint','QsmOptionRow')) { $s = Remove-Style $s $key }
@@ -85,36 +84,7 @@ $entry = @'
 $s = $s.Replace($marker, $entry + $marker)
 Write-Text $p $s
 
-# Permanent CI/store-release gates. This turns the real-host failure into a forbidden source pattern.
-foreach ($workflowPath in @('.github/workflows/build.yml','.github/workflows/nina-release.yml')) {
-    $s = Read-Text $workflowPath
-    $anchor = '          $resourcesCode = Get-Content UI/Resources.xaml.cs -Raw'
-    if (-not $s.Contains($anchor)) { throw "Gate anchor missing in $workflowPath" }
-    $gate = @'
-          $dispatcherSensitiveXaml = @(
-            'UI/Resources.xaml',
-            'UI/OptionsHelpResources.xaml',
-            'UI/ControlCenterResources.xaml',
-            'UI/SyntheticResources.xaml'
-          )
-          foreach ($xamlPath in $dispatcherSensitiveXaml) {
-            if (Test-Path $xamlPath) {
-              $xamlText = Get-Content $xamlPath -Raw
-              if ($xamlText -match '<Style\s+x:Key=') { throw "Dispatcher-sensitive shared keyed Style found in $xamlPath" }
-            }
-          }
-          foreach ($codePath in @('UI/Resources.xaml.cs','UI/OptionsHelpResources.xaml.cs','UI/ControlCenterResources.xaml.cs','UI/SyntheticResources.xaml.cs')) {
-            if (Test-Path $codePath) {
-              $codeText = Get-Content $codePath -Raw
-              if ($codeText -match 'AddLoadedHandler\(' -or $codeText -match 'EventSetter\(') { throw "Cross-dispatcher Style mutation helper found in $codePath" }
-            }
-          }
-'@
-    $s = $s.Replace($anchor, $anchor + "`r`n" + $gate.TrimEnd())
-    Write-Text $workflowPath $s
-}
-
-# Assertions against both XAML and the manually rewritten code-behind.
+# Assertions against XAML and the already manually rewritten code-behind.
 foreach ($xamlPath in @('UI/Resources.xaml','UI/OptionsHelpResources.xaml','UI/ControlCenterResources.xaml','UI/SyntheticResources.xaml')) {
     if ((Read-Text $xamlPath) -match '<Style\s+x:Key=') { throw "Shared keyed Style still present in $xamlPath" }
 }
@@ -123,4 +93,4 @@ foreach ($codePath in @('UI/Resources.xaml.cs','UI/OptionsHelpResources.xaml.cs'
     if ($code -match 'AddLoadedHandler\(' -or $code -match 'EventSetter\(') { throw "Shared Style mutation still present in $codePath" }
 }
 
-Write-Host 'Dispatcher-style XAML/version/gate transform completed.'
+Write-Host 'Dispatcher-style runtime transform completed.'
