@@ -1,0 +1,87 @@
+name: generate store assets
+
+on:
+  push:
+    branches:
+      - release/1305-store-assets
+    paths:
+      - '.github/workflows/store-assets.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout store-assets branch
+        uses: actions/checkout@v4
+        with:
+          ref: release/1305-store-assets
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore WPF visual harnesses
+        run: |
+          dotnet restore QualitySessionMeter.VisualHarness/QualitySessionMeter.VisualHarness.csproj
+          dotnet restore QualitySessionMeter.VisualSlices/QualitySessionMeter.VisualSlices.csproj
+
+      - name: Render actual QSM WPF templates
+        run: |
+          dotnet run --project QualitySessionMeter.VisualHarness/QualitySessionMeter.VisualHarness.csproj -c Release --no-restore -- artifacts/visual
+          dotnet run --project QualitySessionMeter.VisualSlices/QualitySessionMeter.VisualSlices.csproj -c Release --no-restore -- artifacts/visual
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Render actual embedded Web Dashboard
+        run: node tools/visual/render-web.mjs artifacts/visual
+
+      - name: Render featured image from QSM meter geometry
+        shell: pwsh
+        run: pwsh -NoLogo -NoProfile -Sta -File tools/store/render-featured.ps1 -OutputPath artifacts/store/featured.png
+
+      - name: Assemble and validate catalog assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path docs/store | Out-Null
+          Copy-Item artifacts/store/featured.png docs/store/featured.png -Force
+          Copy-Item artifacts/visual/wpf-main-panel-dark-slice-top.png docs/store/nina-panel.png -Force
+          Copy-Item artifacts/visual/web-desktop-1440x1000-top.png docs/store/web-dashboard.png -Force
+
+          $required = @(
+            'docs/store/featured.png',
+            'docs/store/nina-panel.png',
+            'docs/store/web-dashboard.png'
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) { throw "Missing store asset: $path" }
+            $item = Get-Item $path
+            if ($item.Length -lt 10000) { throw "Store asset is unexpectedly small: $path ($($item.Length) bytes)" }
+            $hash = (Get-FileHash $path -Algorithm SHA256).Hash
+            Write-Host "$path  $($item.Length) bytes  SHA256=$hash"
+          }
+
+      - name: Commit generated catalog assets
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/store/featured.png docs/store/nina-panel.png docs/store/web-dashboard.png
+          if (git diff --cached --quiet) {
+            Write-Host "Store assets already match generated output."
+            exit 0
+          }
+          git commit -m "Add generated NINA catalog artwork"
+          git push origin HEAD:release/1305-store-assets
