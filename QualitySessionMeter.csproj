@@ -41,6 +41,10 @@
     <EmbeddedResource Remove="QualitySessionMeter.VisualSlices\**\*" />
     <None Remove="QualitySessionMeter.VisualSlices\**\*" />
     <Page Remove="QualitySessionMeter.VisualSlices\**\*.xaml" />
+    <Compile Remove="QualitySessionMeter.DispatcherCheck\**\*.cs" />
+    <EmbeddedResource Remove="QualitySessionMeter.DispatcherCheck\**\*" />
+    <None Remove="QualitySessionMeter.DispatcherCheck\**\*" />
+    <Page Remove="QualitySessionMeter.DispatcherCheck\**\*.xaml" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(QsmDevelopmentBuild)' != 'true'">
