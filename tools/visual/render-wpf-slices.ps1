@@ -171,16 +171,16 @@ try {
         $content.HorizontalContentAlignment = [System.Windows.HorizontalAlignment]::Stretch
         $content.VerticalContentAlignment = [System.Windows.VerticalAlignment]::Stretch
 
-        $host = [System.Windows.Controls.Border]::new()
-        $host.Width = $Width
-        $host.Height = $Height
-        $host.Child = $content
-        $host.SetResourceReference([System.Windows.Controls.Border]::BackgroundProperty, "BackgroundBrush")
+        $renderHost = [System.Windows.Controls.Border]::new()
+        $renderHost.Width = $Width
+        $renderHost.Height = $Height
+        $renderHost.Child = $content
+        $renderHost.SetResourceReference([System.Windows.Controls.Border]::BackgroundProperty, "BackgroundBrush")
 
         $window = [System.Windows.Window]::new()
         $window.Width = $Width
         $window.Height = $Height
-        $window.Content = $host
+        $window.Content = $renderHost
         $window.WindowStyle = [System.Windows.WindowStyle]::None
         $window.ResizeMode = [System.Windows.ResizeMode]::NoResize
         $window.ShowInTaskbar = $false
@@ -192,9 +192,9 @@ try {
 
         try {
             Pump-Dispatcher
-            $host.Measure([System.Windows.Size]::new($Width, $Height))
-            $host.Arrange([System.Windows.Rect]::new(0, 0, $Width, $Height))
-            $host.UpdateLayout()
+            $renderHost.Measure([System.Windows.Size]::new($Width, $Height))
+            $renderHost.Arrange([System.Windows.Rect]::new(0, 0, $Width, $Height))
+            $renderHost.UpdateLayout()
             Pump-Dispatcher
 
             $scroll = Find-VisualChild -Root $content -Type ([System.Windows.Controls.ScrollViewer])
@@ -211,7 +211,7 @@ try {
                 $scroll.ScrollToVerticalOffset([double]$entry.Value)
                 $scroll.UpdateLayout()
                 Pump-Dispatcher
-                Save-VisualPng -Visual $host -Width $Width -Height $Height -FileName "$BaseName-$($entry.Key).png"
+                Save-VisualPng -Visual $renderHost -Width $Width -Height $Height -FileName "$BaseName-$($entry.Key).png"
             }
         } finally {
             $window.Close()
