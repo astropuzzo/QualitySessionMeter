@@ -8,6 +8,8 @@ using System.Security.Cryptography;
 namespace NINA.Plugin.QualitySessionMeter.Settings;
 
 public sealed class QualitySettings : INotifyPropertyChanged {
+    private const int DashboardPasswordIterations = 120000;
+    private const int DashboardPasswordHashBytes = 32;
     private readonly IPluginOptionsAccessor accessor;
 
     public QualitySettings(IPluginOptionsAccessor accessor) { this.accessor = accessor; }
@@ -203,10 +205,12 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     public void SetWebDashboardPassword(string password) {
         if (string.IsNullOrEmpty(password)) return;
         var salt = RandomNumberGenerator.GetBytes(16);
-        byte[] hash;
-        using (var derive = new Rfc2898DeriveBytes(password, salt, 120000, HashAlgorithmName.SHA256)) {
-            hash = derive.GetBytes(32);
-        }
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            password,
+            salt,
+            DashboardPasswordIterations,
+            HashAlgorithmName.SHA256,
+            DashboardPasswordHashBytes);
         accessor.SetValueString("WebDashboardPasswordSalt", Convert.ToBase64String(salt));
         accessor.SetValueString("WebDashboardPasswordHash", Convert.ToBase64String(hash));
         Raise(nameof(WebDashboardPasswordConfigured));
@@ -225,10 +229,12 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         try {
             var salt = Convert.FromBase64String(accessor.GetValueString("WebDashboardPasswordSalt", string.Empty));
             var expected = Convert.FromBase64String(accessor.GetValueString("WebDashboardPasswordHash", string.Empty));
-            byte[] actual;
-            using (var derive = new Rfc2898DeriveBytes(password, salt, 120000, HashAlgorithmName.SHA256)) {
-                actual = derive.GetBytes(expected.Length);
-            }
+            var actual = Rfc2898DeriveBytes.Pbkdf2(
+                password,
+                salt,
+                DashboardPasswordIterations,
+                HashAlgorithmName.SHA256,
+                expected.Length);
             return CryptographicOperations.FixedTimeEquals(actual, expected);
         } catch {
             return false;
