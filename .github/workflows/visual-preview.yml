@@ -20,15 +20,16 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore WPF visual harness
-        run: dotnet restore QualitySessionMeter.VisualHarness/QualitySessionMeter.VisualHarness.csproj
+      - name: Restore WPF visual harnesses
+        run: |
+          dotnet restore QualitySessionMeter.VisualHarness/QualitySessionMeter.VisualHarness.csproj
+          dotnet restore QualitySessionMeter.VisualSlices/QualitySessionMeter.VisualSlices.csproj
 
       - name: Render real QSM WPF templates
         run: dotnet run --project QualitySessionMeter.VisualHarness/QualitySessionMeter.VisualHarness.csproj -c Release --no-restore -- artifacts/visual
 
       - name: Render WPF scroll slices
-        shell: pwsh
-        run: pwsh -NoLogo -NoProfile -Sta -File tools/visual/render-wpf-slices.ps1 -OutputDirectory artifacts/visual
+        run: dotnet run --project QualitySessionMeter.VisualSlices/QualitySessionMeter.VisualSlices.csproj -c Release --no-restore -- artifacts/visual
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -57,6 +58,7 @@ jobs:
             'wpf-main-panel-dark-slice-top.png',
             'wpf-main-panel-dark-slice-middle.png',
             'wpf-main-panel-dark-slice-bottom.png',
+            'wpf-control-center-light-slice-bottom.png',
             'web-mobile-430x932-full.png',
             'web-desktop-1440x1000-full.png'
           )
