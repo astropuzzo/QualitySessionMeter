@@ -1,5 +1,4 @@
 using NINA.Plugin.QualitySessionMeter.UI;
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,18 +26,25 @@ internal static class Program {
 
         var producer = new Thread(() => {
             try {
-                // This intentionally creates plugin ResourceDictionaries on dispatcher A.
-                // N.I.N.A. can discover/export resource dictionaries before AvalonDock later
-                // materializes their templates on the UI dispatcher.
+                // Dispatcher A creates the exported plugin dictionaries. Each template is then
+                // materialized once on A so FrameworkTemplate is sealed before transfer. This
+                // matches the real N.I.N.A. failure more closely: the host log had already passed
+                // FrameworkTemplate.Seal and failed later while applying a child Style.
                 var resources = new Resources();
                 var controlCenter = new ControlCenterResources();
                 var synthetic = new SyntheticResources();
 
-                templates = new Templates(
-                    RequireTemplate(resources, "NINA.Plugin.QualitySessionMeter.UI.QualitySessionMeterDockable_Dockable"),
-                    RequireTemplate(resources, "QualitySessionMeter_Options"),
-                    RequireTemplate(controlCenter, "NINA.Plugin.QualitySessionMeter.UI.QsmControlCenterDockable_Dockable"),
-                    RequireTemplate(synthetic, "NINA.Plugin.QualitySessionMeter.UI.SyntheticLabDockable_Dockable"));
+                var main = RequireTemplate(resources, "NINA.Plugin.QualitySessionMeter.UI.QualitySessionMeterDockable_Dockable");
+                var options = RequireTemplate(resources, "QualitySessionMeter_Options");
+                var cc = RequireTemplate(controlCenter, "NINA.Plugin.QualitySessionMeter.UI.QsmControlCenterDockable_Dockable");
+                var lab = RequireTemplate(synthetic, "NINA.Plugin.QualitySessionMeter.UI.SyntheticLabDockable_Dockable");
+
+                PrimeTemplate("main dockable", main);
+                PrimeTemplate("options", options);
+                PrimeTemplate("control center", cc);
+                PrimeTemplate("synthetic lab", lab);
+
+                templates = new Templates(main, options, cc, lab);
             } catch (Exception ex) {
                 producerFailure = ex;
             }
@@ -60,7 +66,8 @@ internal static class Program {
 
         var consumer = new Thread(() => {
             try {
-                // Dispatcher B is deliberately distinct from the resource producer.
+                // Dispatcher B is deliberately distinct from the resource producer and owns all
+                // host theme/implicit Style resources used during layout.
                 var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 InstallHostResources(app);
                 try {
@@ -86,7 +93,7 @@ internal static class Program {
             return 4;
         }
 
-        Console.WriteLine("PASS: QSM ResourceDictionaries created on STA dispatcher A and all release/field-test templates materialized and laid out on independent STA dispatcher B.");
+        Console.WriteLine("PASS: sealed QSM templates created/materialized on STA dispatcher A were materialized and laid out again on independent STA dispatcher B.");
         return 0;
     }
 
@@ -97,6 +104,22 @@ internal static class Program {
         return template;
     }
 
+    private static void PrimeTemplate(string name, DataTemplate template) {
+        try {
+            var content = template.LoadContent();
+            if (!template.IsSealed) {
+                throw new InvalidOperationException($"Template '{name}' did not seal after LoadContent().");
+            }
+            if (content is FrameworkElement element) {
+                element.Measure(new Size(1100, 900));
+                element.Arrange(new Rect(0, 0, 1100, 900));
+            }
+            Console.WriteLine($"SEALED ON A: {name}");
+        } catch (Exception ex) {
+            throw new InvalidOperationException($"Template '{name}' could not be primed on resource dispatcher A.", ex);
+        }
+    }
+
     private static void InstallHostResources(Application app) {
         app.Resources["BackgroundBrush"] = FrozenBrush("#2B353B");
         app.Resources["SecondaryBackgroundBrush"] = FrozenBrush("#1B2025");
@@ -105,9 +128,6 @@ internal static class Program {
         app.Resources["ButtonForegroundBrush"] = FrozenBrush("#EEF2F5");
         app.Resources["PrimaryBrush"] = FrozenBrush("#62A89A");
 
-        // Minimal implicit host styles are intentionally created on dispatcher B. If a QSM
-        // template accidentally retains a Style object owned by dispatcher A, applying/layout
-        // on this dispatcher reproduces Style.CheckTargetType/VerifyAccess failures.
         app.Resources.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse("""
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -155,7 +175,7 @@ internal static class Program {
             host.Arrange(new Rect(0, 0, 1100, 900));
             host.UpdateLayout();
             Pump();
-            Console.WriteLine($"PASS: {name}");
+            Console.WriteLine($"PASS ON B: {name}");
         } catch (Exception ex) {
             throw new InvalidOperationException($"Template '{name}' failed across dispatchers.", ex);
         } finally {
