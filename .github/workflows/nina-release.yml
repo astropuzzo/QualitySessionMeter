@@ -1,7 +1,7 @@
 name: NINA catalog release
 
 # Official/store releases are immutable and tag-driven. Use a four-part tag without a leading v,
-# for example: 1.3.0.5. Do not use this workflow for ordinary pre-store field testing.
+# for example: 1.3.0.6. Do not use this workflow for ordinary pre-store field testing.
 on:
   push:
     tags:
@@ -50,6 +50,7 @@ jobs:
           $text = ($compile -join "`n") + "`n" + ($pages -join "`n")
           $syntheticPattern = 'SyntheticSessionGenerator\.cs|SyntheticConfidenceOracle\.cs|SyntheticEventOracle\.cs|SyntheticGuidePatternOracle\.cs|SyntheticTrendOracle\.cs|SyntheticLabDockable\.cs|SyntheticResources\.xaml'
           if ($text -match $syntheticPattern) { throw "Official production source set contains Synthetic Lab/test UI." }
+          if ($text -match 'QualitySessionMeter\.DispatcherCheck') { throw "Official production source set contains dispatcher test harness code." }
 
       - name: Gate dashboard/release contracts
         shell: pwsh
@@ -58,9 +59,14 @@ jobs:
           $server = Get-Content Core/QualitySessionWebServer.cs -Raw
           $preview = Get-Content Core/LatestLightPreviewCache.cs -Raw
           $assembly = Get-Content Properties/AssemblyInfo.cs -Raw
+          $resourcesXaml = Get-Content UI/Resources.xaml -Raw
+          $optionsXaml = Get-Content UI/OptionsHelpResources.xaml -Raw
+          $controlCenterXaml = Get-Content UI/ControlCenterResources.xaml -Raw
+          $syntheticXaml = if (Test-Path UI/SyntheticResources.xaml) { Get-Content UI/SyntheticResources.xaml -Raw } else { '' }
           $resourcesCode = Get-Content UI/Resources.xaml.cs -Raw
           $optionsCode = Get-Content UI/OptionsHelpResources.xaml.cs -Raw
           $controlCenterCode = Get-Content UI/ControlCenterResources.xaml.cs -Raw
+          $syntheticCode = if (Test-Path UI/SyntheticResources.xaml.cs) { Get-Content UI/SyntheticResources.xaml.cs -Raw } else { '' }
           $frameAxis = Get-Content UI/TimelineFrameAxisAdorner.cs -Raw
 
           foreach ($required in @(
@@ -89,23 +95,51 @@ jobs:
             if ($assembly -notmatch [regex]::Escape($required)) { throw "Manifest assembly metadata missing: $required" }
           }
 
-          # Never ship the cross-dispatcher WPF crash pattern: data-binding a shared
-          # SolidColorBrush/Freezable prevents it from freezing before AvalonDock uses it.
+          # Real-host WPF/AvalonDock dispatcher safety. QSM exported ResourceDictionaries can be
+          # discovered on one dispatcher and their templates materialized by AvalonDock on another.
+          # Shared keyed Style objects caused a real N.I.N.A. 3.3.0.1057 Style.CheckTargetType crash.
+          foreach ($pair in @(
+            @{ Path = 'UI/Resources.xaml'; Text = $resourcesXaml },
+            @{ Path = 'UI/OptionsHelpResources.xaml'; Text = $optionsXaml },
+            @{ Path = 'UI/ControlCenterResources.xaml'; Text = $controlCenterXaml },
+            @{ Path = 'UI/SyntheticResources.xaml'; Text = $syntheticXaml }
+          )) {
+            if ($pair.Text -match '<Style\s+x:Key=') { throw "Dispatcher-sensitive shared keyed Style found in $($pair.Path)." }
+          }
+          foreach ($pair in @(
+            @{ Path = 'UI/Resources.xaml.cs'; Text = $resourcesCode },
+            @{ Path = 'UI/OptionsHelpResources.xaml.cs'; Text = $optionsCode },
+            @{ Path = 'UI/ControlCenterResources.xaml.cs'; Text = $controlCenterCode },
+            @{ Path = 'UI/SyntheticResources.xaml.cs'; Text = $syntheticCode }
+          )) {
+            if ($pair.Text -match 'AddLoadedHandler\(' -or $pair.Text -match 'EventSetter\(') {
+              throw "Cross-dispatcher Style mutation helper found in $($pair.Path)."
+            }
+          }
+
+          # Never ship the earlier Freezable failure pattern either.
           if ($resourcesCode -match 'BindingOperations\.SetBinding' -or $resourcesCode -match 'SolidColorBrush\.ColorProperty') {
             throw "Official release contains a cross-thread unsafe shared SolidColorBrush binding."
           }
-          foreach ($required in @('FreezeBrush("QsmCard")','SetResourceReference','CardLoaded','TimelineFrameAxisBehavior.Attach')) {
+          foreach ($required in @('FreezeBrush("QsmCard")','SetResourceReference','DockableLoaded','TimelineFrameAxisBehavior.Attach')) {
             if ($resourcesCode -notmatch [regex]::Escape($required)) { throw "WPF dispatcher-safety contract missing: $required" }
           }
-          foreach ($required in @('TextAlignment = TextAlignment.Left','HorizontalContentAlignment = HorizontalAlignment.Left','ButtonForegroundBrush')) {
+          foreach ($required in @('OptionsRootLoaded','TextAlignment = TextAlignment.Left','HorizontalContentAlignment = HorizontalAlignment.Left','ButtonForegroundBrush')) {
             if ($optionsCode -notmatch [regex]::Escape($required)) { throw "Options alignment/theme contract missing: $required" }
           }
-          foreach ($required in @('SecondaryBackgroundBrush','TertiaryBackgroundBrush','ButtonForegroundBrush','SetResourceReference')) {
+          foreach ($required in @('ControlCenterLoaded','SecondaryBackgroundBrush','TertiaryBackgroundBrush','ButtonForegroundBrush','SetResourceReference')) {
             if ($controlCenterCode -notmatch [regex]::Escape($required)) { throw "Control Center theme contract missing: $required" }
           }
+          if ($syntheticCode -and $syntheticCode -notmatch 'SyntheticRootLoaded') { throw "Synthetic Lab dispatcher-safe root theme hook missing." }
           foreach ($required in @('FRAME #','FrameIndex','BuildTickIndexes','TakeLast(160)','IsHitTestVisible = false')) {
             if ($frameAxis -notmatch [regex]::Escape($required)) { throw "WPF frame-axis contract missing: $required" }
           }
+
+      - name: Restore WPF dispatcher boundary checker
+        run: dotnet restore QualitySessionMeter.DispatcherCheck/QualitySessionMeter.DispatcherCheck.csproj
+
+      - name: Verify sealed QSM templates across independent STA dispatchers
+        run: dotnet run --project QualitySessionMeter.DispatcherCheck/QualitySessionMeter.DispatcherCheck.csproj -c Release --no-restore
 
       - name: Build immutable production plugin
         run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=false -p:Version=${{ github.ref_name }} -p:AssemblyVersion=${{ github.ref_name }} -p:FileVersion=${{ github.ref_name }}

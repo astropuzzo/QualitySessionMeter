@@ -11,9 +11,8 @@ public partial class SyntheticResources : ResourceDictionary {
     public SyntheticResources() {
         InitializeComponent();
 
-        // Synthetic Lab is field-test-only, but its shared fallback brushes still cross the same
-        // AvalonDock resource/template boundary as production UI. Keep them frozen and resolve
-        // host theme resources only on loaded visual elements, never by data-binding a Freezable.
+        // Field-test-only fallback brushes still cross the plugin-resource/AvalonDock boundary.
+        // Keep them frozen and resolve host theme resources only on materialized visual elements.
         FreezeBrush("LabCard");
         FreezeBrush("LabWarn");
         FreezeBrush("LabMuted");
@@ -21,8 +20,6 @@ public partial class SyntheticResources : ResourceDictionary {
         FreezeBrush("LabSafe");
         FreezeBrush("LabBorder");
         FreezeBrush("LabText");
-
-        AddLoadedHandler("LabCardStyle", LabCardLoaded);
     }
 
     private void FreezeBrush(string key) {
@@ -31,17 +28,8 @@ public partial class SyntheticResources : ResourceDictionary {
         }
     }
 
-    private void AddLoadedHandler(string styleKey, RoutedEventHandler handler) {
-        if (this[styleKey] is Style style && !style.IsSealed) {
-            style.Setters.Add(new EventSetter(FrameworkElement.LoadedEvent, handler));
-        }
-    }
-
-    private static void LabCardLoaded(object sender, RoutedEventArgs e) {
-        if (sender is not Border card) return;
-        card.SetResourceReference(Border.BackgroundProperty, "SecondaryBackgroundBrush");
-        card.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-        ThemeTree(card);
+    private void SyntheticRootLoaded(object sender, RoutedEventArgs e) {
+        if (sender is DependencyObject root) ThemeTree(root);
     }
 
     private static void ThemeTree(DependencyObject root) {
