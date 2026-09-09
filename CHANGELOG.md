@@ -6,6 +6,33 @@ The current `1.3.x` line is still a **pre-store field-test line**. During this p
 
 ---
 
+## [1.3.0.5] - 2026-09-08
+
+### WPF/AvalonDock crash hotfix and UI alignment
+
+- Fixed an unexpected N.I.N.A. Imaging-layout crash caused by data-binding shared QSM `SolidColorBrush` resources to host theme brushes. A bound `SolidColorBrush` is a non-freezable WPF `Freezable`; AvalonDock can later materialize a dock template on another dispatcher, producing `XamlParseException`, `StaticResourceHolder` failures and cross-thread `SolidColorBrush` access errors.
+- Removed cross-thread brush bindings entirely. Shared fallback brushes are now immutable/frozen and therefore safe to cross dispatcher boundaries.
+- Theme following is now applied with `SetResourceReference(...)` on the actual loaded UI element, on its owning UI dispatcher. This preserves live N.I.N.A. theme resources without sharing mutable `Freezable` objects between threads.
+- Fixed Plugin Options controls whose boxes were left-positioned but whose text/content could still inherit centered alignment from N.I.N.A. styles. TextBlock text, TextBox content, PasswordBox content, ComboBox content and ComboBox items are explicitly left-aligned while preserving native control styles.
+- Fixed inconsistent foreground colors in Plugin Options by resolving `ButtonForegroundBrush` on loaded controls rather than relying on inherited/hard-coded text colors.
+- Fixed Control Center hard-coded dark card chrome versus inherited host foreground colors. Cards/borders now resolve N.I.N.A. background/border resources on the UI dispatcher; ordinary text uses the host foreground resource and QSM accent text uses the host primary resource.
+- Synthetic Lab now follows light/dark host structural resources through loaded-element resource references while keeping all shared fallback brushes frozen.
+- Added an adaptive `Frame #` axis to the N.I.N.A. multichannel timeline and the Web Dashboard using the same chronological QSM `FrameIndex` shown by Recent Frames and hover diagnostics.
+- Separated the Frame # row from the EVENTS legend/badge row so axis text cannot overlap the event explanation on narrow timelines.
+- Web Dashboard timeline hover now includes filename as well as frame number/state/metrics.
+- Replaced blind periodic browser preview reloads with preview-generation-aware updates; the last valid LIGHT remains visible through temporary reconnect/fetch errors.
+
+### Automated visual regression
+
+- Added `QualitySessionMeter.VisualHarness`, a Windows/WPF visual test host that renders the actual QSM DataTemplates and `QualityTimelineControl` with deterministic stress-test data without requiring a local N.I.N.A. installation.
+- Added a Playwright renderer that extracts the actual embedded Web Dashboard HTML and renders desktop, tablet and mobile layouts against deterministic snapshot/guiding/preview responses.
+- Added `.github/workflows/visual-preview.yml`: every PR can now generate dark/light WPF screenshots and desktop/tablet/mobile browser screenshots entirely on GitHub-hosted Windows runners.
+- The visual harness is explicitly excluded from the plugin compile/resource source set and can never ship in the production DLL.
+- Automated visual inspection already caught and drove fixes for Synthetic Lab light-theme chrome and Frame #/EVENTS overlap before host installation.
+- These renders are visual-regression evidence only; final store readiness still requires one real N.I.N.A./AvalonDock smoke test because a standalone harness cannot reproduce every host lifecycle/dispatcher interaction.
+
+---
+
 ## [1.3.0.4] - 2026-09-08
 
 ### Unified latest-LIGHT preview and official N.I.N.A. publication path

@@ -196,7 +196,9 @@ public sealed class FrameQualityResult {
         : ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + "%";
 
     public string GuideRmsText => FormatArcsec(GuideRmsArcsec);
-    public string ExcursionText => FormatArcsec(MaxGuideExcursionArcsec);
+    public string ExcursionText => double.IsNaN(MaxGuideExcursionArcsec)
+        ? "max excursion N/A"
+        : "max excursion " + FormatArcsec(MaxGuideExcursionArcsec);
     public string GuidePatternText => GuidePattern switch {
         GuidePatternKind.Unavailable => "N/A",
         GuidePatternKind.Stable => "STABLE",
@@ -208,8 +210,8 @@ public sealed class FrameQualityResult {
         _ => "IRREGULAR"
     };
     public string GuidePatternConfidenceText => double.IsNaN(GuidePatternConfidence)
-        ? "N/A"
-        : GuidePatternConfidence.ToString("0", CultureInfo.InvariantCulture) + "%";
+        ? "confidence N/A"
+        : "confidence " + GuidePatternConfidence.ToString("0", CultureInfo.InvariantCulture) + "%";
     public string TrendText {
         get {
             if (StarTrendKind == TrendInterpretationKind.AbruptAnomaly || BackgroundTrendKind == TrendInterpretationKind.AbruptAnomaly) return "ABRUPT";
@@ -220,10 +222,14 @@ public sealed class FrameQualityResult {
     }
     public string StarsText => StarCount >= 0 ? StarCount.ToString(CultureInfo.InvariantCulture) : "N/A";
     public string StarDeltaText => FormatPercent(StarDeviationPercent);
-    public string StarTrendResidualText => FormatPercent(StarTrendResidualPercent);
+    public string StarTrendResidualText => double.IsNaN(StarTrendResidualPercent)
+        ? "trend residual N/A"
+        : "trend residual " + FormatPercent(StarTrendResidualPercent);
     public string BackgroundText => double.IsNaN(BackgroundMedian) ? "N/A" : BackgroundMedian.ToString("0.##", CultureInfo.InvariantCulture);
     public string BackgroundDeltaText => FormatPercent(BackgroundDeviationPercent);
-    public string BackgroundTrendResidualText => FormatPercent(BackgroundTrendResidualPercent);
+    public string BackgroundTrendResidualText => double.IsNaN(BackgroundTrendResidualPercent)
+        ? "trend residual N/A"
+        : "trend residual " + FormatPercent(BackgroundTrendResidualPercent);
 
     private static string FormatArcsec(double value) => double.IsNaN(value) ? "N/A" : value.ToString("0.00", CultureInfo.InvariantCulture) + "\"";
     private static string FormatPercent(double value) => double.IsNaN(value) ? "N/A" : value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "%";
