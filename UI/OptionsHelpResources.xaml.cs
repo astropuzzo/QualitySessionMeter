@@ -12,6 +12,19 @@ public partial class OptionsHelpResources : ResourceDictionary {
     }
 
     private void OptionsRootLoaded(object sender, RoutedEventArgs e) {
+        // N.I.N.A. hosts plugin option templates inside containers whose default content
+        // alignment can vary by theme/layout. Explicitly anchor the QSM page to the left
+        // instead of relying on the host's inherited HorizontalContentAlignment.
+        if (sender is ScrollViewer scroll) {
+            scroll.HorizontalContentAlignment = HorizontalAlignment.Left;
+            if (scroll.Content is FrameworkElement content) {
+                content.HorizontalAlignment = HorizontalAlignment.Left;
+                content.VerticalAlignment = VerticalAlignment.Top;
+            }
+            ThemeAndAlign(scroll);
+            return;
+        }
+
         if (sender is DependencyObject root) ThemeAndAlign(root);
     }
 
