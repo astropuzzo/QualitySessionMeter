@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -11,6 +12,7 @@ namespace QualitySessionMeter.VisualSlices;
 
 internal static class Program {
     private static string outputDirectory = "visual-output";
+    private static string evidenceAssemblyDirectory = "";
     private static Assembly harnessAssembly;
     private static Assembly pluginAssembly;
     private static MethodInfo installHostResources;
@@ -37,8 +39,16 @@ internal static class Program {
     }
 
     private static void InitializeReflection() {
-        harnessAssembly = Assembly.Load("QualitySessionMeter.VisualHarness");
-        pluginAssembly = Assembly.Load("QualitySessionMeter");
+        evidenceAssemblyDirectory = Path.GetFullPath(
+            Path.Combine("QualitySessionMeter.VisualHarness", "bin", "Release", "net10.0-windows7.0"));
+        var harnessPath = Path.Combine(evidenceAssemblyDirectory, "QualitySessionMeter.VisualHarness.dll");
+        var pluginPath = Path.Combine(evidenceAssemblyDirectory, "QualitySessionMeter.dll");
+        if (!File.Exists(harnessPath) || !File.Exists(pluginPath))
+            throw new FileNotFoundException("VisualHarness evidence assemblies were not built before the slice renderer.");
+
+        AssemblyLoadContext.Default.Resolving += ResolveEvidenceAssembly;
+        pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(pluginPath);
+        harnessAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(harnessPath);
 
         var staticFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         var programType = harnessAssembly.GetType("QualitySessionMeter.VisualHarness.Program", throwOnError: true)!;
@@ -52,6 +62,11 @@ internal static class Program {
             ?? throw new InvalidOperationException("PreviewData.Frames not found.");
         eventsMethod = previewDataType.GetMethod("Events", staticFlags)
             ?? throw new InvalidOperationException("PreviewData.Events not found.");
+    }
+
+    private static Assembly? ResolveEvidenceAssembly(AssemblyLoadContext context, AssemblyName name) {
+        var candidate = Path.Combine(evidenceAssemblyDirectory, name.Name + ".dll");
+        return File.Exists(candidate) ? context.LoadFromAssemblyPath(candidate) : null;
     }
 
     private static void RenderTheme(bool dark) {
