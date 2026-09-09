@@ -26,6 +26,10 @@ jobs:
       - name: Render real QSM WPF templates
         run: dotnet run --project QualitySessionMeter.VisualHarness/QualitySessionMeter.VisualHarness.csproj -c Release --no-restore -- artifacts/visual
 
+      - name: Render WPF scroll slices
+        shell: pwsh
+        run: pwsh -NoLogo -NoProfile -Sta -File tools/visual/render-wpf-slices.ps1 -OutputDirectory artifacts/visual
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -45,7 +49,20 @@ jobs:
         run: |
           Get-ChildItem artifacts/visual | Sort-Object Name | Format-Table Name, Length
           $pngs = Get-ChildItem artifacts/visual -Filter *.png
-          if ($pngs.Count -lt 10) { throw "Expected at least 10 visual-regression PNGs, found $($pngs.Count)." }
+          if ($pngs.Count -lt 30) { throw "Expected at least 30 visual-regression PNGs, found $($pngs.Count)." }
+          $required = @(
+            'wpf-options-dark-slice-top.png',
+            'wpf-options-dark-slice-middle.png',
+            'wpf-options-dark-slice-bottom.png',
+            'wpf-main-panel-dark-slice-top.png',
+            'wpf-main-panel-dark-slice-middle.png',
+            'wpf-main-panel-dark-slice-bottom.png',
+            'web-mobile-430x932-full.png',
+            'web-desktop-1440x1000-full.png'
+          )
+          foreach ($name in $required) {
+            if (-not (Test-Path (Join-Path 'artifacts/visual' $name))) { throw "Missing visual evidence: $name" }
+          }
 
       - name: Upload QSM visual preview
         uses: actions/upload-artifact@v4
