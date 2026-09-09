@@ -10,37 +10,10 @@ namespace NINA.Plugin.QualitySessionMeter.UI;
 public partial class ControlCenterResources : ResourceDictionary {
     public ControlCenterResources() {
         InitializeComponent();
-
-        // These two styles occur immediately in the template. Their Loaded handlers give us a
-        // UI-dispatcher-safe point from which to normalize the whole QSM Control Center without
-        // replacing N.I.N.A.'s native control styles or sharing mutable theme brushes.
-        AddLoadedHandler("QsmCcSectionTitle", ThemeControlCenterLoaded);
-        AddLoadedHandler("QsmCcHelp", ThemeControlCenterLoaded);
     }
 
-    private void AddLoadedHandler(string styleKey, RoutedEventHandler handler) {
-        if (this[styleKey] is Style style && !style.IsSealed) {
-            style.Setters.Add(new EventSetter(FrameworkElement.LoadedEvent, handler));
-        }
-    }
-
-    private static void ThemeControlCenterLoaded(object sender, RoutedEventArgs e) {
-        if (sender is not DependencyObject source) return;
-
-        // Walk up to this dockable's ScrollViewer, then normalize only its subtree.
-        DependencyObject root = source;
-        while (root is not ScrollViewer) {
-            DependencyObject parent;
-            try {
-                parent = VisualTreeHelper.GetParent(root);
-            } catch {
-                return;
-            }
-            if (parent == null) return;
-            root = parent;
-        }
-
-        ThemeTree(root);
+    private void ControlCenterLoaded(object sender, RoutedEventArgs e) {
+        if (sender is DependencyObject root) ThemeTree(root);
     }
 
     private static void ThemeTree(DependencyObject root) {
