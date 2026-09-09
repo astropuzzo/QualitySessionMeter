@@ -8,8 +8,4 @@
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\QualitySessionMeter.VisualHarness\QualitySessionMeter.VisualHarness.csproj" />
-  </ItemGroup>
 </Project>
