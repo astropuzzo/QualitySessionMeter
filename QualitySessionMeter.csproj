@@ -37,6 +37,10 @@
     <EmbeddedResource Remove="QualitySessionMeter.VisualHarness\**\*" />
     <None Remove="QualitySessionMeter.VisualHarness\**\*" />
     <Page Remove="QualitySessionMeter.VisualHarness\**\*.xaml" />
+    <Compile Remove="QualitySessionMeter.VisualSlices\**\*.cs" />
+    <EmbeddedResource Remove="QualitySessionMeter.VisualSlices\**\*" />
+    <None Remove="QualitySessionMeter.VisualSlices\**\*" />
+    <Page Remove="QualitySessionMeter.VisualSlices\**\*.xaml" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(QsmDevelopmentBuild)' != 'true'">
