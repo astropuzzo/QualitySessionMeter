@@ -9,32 +9,10 @@ namespace NINA.Plugin.QualitySessionMeter.UI;
 public partial class OptionsHelpResources : ResourceDictionary {
     public OptionsHelpResources() {
         InitializeComponent();
-
-        // N.I.N.A. host styles may center TextBox/ComboBox content even when the control itself
-        // is left-aligned. Apply only local alignment/theme references when each QSM row is loaded
-        // on the UI dispatcher. This preserves the native host style while making QSM consistently
-        // left-aligned and avoids sharing theme SolidColorBrush instances across dispatchers.
-        AddLoadedHandler("QsmOptionRow", OptionRowLoaded);
-        AddLoadedHandler("QsmSectionHeader", OptionTextLoaded);
-        AddLoadedHandler("QsmSubHeader", OptionTextLoaded);
-        AddLoadedHandler("QsmHint", OptionTextLoaded);
     }
 
-    private void AddLoadedHandler(string styleKey, RoutedEventHandler handler) {
-        if (this[styleKey] is Style style && !style.IsSealed) {
-            style.Setters.Add(new EventSetter(FrameworkElement.LoadedEvent, handler));
-        }
-    }
-
-    private static void OptionTextLoaded(object sender, RoutedEventArgs e) {
-        if (sender is not TextBlock text) return;
-        text.TextAlignment = TextAlignment.Left;
-        text.SetResourceReference(TextBlock.ForegroundProperty, "ButtonForegroundBrush");
-    }
-
-    private static void OptionRowLoaded(object sender, RoutedEventArgs e) {
-        if (sender is not Grid row) return;
-        ThemeAndAlign(row);
+    private void OptionsRootLoaded(object sender, RoutedEventArgs e) {
+        if (sender is DependencyObject root) ThemeAndAlign(root);
     }
 
     private static void ThemeAndAlign(DependencyObject root) {
@@ -72,7 +50,7 @@ public partial class OptionsHelpResources : ResourceDictionary {
                 break;
 
             case CheckBox checkBox:
-                // Do not override the ON/OFF toggle template alignment; only fix text color.
+                // Preserve N.I.N.A.'s ON/OFF template geometry; normalize only text color.
                 checkBox.SetResourceReference(Control.ForegroundProperty, "ButtonForegroundBrush");
                 break;
         }
