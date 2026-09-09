@@ -58,10 +58,14 @@ jobs:
         run: |
           $web = Get-Content Core/WebDashboardPage.cs -Raw
           $server = Get-Content Core/QualitySessionWebServer.cs -Raw
+          $resourcesXaml = Get-Content UI/Resources.xaml -Raw
           $options = Get-Content UI/OptionsHelpResources.xaml -Raw
+          $controlCenterXaml = Get-Content UI/ControlCenterResources.xaml -Raw
+          $syntheticXaml = if (Test-Path UI/SyntheticResources.xaml) { Get-Content UI/SyntheticResources.xaml -Raw } else { '' }
           $optionsCode = Get-Content UI/OptionsHelpResources.xaml.cs -Raw
           $resourcesCode = Get-Content UI/Resources.xaml.cs -Raw
           $controlCenterCode = Get-Content UI/ControlCenterResources.xaml.cs -Raw
+          $syntheticCode = if (Test-Path UI/SyntheticResources.xaml.cs) { Get-Content UI/SyntheticResources.xaml.cs -Raw } else { '' }
           $timeline = Get-Content UI/QualityTimelineControl.cs -Raw
           $frameAxis = Get-Content UI/TimelineFrameAxisAdorner.cs -Raw
 
@@ -99,21 +103,43 @@ jobs:
           if ($options -notmatch 'Background="\{DynamicResource BackgroundBrush\}"') { throw "Plugin Options are not bound to the active N.I.N.A. background theme." }
           if ($options -notmatch 'WebDashboardAddress, Mode=OneWay') { throw "Dashboard address must remain read-only/OneWay in Options." }
 
-          # WPF/AvalonDock safety: never bind a shared SolidColorBrush/Freezable to a host brush.
-          # A bound Freezable cannot be frozen and can crash when a dock template is materialized
-          # from another dispatcher. Theme resources must be resolved on the loaded UI element.
+          # Real-host WPF/AvalonDock dispatcher safety. QSM ResourceDictionary instances may be
+          # created by one dispatcher and their templates materialized by another. Shared keyed
+          # Style objects and EventSetter mutation are therefore forbidden in dispatcher-sensitive
+          # QSM UI dictionaries. Former style presentation belongs directly on template elements.
+          foreach ($pair in @(
+            @{ Path = 'UI/Resources.xaml'; Text = $resourcesXaml },
+            @{ Path = 'UI/OptionsHelpResources.xaml'; Text = $options },
+            @{ Path = 'UI/ControlCenterResources.xaml'; Text = $controlCenterXaml },
+            @{ Path = 'UI/SyntheticResources.xaml'; Text = $syntheticXaml }
+          )) {
+            if ($pair.Text -match '<Style\s+x:Key=') { throw "Dispatcher-sensitive shared keyed Style found in $($pair.Path)." }
+          }
+          foreach ($pair in @(
+            @{ Path = 'UI/Resources.xaml.cs'; Text = $resourcesCode },
+            @{ Path = 'UI/OptionsHelpResources.xaml.cs'; Text = $optionsCode },
+            @{ Path = 'UI/ControlCenterResources.xaml.cs'; Text = $controlCenterCode },
+            @{ Path = 'UI/SyntheticResources.xaml.cs'; Text = $syntheticCode }
+          )) {
+            if ($pair.Text -match 'AddLoadedHandler\(' -or $pair.Text -match 'EventSetter\(') {
+              throw "Cross-dispatcher Style mutation helper found in $($pair.Path)."
+            }
+          }
+
+          # Shared fallback brushes must remain freezable and must never be data-bound.
           if ($resourcesCode -match 'BindingOperations\.SetBinding' -or $resourcesCode -match 'SolidColorBrush\.ColorProperty') {
             throw "Cross-thread unsafe SolidColorBrush binding returned to shared QSM resources."
           }
-          foreach ($required in @('FreezeBrush("QsmCard")', 'SetResourceReference', 'CardLoaded', 'TimelineFrameAxisBehavior.Attach')) {
+          foreach ($required in @('FreezeBrush("QsmCard")', 'SetResourceReference', 'DockableLoaded', 'TimelineFrameAxisBehavior.Attach')) {
             if ($resourcesCode -notmatch [regex]::Escape($required)) { throw "WPF brush/timeline safety contract missing: $required" }
           }
-          foreach ($required in @('TextAlignment = TextAlignment.Left', 'HorizontalContentAlignment = HorizontalAlignment.Left', 'ButtonForegroundBrush')) {
+          foreach ($required in @('OptionsRootLoaded', 'TextAlignment = TextAlignment.Left', 'HorizontalContentAlignment = HorizontalAlignment.Left', 'ButtonForegroundBrush')) {
             if ($optionsCode -notmatch [regex]::Escape($required)) { throw "Options left-alignment/theme contract missing: $required" }
           }
-          foreach ($required in @('SecondaryBackgroundBrush', 'TertiaryBackgroundBrush', 'ButtonForegroundBrush', 'SetResourceReference')) {
+          foreach ($required in @('ControlCenterLoaded', 'SecondaryBackgroundBrush', 'TertiaryBackgroundBrush', 'ButtonForegroundBrush', 'SetResourceReference')) {
             if ($controlCenterCode -notmatch [regex]::Escape($required)) { throw "Control Center theme contract missing: $required" }
           }
+          if ($syntheticCode -and $syntheticCode -notmatch 'SyntheticRootLoaded') { throw "Synthetic Lab root-dispatcher theme hook is missing." }
           foreach ($required in @('FRAME #', 'FrameIndex', 'BuildTickIndexes', 'TakeLast(160)', 'IsHitTestVisible = false')) {
             if ($frameAxis -notmatch [regex]::Escape($required)) { throw "WPF frame-axis contract missing: $required" }
           }
