@@ -11,22 +11,17 @@ public partial class Resources : ResourceDictionary {
     public Resources() {
         InitializeComponent();
 
-        // IMPORTANT: do not data-bind shared SolidColorBrush resources to N.I.N.A. theme brushes.
-        // SolidColorBrush is a Freezable. A Binding makes it non-freezable and AvalonDock can later
-        // materialize the template on a different dispatcher, causing a cross-thread XamlParseException.
-        // Keep the fallback brushes immutable/cross-thread safe and apply DynamicResource references
-        // to the actual UI elements when they are loaded on the owning UI dispatcher.
+        // Shared fallback brushes may cross the plugin-resource/AvalonDock boundary, so they
+        // must remain immutable. Host theme resources are resolved only on materialized visual
+        // elements, on the dispatcher that owns those elements.
         FreezeBrush("QsmCard");
         FreezeBrush("QsmCardBorder");
         FreezeBrush("QsmPrimaryText");
         FreezeBrush("QsmSecondaryText");
         FreezeBrush("QsmAccent");
 
-        AddLoadedHandler("QsmCardStyle", CardLoaded);
-        AddLoadedHandler("QsmSectionTitle", SectionTitleLoaded);
-
-        // Keep the legacy template for compatibility/history, while the active options page
-        // is the native-style, help-rich template used for release validation.
+        // Keep the legacy template key, but replace its value with the help-rich release options
+        // template. OptionsHelpResources itself contains no shared keyed Style objects.
         var polishedOptions = new OptionsHelpResources();
         this["QualitySessionMeter_Options"] = polishedOptions["QualitySessionMeter_Options_Polished"];
     }
@@ -37,35 +32,26 @@ public partial class Resources : ResourceDictionary {
         }
     }
 
-    private void AddLoadedHandler(string styleKey, RoutedEventHandler handler) {
-        if (this[styleKey] is Style style && !style.IsSealed) {
-            style.Setters.Add(new EventSetter(FrameworkElement.LoadedEvent, handler));
-        }
-    }
-
-    private static void SectionTitleLoaded(object sender, RoutedEventArgs e) {
-        if (sender is not TextBlock text) return;
-        text.TextAlignment = TextAlignment.Left;
-        text.SetResourceReference(TextBlock.ForegroundProperty, "ButtonForegroundBrush");
-        text.Opacity = Math.Min(text.Opacity, 0.78);
-    }
-
-    private static void CardLoaded(object sender, RoutedEventArgs e) {
-        if (sender is not Border card) return;
-
-        // Resolve N.I.N.A. theme resources on the UI element/dispatcher itself. DynamicResource
-        // remains theme-aware but does not share a mutable Freezable across dispatchers.
-        card.SetResourceReference(Border.BackgroundProperty, "SecondaryBackgroundBrush");
-        card.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
-        ThemeCardTree(card);
+    private void DockableLoaded(object sender, RoutedEventArgs e) {
+        if (sender is DependencyObject root) ThemeCardTree(root);
     }
 
     private static void ThemeCardTree(DependencyObject root) {
+        if (root is Border border) {
+            if (border.Background is SolidColorBrush background && ColorEquals(background.Color, 0x17, 0x1A, 0x20)) {
+                border.SetResourceReference(Border.BackgroundProperty, "SecondaryBackgroundBrush");
+            }
+            if (border.BorderBrush is SolidColorBrush borderBrush && ColorEquals(borderBrush.Color, 0x2A, 0x30, 0x39)) {
+                border.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+            }
+        }
+
         if (root is QualityTimelineControl timeline) {
             TimelineFrameAxisBehavior.Attach(timeline);
         }
 
         if (root is TextBlock text && text.Foreground is SolidColorBrush brush) {
+            text.TextAlignment = TextAlignment.Left;
             if (ColorEquals(brush.Color, 0xF1, 0xF3, 0xF4)) {
                 text.SetResourceReference(TextBlock.ForegroundProperty, "ButtonForegroundBrush");
             } else if (ColorEquals(brush.Color, 0x9A, 0xA0, 0xA6)) {
