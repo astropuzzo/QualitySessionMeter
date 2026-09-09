@@ -6,6 +6,17 @@ The current `1.3.x` line is still a **pre-store field-test line**. During this p
 
 ---
 
+## [1.3.0.6] - 2026-09-09
+
+### AvalonDock dispatcher-style crash hotfix
+
+- Fixed a real-host N.I.N.A. 3.3.0.1057 `XamlParseException` where AvalonDock materialized QSM templates on a different dispatcher and WPF rejected a shared plugin `Style` (`Style.CheckTargetType`: "The calling thread cannot access this object because a different thread owns it").
+- Removed all shared keyed `Style` objects from QSM dockable/options/synthetic ResourceDictionaries. Former style properties are now local template properties; theme normalization starts from each visual root's `Loaded` event on the owning UI dispatcher.
+- Removed QSM `EventSetter`/`AddLoadedHandler` mutation of shared styles.
+- Preserved N.I.N.A. theme following through `DynamicResource` and element-local `SetResourceReference`, and preserved the adaptive Frame # adorner attachment.
+- Added release gates that reject reintroduction of shared keyed styles or style-mutation helpers in dispatcher-sensitive QSM UI resources.
+
+---
 ## [1.3.0.5] - 2026-09-08
 
 ### WPF/AvalonDock crash hotfix and UI alignment
