@@ -6,6 +6,21 @@ The current `1.3.x` line is still a **pre-store field-test line**. During this p
 
 ---
 
+## [1.3.0.7] - 2026-09-09
+
+### Options alignment and plain-language settings help
+
+- Fixed the remaining real-host Options layout issue where the complete QSM options block could be centered by N.I.N.A.'s host container even though individual labels/controls were left-aligned. The ScrollViewer content and root options panel are now explicitly anchored to the left edge, with a runtime fallback in `OptionsRootLoaded` for host/theme variations.
+- Renamed ambiguous presentation labels without changing persisted setting names or behavior: `Monitoring Scope` is now **Frames to Monitor**, `Maximum RMS` is **Max Exposure Guide RMS**, `Worst Metric Weight` is **Worst-channel influence**, `Environmental Correlation` is **Use environmental data for hints**, and Smart Recovery explicitly identifies the **QSM Smart Recovery Gate**.
+- Added visible, plain-language descriptions for monitoring scope, Monitor Only, exposure RMS versus live RMS, Adaptive Calibration Off/Suggest Only/Automatic behavior, worst-channel weighting, environment hints and Smart Recovery sequence behavior.
+- Documented the exact Quality formula (`worst * weight + average * (1 - weight)`) and clarified that it affects only the diagnostic Quality score, never hard reject rules.
+- Clarified that environmental data is explanatory only and never independently rejects a frame.
+- Clarified that Smart Recovery has an effect only when the Advanced Sequencer `QSM Smart Recovery Gate` item is present and never aborts an active exposure.
+- Added `docs/SETTINGS.md` with a complete plain-language settings reference and examples.
+- Preserved the dispatcher-safe 1.3.0.6 WPF architecture: no shared keyed Style objects were reintroduced.
+
+---
+
 ## [1.3.0.6] - 2026-09-09
 
 ### AvalonDock dispatcher-style crash hotfix
