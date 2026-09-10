@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyMetadata("Repository", "https://github.com/astropuzzo/QualitySessionMeter")]
 [assembly: AssemblyMetadata("Homepage", "https://github.com/astropuzzo/QualitySessionMeter")]
 [assembly: AssemblyMetadata("Tags", "Quality,Subframe,Guiding,Clouds,Session,Imaging,Monitoring")]
-[assembly: AssemblyMetadata("ChangelogURL", "https://github.com/astropuzzo/QualitySessionMeter/blob/main/CHANGELOG.md")]
+[assembly: AssemblyMetadata("ChangelogURL", "https://github.com/astropuzzo/QualitySessionMeter/releases")]
 [assembly: AssemblyMetadata("LongDescription", "QualitySessionMeter evaluates LIGHT frames while N.I.N.A. acquires them, combining exposure-specific guiding analysis with rolling same-context star-count and background baselines. It provides a 0–100 Quality score, independent hard rejection rules, confidence and probable-cause diagnostics, reversible rejected-file handling, session reports, quality-aware Advanced Sequencer tools, and a read-only local Web Dashboard for phone or tablet monitoring. Rejected images are never deleted by the normal QSM workflow. The Web Dashboard is disabled by default, exposes no remote control endpoints, and does not configure Internet or router access.")]
 [assembly: AssemblyMetadata("FeaturedImageURL", "https://raw.githubusercontent.com/astropuzzo/QualitySessionMeter/main/docs/store/featured.png")]
 [assembly: AssemblyMetadata("ScreenshotURL", "https://raw.githubusercontent.com/astropuzzo/QualitySessionMeter/main/docs/store/nina-panel.png")]
