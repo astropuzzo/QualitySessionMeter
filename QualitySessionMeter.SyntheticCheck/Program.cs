@@ -243,17 +243,17 @@ static void RunV3SourcePolicyOracle(List<string> failures) {
     var sequenceDefault = FrameSourcePolicy.Resolve(MonitoringScope.AdvancedSequencerLights, false, "M31 Night");
     if (!sequenceDefault.MonitoringEligible || !sequenceDefault.FileActionEligible || sequenceDefault.Kind != FrameSourceKind.AdvancedSequencer) failures.Add("V3 source policy failed to authorize a known Advanced Sequencer LIGHT.");
 
-    var controlled = FrameSourcePolicy.Resolve(MonitoringScope.ControlledBlocksOnly, true, "");
-    if (!controlled.MonitoringEligible || !controlled.FileActionEligible || controlled.Kind != FrameSourceKind.QsmControlledBlock) failures.Add("V3 source policy failed QSM controlled-block arming.");
+    var internallyCorrelated = FrameSourcePolicy.Resolve(MonitoringScope.AdvancedSequencerLights, true, "");
+    if (!internallyCorrelated.MonitoringEligible || !internallyCorrelated.FileActionEligible || internallyCorrelated.Kind != FrameSourceKind.QsmControlledBlock) failures.Add("V3 source policy failed internal sequencer correlation inside the normal Advanced Sequencer scope.");
 
-    var nonControlledSequence = FrameSourcePolicy.Resolve(MonitoringScope.ControlledBlocksOnly, false, "M31 Night");
-    if (nonControlledSequence.MonitoringEligible) failures.Add("V3 ControlledBlocksOnly scope incorrectly accepted a non-controlled sequencer frame.");
+    var removedLegacyScope = FrameSourcePolicy.Resolve((MonitoringScope)0, true, "M31 Night");
+    if (removedLegacyScope.MonitoringEligible) failures.Add("Removed legacy monitoring scope value 0 must never remain operational in FrameSourcePolicy.");
 
     var manualAll = FrameSourcePolicy.Resolve(MonitoringScope.AllLights, false, "");
     if (!manualAll.MonitoringEligible || manualAll.FileActionEligible) failures.Add("V3 AllLights should monitor manual LIGHTs but must never authorize their file mutation.");
 
     var runningWithoutMetadata = FrameSourcePolicy.Resolve(MonitoringScope.AdvancedSequencerLights, false, "", true);
-    if (!runningWithoutMetadata.MonitoringEligible || runningWithoutMetadata.FileActionEligible) failures.Add("V3 live sequencer evidence may authorize monitoring but must not authorize file mutation without stable sequence metadata or explicit QSM arm.");
+    if (!runningWithoutMetadata.MonitoringEligible || runningWithoutMetadata.FileActionEligible) failures.Add("V3 live sequencer evidence may authorize monitoring but must not authorize file mutation without stable sequence metadata or internal sequence correlation.");
 }
 
 static void RunV3ConditionPersistenceOracle(List<string> failures) {
