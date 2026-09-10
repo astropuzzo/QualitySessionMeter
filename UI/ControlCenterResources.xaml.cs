@@ -1,12 +1,12 @@
 using System;
-using System.ComponentModel.Composition;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
 namespace NINA.Plugin.QualitySessionMeter.UI;
 
-[Export(typeof(ResourceDictionary))]
+// Legacy visual-regression fixture only. The former QSM Control Center dockable was removed in
+// 1.3.0.9; this dictionary is deliberately not exported into N.I.N.A.'s ResourceDictionary catalog.
 public partial class ControlCenterResources : ResourceDictionary {
     public ControlCenterResources() {
         InitializeComponent();
