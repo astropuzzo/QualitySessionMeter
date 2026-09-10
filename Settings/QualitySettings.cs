@@ -15,11 +15,10 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     public QualitySettings(IPluginOptionsAccessor accessor) {
         this.accessor = accessor;
 
-        // 1.3.0.8 removes the former user-facing ControlledBlocksOnly monitoring mode.
-        // Migrate any profile that still stores the legacy value (0) to the normal
-        // Advanced Sequencer scope so upgrades never expose or retain that behavior.
-        if (accessor.GetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights)
-            == (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.ControlledBlocksOnly) {
+        // MonitoringScope value 0 existed in pre-store builds as a controlled-block-only
+        // mode. That mode no longer exists: migrate the raw legacy value to the normal
+        // Advanced Sequencer scope without keeping it in the public model.
+        if (accessor.GetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights) == 0) {
             accessor.SetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights);
         }
     }
@@ -210,8 +209,6 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     }
     public int RejectedFileActionIndex { get => (int)RejectedFileAction; set => RejectedFileAction = (RejectedFileAction)Clamp(value, 0, 2); }
 
-    // Optional self-contained mobile/web dashboard. This is deliberately separate from
-    // the tokenized OpenAstro integration bridge so existing installations remain untouched.
     public bool WebDashboardEnabled {
         get => accessor.GetValueBoolean(nameof(WebDashboardEnabled), false);
         set { accessor.SetValueBoolean(nameof(WebDashboardEnabled), value); Raise(); }
