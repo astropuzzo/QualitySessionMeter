@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: qsm-final-store-artwork
+  cancel-in-progress: true
+
 jobs:
   render-and-commit:
     if: github.actor != 'github-actions[bot]'
@@ -50,25 +54,35 @@ jobs:
             $g.Children.Add([System.Windows.Media.EllipseGeometry]::new([System.Windows.Point]::new(32,32),29,29))
             $g.Children.Add([System.Windows.Media.Geometry]::Parse('M 10,38 C 16,19 28,13 32,13 C 42,13 51,22 55,35'))
             $g.Children.Add([System.Windows.Media.Geometry]::Parse('M 32,32 L 47,22'))
-            $t=[System.Windows.Media.TransformGroup]::new(); $t.Children.Add([System.Windows.Media.ScaleTransform]::new(6.35,6.35)); $t.Children.Add([System.Windows.Media.TranslateTransform]::new(52.8,52.8)); $g.Transform=$t
-            $pen=[System.Windows.Media.Pen]::new($accent,13); $pen.StartLineCap='Round'; $pen.EndLineCap='Round'; $pen.LineJoin='Round'
+            $t=[System.Windows.Media.TransformGroup]::new()
+            $t.Children.Add([System.Windows.Media.ScaleTransform]::new(6.35,6.35))
+            $t.Children.Add([System.Windows.Media.TranslateTransform]::new(52.8,52.8))
+            $g.Transform=$t
+            $pen=[System.Windows.Media.Pen]::new($accent,13)
+            $pen.StartLineCap=[System.Windows.Media.PenLineCap]::Round
+            $pen.EndLineCap=[System.Windows.Media.PenLineCap]::Round
+            $pen.LineJoin=[System.Windows.Media.PenLineJoin]::Round
             $dc.DrawGeometry($null,$pen,$g)
           } finally { $dc.Close() }
-          $bmp=[System.Windows.Media.Imaging.RenderTargetBitmap]::new($size,$size,96,96,[System.Windows.Media.PixelFormats]::Pbgra32); $bmp.Render($visual)
-          $enc=[System.Windows.Media.Imaging.PngBitmapEncoder]::new(); $enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bmp))
-          $fs=[System.IO.File]::Create((Resolve-Path docs/store).Path + '\featured.png'); try { $enc.Save($fs) } finally { $fs.Dispose() }
+          $bmp=[System.Windows.Media.Imaging.RenderTargetBitmap]::new($size,$size,96,96,[System.Windows.Media.PixelFormats]::Pbgra32)
+          $bmp.Render($visual)
+          $enc=[System.Windows.Media.Imaging.PngBitmapEncoder]::new()
+          $enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bmp))
+          $fs=[System.IO.File]::Create((Resolve-Path docs/store).Path + '\featured.png')
+          try { $enc.Save($fs) } finally { $fs.Dispose() }
 
-          @'
-          # N.I.N.A. catalog artwork
-
-          These are the presentation assets for the official QualitySessionMeter manifest.
-
-          - `featured.png`: QSM meter mark rendered from the same geometry used by the plugin icon.
-          - `nina-panel.png`: actual current QSM WPF monitoring DataTemplate rendered by the Windows visual harness.
-          - `web-dashboard.png`: actual current embedded Web Dashboard rendered in Chromium with deterministic telemetry and LIGHT-preview responses.
-
-          They are regenerated from the release source and are not hand-drawn UI mockups. Real N.I.N.A. host validation was completed before the first catalog release.
-          '@ | Set-Content docs/store/README.md
+          $storeReadme = @(
+            '# N.I.N.A. catalog artwork',
+            '',
+            'These are the presentation assets for the official QualitySessionMeter manifest.',
+            '',
+            '- `featured.png`: QSM meter mark rendered from the same geometry used by the plugin icon.',
+            '- `nina-panel.png`: actual current QSM WPF monitoring DataTemplate rendered by the Windows visual harness.',
+            '- `web-dashboard.png`: actual current embedded Web Dashboard rendered in Chromium with deterministic telemetry and LIGHT-preview responses.',
+            '',
+            'They are regenerated from the release source and are not hand-drawn UI mockups. Real N.I.N.A. host validation was completed before the first catalog release.'
+          )
+          $storeReadme | Set-Content docs/store/README.md
       - name: Commit generated artwork to release branch
         shell: pwsh
         run: |
