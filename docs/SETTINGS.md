@@ -14,7 +14,7 @@ The displayed 0–100 Quality score is diagnostic. A frame is rejected only when
 
 ### Enable QualitySessionMeter
 
-Master switch for frame assessment and QSM sequencer control.
+Master switch for frame assessment and QSM sequencer helpers.
 
 - **ON:** eligible LIGHT frames are evaluated by QSM.
 - **OFF:** QSM does not assess new frames.
@@ -23,15 +23,14 @@ The optional Web Dashboard and the separate OpenAstro companion API have their o
 
 ### Frames to Monitor
 
-This was previously labelled **Monitoring Scope**.
+QSM intentionally exposes only two analysis scopes:
 
-It decides which saved LIGHT frames QSM is allowed to assess:
+- **Advanced Sequencer LIGHTs (default):** every LIGHT produced by N.I.N.A.'s Advanced Sequencer.
+- **All saved LIGHTs:** Advanced Sequencer LIGHTs plus manual/external LIGHT saves visible to N.I.N.A.
 
-- **QSM-controlled blocks only (safest):** only frames produced inside sequence blocks explicitly controlled by QSM.
-- **All Advanced Sequencer LIGHTs:** all LIGHT frames produced by N.I.N.A.'s Advanced Sequencer, including QSM-controlled blocks.
-- **All saved LIGHTs (widest):** also includes other/manual/external LIGHT saves visible to N.I.N.A.
+The former controlled-block-only monitoring mode has been removed. Profiles that stored that legacy value are automatically migrated to **Advanced Sequencer LIGHTs**.
 
-This controls **analysis scope**. It does not automatically make every monitored frame eligible for rename/move actions. File mutation is separately protected by QSM's frame-source/provenance policy.
+This setting controls which LIGHTs QSM assesses. File rename/move safety remains independently protected by acquisition provenance and the **Monitor Only** setting.
 
 ### Monitor Only
 
@@ -263,17 +262,17 @@ QSM can then add explanatory hints, for example:
 
 ## Smart Recovery (Advanced Sequencer)
 
-Smart Recovery has an effect only when the **QSM Smart Recovery Gate** sequence item is placed after **Take Exposure** inside a QSM-controlled loop.
+Smart Recovery is an optional Advanced Sequencer helper. Place **QSM Smart Recovery Gate** after **Take Exposure** in the sequence loop where recovery behaviour is wanted.
 
 It never aborts an active exposure.
 
 ### Enable Smart Recovery Gate
 
-Allows the Smart Recovery Gate to react after persistent QSM-controlled degradation.
+Allows the Smart Recovery Gate to react after a configured streak of sequence-frame degradation.
 
 ### Reject / Error Streak
 
-Number of consecutive QSM-controlled **REJECTED** or **ERROR** frames required before the recovery gate activates.
+Number of consecutive **REJECTED** or **ERROR** results associated with that sequence loop required before the recovery gate activates.
 
 Accepted/warning frames break the streak.
 
@@ -295,7 +294,7 @@ Recovery wait: 120 s
 Healthy samples: 3
 ```
 
-After three consecutive controlled REJECTED/ERROR frames, QSM waits 120 seconds. It then waits for three consecutive healthy guide samples before the next exposure. If recovery cannot be confirmed before the safety timeout, one probe exposure is allowed.
+After three consecutive REJECTED/ERROR results associated with the loop, QSM waits 120 seconds. It then waits for three consecutive healthy guide samples before the next exposure. If recovery cannot be confirmed before the safety timeout, one probe exposure is allowed.
 
 ## Web Dashboard
 
