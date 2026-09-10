@@ -15,9 +15,9 @@ using System.Threading.Tasks;
 namespace NINA.Plugin.QualitySessionMeter.Sequencer;
 
 /// <summary>
-/// Optional V3 recovery gate. Place it after Take Exposure inside a QSM-controlled loop.
-/// It never interrupts an active shutter: it can only delay the next iteration after QSM has
-/// classified the current frame. Disabled by default in QSM settings.
+/// Optional V3 recovery gate. Place it after Take Exposure in the Advanced Sequencer loop
+/// where recovery behaviour is wanted. It never interrupts an active shutter: it can only
+/// delay the next iteration after QSM has classified the current frame.
 /// </summary>
 [ExportMetadata("Name", "QSM Smart Recovery Gate")]
 [ExportMetadata("Description", "After persistent QSM rejects, wait between exposures and require healthy guiding before allowing the next probe frame.")]
@@ -29,7 +29,7 @@ public sealed class QsmSmartRecoveryGate : SequenceItem {
     private readonly IGuiderMediator guiderMediator;
     private int blockStartFrameIndex;
     private string lastAction = "IDLE";
-    private string lastDetail = "Smart recovery is controlled by QSM settings.";
+    private string lastDetail = "Smart Recovery is configured in QSM settings.";
 
     [ImportingConstructor]
     public QsmSmartRecoveryGate(IGuiderMediator guiderMediator) {
@@ -56,7 +56,7 @@ public sealed class QsmSmartRecoveryGate : SequenceItem {
         blockStartFrameIndex = runtime?.Store?.Results?.LastOrDefault()?.FrameIndex ?? 0;
         LastAction = "READY";
         LastDetail = runtime?.Settings?.SmartPauseEnabled == true
-            ? "Watching current frame for persistent degradation."
+            ? "Watching the sequence for persistent degradation."
             : "Disabled in QSM settings — pass-through.";
     }
 
@@ -67,10 +67,10 @@ public sealed class QsmSmartRecoveryGate : SequenceItem {
             return;
         }
 
-        var result = await WaitForControlledResultAsync(runtime, blockStartFrameIndex, 30, token);
+        var result = await WaitForSequenceResultAsync(runtime, blockStartFrameIndex, 30, token);
         if (result == null) {
             LastAction = "NO RESULT";
-            LastDetail = "No controlled QSM result arrived; Valid Frame Target remains responsible for fail-safe loop termination.";
+            LastDetail = "No matching QSM result arrived; Valid Frame Target remains responsible for fail-safe loop termination.";
             return;
         }
 
@@ -136,12 +136,14 @@ public sealed class QsmSmartRecoveryGate : SequenceItem {
         }
     }
 
-    private static async Task<FrameQualityResult> WaitForControlledResultAsync(
+    private static async Task<FrameQualityResult> WaitForSequenceResultAsync(
         QualitySessionRuntime runtime,
         int afterFrameIndex,
         int timeoutSeconds,
         CancellationToken token) {
 
+        // QsmControlled is internal provenance used to correlate this gate with the exposure
+        // it follows. It is not a user-selectable monitoring mode.
         var existing = runtime.Store.Results
             .Where(r => r.FrameIndex > afterFrameIndex && r.QsmControlled)
             .OrderBy(r => r.FrameIndex)
