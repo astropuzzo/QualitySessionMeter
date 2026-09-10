@@ -1,7 +1,6 @@
 namespace NINA.Plugin.QualitySessionMeter.Models;
 
 public enum MonitoringScope {
-    ControlledBlocksOnly = 0,
     AdvancedSequencerLights = 1,
     AllLights = 2
 }
@@ -23,7 +22,7 @@ public sealed class FrameSourceInfo {
     public bool ProvenanceFrozen { get; init; }
 
     public string SourceText => Kind switch {
-        FrameSourceKind.QsmControlledBlock => "QSM CONTROLLED BLOCK",
+        FrameSourceKind.QsmControlledBlock => "QSM SEQUENCE FRAME",
         FrameSourceKind.AdvancedSequencer => "ADVANCED SEQUENCER",
         FrameSourceKind.ManualOrExternalLight => "MANUAL / EXTERNAL LIGHT",
         _ => "UNKNOWN"

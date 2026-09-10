@@ -12,7 +12,16 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     private const int DashboardPasswordHashBytes = 32;
     private readonly IPluginOptionsAccessor accessor;
 
-    public QualitySettings(IPluginOptionsAccessor accessor) { this.accessor = accessor; }
+    public QualitySettings(IPluginOptionsAccessor accessor) {
+        this.accessor = accessor;
+
+        // MonitoringScope value 0 existed in pre-store builds as a controlled-block-only
+        // mode. That mode no longer exists: migrate the raw legacy value to the normal
+        // Advanced Sequencer scope without keeping it in the public model.
+        if (accessor.GetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights) == 0) {
+            accessor.SetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights);
+        }
+    }
 
     public bool Enabled {
         get => accessor.GetValueBoolean(nameof(Enabled), false);
@@ -20,10 +29,31 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     }
 
     public MonitoringScope MonitoringScope {
-        get => (MonitoringScope)Clamp(accessor.GetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights), 0, 2);
-        set { accessor.SetValueInt32(nameof(MonitoringScope), Clamp((int)value, 0, 2)); Raise(); Raise(nameof(MonitoringScopeIndex)); }
+        get {
+            var stored = accessor.GetValueInt32(
+                nameof(MonitoringScope),
+                (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights);
+            return stored == (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AllLights
+                ? NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AllLights
+                : NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights;
+        }
+        set {
+            var normalized = value == NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AllLights
+                ? NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AllLights
+                : NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights;
+            accessor.SetValueInt32(nameof(MonitoringScope), (int)normalized);
+            Raise();
+            Raise(nameof(MonitoringScopeIndex));
+        }
     }
-    public int MonitoringScopeIndex { get => (int)MonitoringScope; set => MonitoringScope = (MonitoringScope)Clamp(value, 0, 2); }
+
+    // UI index is intentionally only 0/1: Advanced Sequencer LIGHTs or all saved LIGHTs.
+    public int MonitoringScopeIndex {
+        get => MonitoringScope == NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AllLights ? 1 : 0;
+        set => MonitoringScope = value == 1
+            ? NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AllLights
+            : NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights;
+    }
 
     public bool MonitorOnly {
         get => accessor.GetValueBoolean(nameof(MonitorOnly), true);
@@ -179,8 +209,6 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     }
     public int RejectedFileActionIndex { get => (int)RejectedFileAction; set => RejectedFileAction = (RejectedFileAction)Clamp(value, 0, 2); }
 
-    // Optional self-contained mobile/web dashboard. This is deliberately separate from
-    // the tokenized OpenAstro integration bridge so existing installations remain untouched.
     public bool WebDashboardEnabled {
         get => accessor.GetValueBoolean(nameof(WebDashboardEnabled), false);
         set { accessor.SetValueBoolean(nameof(WebDashboardEnabled), value); Raise(); }
