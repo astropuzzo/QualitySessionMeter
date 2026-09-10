@@ -15,100 +15,6 @@
     <SolidColorBrush x:Key="QsmPrimaryText" Color="#F1F3F4"/>
     <SolidColorBrush x:Key="QsmSecondaryText" Color="#9AA0A6"/>
     <SolidColorBrush x:Key="QsmAccent" Color="#8AB4F8"/>
-<DataTemplate x:Key="QualitySessionMeter_Options">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="12" MaxWidth="760">
-                <TextBlock Text="Quality Session Meter" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                <TextBlock Text="Real-time frame quality control. Rejected files are never deleted." Opacity="0.7" Margin="0,0,0,16"/>
-
-                <GroupBox Header="General" Margin="0,0,0,10">
-                    <StackPanel Margin="10">
-                        <CheckBox Content="Enable QualitySessionMeter" IsChecked="{Binding Settings.Enabled}" Margin="0,3"/>
-                        <CheckBox Content="Monitor only — analyze and report without moving/renaming files" IsChecked="{Binding Settings.MonitorOnly}" Margin="0,3"/>
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Baseline window (good frames)" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.BaselineWindow, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                        <Grid Margin="0,5,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Minimum learning frames" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.MinimumLearningFrames, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                    </StackPanel>
-                </GroupBox>
-
-                <GroupBox Header="Guiding" Margin="0,0,0,10">
-                    <StackPanel Margin="10">
-                        <CheckBox Content="Reject on exposure RMS" IsChecked="{Binding Settings.EnableGuideRms}" Margin="0,3"/>
-                        <Grid Margin="20,3,0,5">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Maximum RMS (arcsec)" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.MaxGuideRms, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                        <CheckBox Content="Reject sustained guide excursion" IsChecked="{Binding Settings.EnableSustainedExcursion}" Margin="0,3"/>
-                        <Grid Margin="20,3,0,3">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Excursion threshold (arcsec)" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.ExcursionThreshold, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                        <Grid Margin="20,3,0,5">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Minimum duration (seconds)" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.ExcursionMinimumDuration, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                        <CheckBox Content="Reject hard guide excursion" IsChecked="{Binding Settings.EnableHardExcursion}" Margin="0,3"/>
-                        <Grid Margin="20,3,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Hard excursion (arcsec)" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.HardExcursionThreshold, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                    </StackPanel>
-                </GroupBox>
-
-                <GroupBox Header="Image signal" Margin="0,0,0,10">
-                    <StackPanel Margin="10">
-                        <CheckBox Content="Reject relative star-count loss" IsChecked="{Binding Settings.EnableStarCount}" Margin="0,3"/>
-                        <Grid Margin="20,3,0,8">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Maximum star loss (%)" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.MaxStarLossPercent, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                        <CheckBox Content="Reject background deviation" IsChecked="{Binding Settings.EnableBackground}" Margin="0,3"/>
-                        <Grid Margin="20,3,0,3">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Maximum increase (%)" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.MaxBackgroundIncreasePercent, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                        <Grid Margin="20,3,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Maximum decrease (%)" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.MaxBackgroundDecreasePercent, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                    </StackPanel>
-                </GroupBox>
-
-                <GroupBox Header="Quality score &amp; rejected files">
-                    <StackPanel Margin="10">
-                        <Grid Margin="0,3">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Worst-metric weight (0.50–0.95)" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.WorstMetricWeight, UpdateSourceTrigger=LostFocus}"/>
-                        </Grid>
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="230"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Rejected file action" VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.RejectedFileActionIndex}">
-                                <ComboBoxItem Content="Keep in place"/>
-                                <ComboBoxItem Content="Prefix BAD_"/>
-                                <ComboBoxItem Content="Move to Rejected subfolder"/>
-                            </ComboBox>
-                        </Grid>
-                    </StackPanel>
-                </GroupBox>
-            </StackPanel>
-        </ScrollViewer>
-    </DataTemplate>
 
     <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.UI.QualitySessionMeterDockable_Dockable">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Loaded="DockableLoaded">
@@ -182,6 +88,27 @@
                         <StackPanel Grid.Column="3"><TextBlock Text="ACCEPTANCE" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding AcceptanceRate, StringFormat={}{0:0.0}%}" FontSize="16"/></StackPanel>
                         <StackPanel Grid.Column="4"><TextBlock Text="SESSION QUALITY" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding SessionQuality, StringFormat={}{0:0}}" FontSize="16"/></StackPanel>
                         <StackPanel Grid.Column="5"><TextBlock Text="SESSION CONF." Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding SessionConfidence, StringFormat={}{0:0}%}" FontSize="16"/></StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Visibility="{Binding CalibrationSuggestionVisibility}"
+                        Background="{DynamicResource SecondaryBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10"
+                        Margin="0,0,0,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="ADAPTIVE CALIBRATION SUGGESTION" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
+                            <TextBlock Text="{Binding CalibrationStatus}" Margin="0,3,0,0" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding CalibrationValues}" Foreground="{StaticResource QsmSecondaryText}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                            <Button Content="Apply" Command="{Binding ApplyCalibrationCommand}" IsEnabled="{Binding CalibrationAvailable}" Margin="0,0,6,0" Padding="10,4" ToolTip="Apply the currently proposed bounded thresholds. Configuration of Adaptive Calibration remains in Plugin Options."/>
+                            <Button Content="Ignore" Command="{Binding IgnoreCalibrationCommand}" IsEnabled="{Binding CalibrationAvailable}" Padding="10,4" ToolTip="Dismiss this proposal for the current imaging context."/>
+                        </StackPanel>
                     </Grid>
                 </Border>
 

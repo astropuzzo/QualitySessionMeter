@@ -42,6 +42,16 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public ObservableCollection<FrameQualityResult> RejectedFrames { get; } = new();
     public QualitySettings Settings => runtime.Settings;
 
+    public CalibrationSuggestion Calibration => runtime.CurrentCalibrationSuggestion;
+    public bool CalibrationAvailable => Calibration?.Available == true;
+    public Visibility CalibrationSuggestionVisibility => CalibrationAvailable ? Visibility.Visible : Visibility.Collapsed;
+    public string CalibrationStatus => CalibrationAvailable
+        ? $"READY · {Calibration.SampleCount} stable accepted frames · {Calibration.Context}"
+        : Calibration?.Reason ?? "No calibration suggestion is currently available.";
+    public string CalibrationValues => CalibrationAvailable
+        ? $"RMS ≤ {Calibration.SuggestedMaxGuideRms:0.00}\" · excursion {Calibration.SuggestedExcursionThreshold:0.00}\" · hard {Calibration.SuggestedHardExcursionThreshold:0.00}\" · stars -{Calibration.SuggestedMaxStarLossPercent:0.0}% · background +{Calibration.SuggestedBackgroundIncreasePercent:0.0}/-{Calibration.SuggestedBackgroundDecreasePercent:0.0}%"
+        : "";
+
     private FrameQualityResult selectedRejectedFrame;
     public FrameQualityResult SelectedRejectedFrame {
         get => selectedRejectedFrame;
@@ -117,6 +127,8 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public ICommand OpenReportCommand { get; }
     public ICommand OpenSelectedRejectedCommand { get; }
     public ICommand RestoreSelectedRejectedCommand { get; }
+    public ICommand ApplyCalibrationCommand { get; }
+    public ICommand IgnoreCalibrationCommand { get; }
 #if QSM_DEVELOPMENT
     public ICommand RunSyntheticSessionCommand { get; }
     public ICommand StopSyntheticSessionCommand { get; }
@@ -148,6 +160,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
 
         runtime.FrameProcessed += RuntimeFrameProcessed;
         runtime.FrameReviewChanged += RuntimeFrameReviewChanged;
+        runtime.CalibrationSuggestionChanged += RuntimeCalibrationSuggestionChanged;
 #if QSM_DEVELOPMENT
         runtime.SyntheticStateChanged += RuntimeSyntheticStateChanged;
 #endif
@@ -158,6 +171,8 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         OpenReportCommand = new RelayCommand(OpenReport);
         OpenSelectedRejectedCommand = new AsyncRelayCommand(OpenSelectedRejectedAsync);
         RestoreSelectedRejectedCommand = new AsyncRelayCommand(RestoreSelectedRejectedAsync);
+        ApplyCalibrationCommand = new RelayCommand(runtime.ApplyCurrentCalibrationSuggestion);
+        IgnoreCalibrationCommand = new RelayCommand(runtime.IgnoreCurrentCalibrationSuggestion);
 #if QSM_DEVELOPMENT
         RunSyntheticSessionCommand = new AsyncRelayCommand(RunSyntheticSessionAsync);
         StopSyntheticSessionCommand = new RelayCommand(runtime.StopSyntheticSession);
@@ -249,6 +264,21 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         else Apply();
     }
 
+    private void RuntimeCalibrationSuggestionChanged(object sender, EventArgs e) {
+        void Apply() => RaiseCalibrationSummary();
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke((Action)Apply);
+        else Apply();
+    }
+
+    private void RaiseCalibrationSummary() {
+        RaisePropertyChanged(nameof(Calibration));
+        RaisePropertyChanged(nameof(CalibrationAvailable));
+        RaisePropertyChanged(nameof(CalibrationSuggestionVisibility));
+        RaisePropertyChanged(nameof(CalibrationStatus));
+        RaisePropertyChanged(nameof(CalibrationValues));
+    }
+
     private void ReloadLiveFrames() {
         Frames.Clear();
         foreach (var frame in runtime.Store.Results.TakeLast(500)) Frames.Add(frame);
@@ -264,6 +294,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
             CurrentFrame = frame;
             RefreshDerivedViews();
             RaiseAllSummary();
+            RaiseCalibrationSummary();
         }
 
         var dispatcher = Application.Current?.Dispatcher;
@@ -295,6 +326,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
             RaisePropertyChanged(nameof(SyntheticFailureSummary));
             RaisePropertyChanged(nameof(SessionFolder));
             RaisePropertyChanged(nameof(ModeText));
+            RaiseCalibrationSummary();
             RaiseAllSummary();
         }
 
@@ -305,7 +337,10 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
 
 #endif
 
-    private void SettingsChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e) => RaisePropertyChanged(nameof(ModeText));
+    private void SettingsChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e) {
+        RaisePropertyChanged(nameof(ModeText));
+        RaiseCalibrationSummary();
+    }
 
     private void RefreshDerivedViews() {
         BestAccepted.Clear();
@@ -342,6 +377,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         CurrentFrame = null;
         RefreshDerivedViews();
         RaiseAllSummary();
+        RaiseCalibrationSummary();
     }
 
     private void OpenSessionFolder() {
@@ -386,6 +422,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public void Dispose() {
         runtime.FrameProcessed -= RuntimeFrameProcessed;
         runtime.FrameReviewChanged -= RuntimeFrameReviewChanged;
+        runtime.CalibrationSuggestionChanged -= RuntimeCalibrationSuggestionChanged;
 #if QSM_DEVELOPMENT
         runtime.SyntheticStateChanged -= RuntimeSyntheticStateChanged;
 #endif

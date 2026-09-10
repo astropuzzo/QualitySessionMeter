@@ -20,8 +20,8 @@ public partial class Resources : ResourceDictionary {
         FreezeBrush("QsmSecondaryText");
         FreezeBrush("QsmAccent");
 
-        // Keep the legacy template key, but replace its value with the help-rich release options
-        // template. OptionsHelpResources itself contains no shared keyed Style objects.
+        // N.I.N.A. expects the historical QualitySessionMeter_Options key. Provide that key from
+        // the single canonical Plugin Options template; there is no second settings/control-center UI.
         var polishedOptions = new OptionsHelpResources();
         this["QualitySessionMeter_Options"] = polishedOptions["QualitySessionMeter_Options_Polished"];
     }
