@@ -10,6 +10,8 @@ Quality score != hard rejection
 
 The displayed 0–100 Quality score is diagnostic. A frame is rejected only when at least one enabled hard rule fails.
 
+All configurable QSM settings live in **N.I.N.A. Plugin Options**. The Imaging dock is operational only: it shows session state, metrics, history/review tools and, when Suggest Only has a proposal ready, compact **Apply / Ignore** actions. There is no second QSM settings/control-center panel.
+
 ## General
 
 ### Enable QualitySessionMeter
@@ -161,11 +163,11 @@ No automatic calibration assistance. Current thresholds remain manual.
 
 #### Suggest Only — recommended
 
-QSM calculates a bounded recommendation and displays it in **QSM Control Center**.
+QSM calculates a bounded recommendation. When a proposal is ready, a compact **Adaptive Calibration Suggestion** row appears in the normal QualitySessionMeter Imaging dock with **Apply** and **Ignore** actions.
 
-Nothing changes until the user explicitly applies the suggestion.
+Nothing changes until the user explicitly applies the suggestion. The row is hidden when there is no proposal, and it contains no configuration controls.
 
-This is the recommended mode while validating a setup because the proposed limits remain visible and reviewable.
+This is the recommended mode while validating a setup because the proposed limits remain visible and reviewable without duplicating Plugin Options.
 
 #### Automatic
 
