@@ -6,6 +6,20 @@ The current `1.3.x` line is still a **pre-store field-test line**. During this p
 
 ---
 
+## [1.3.0.8] - 2026-09-10
+
+### Monitoring-scope simplification and Options cleanup
+
+- Removed the former **QSM-controlled blocks only** monitoring mode from the public model, source-scoping policy and Plugin Options.
+- **Frames to Monitor** now has exactly two choices: **Advanced Sequencer LIGHTs** (default) and **All saved LIGHTs**.
+- Profiles carrying the legacy pre-store numeric scope value `0` are migrated automatically to **Advanced Sequencer LIGHTs**.
+- Internal per-exposure correlation used by Smart Recovery remains a private provenance/safety detail and is no longer presented as a monitoring mode or user concept.
+- Simplified Smart Recovery wording so the user only needs to place the gate after Take Exposure in the desired Advanced Sequencer loop.
+- Reworked Plugin Options for lower visual density: more row/section spacing, concise visible section summaries, stronger hierarchy on key controls and detailed explanations kept in hover tooltips instead of permanent paragraphs.
+- Preserved all dispatcher-safe WPF/theme rules introduced in the 1.3.0.5–1.3.0.7 hardening cycle.
+
+---
+
 ## [1.3.0.7] - 2026-09-09
 
 ### Options alignment and plain-language settings help
