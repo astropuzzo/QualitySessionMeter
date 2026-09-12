@@ -48,7 +48,9 @@ jobs:
           $syntheticPattern = 'SyntheticSessionGenerator\.cs|SyntheticConfidenceOracle\.cs|SyntheticEventOracle\.cs|SyntheticGuidePatternOracle\.cs|SyntheticTrendOracle\.cs|SyntheticLabDockable\.cs|SyntheticResources\.xaml'
           if ($text -match $syntheticPattern) { throw "Official production source set contains Synthetic Lab/test UI." }
           if ($text -match 'QualitySessionMeter\.DispatcherCheck|QualitySessionMeter\.VisualHarness|QualitySessionMeter\.VisualSlices') { throw "Official production source set contains test harness code." }
-          if (Test-Path UI/QsmControlCenterDockable.cs -or Test-Path UI/ControlCenterResources.xaml -or Test-Path UI/ControlCenterResources.xaml.cs) { throw "Removed duplicate QSM Control Center returned to the production tree." }
+          if (Test-Path UI/QsmControlCenterDockable.cs) { throw "Removed duplicate QSM Control Center dockable returned to the production tree." }
+          # The legacy resource dictionary remains for dispatcher regression checks, without a MEF export.
+          if ((Test-Path UI/ControlCenterResources.xaml.cs) -and ((Get-Content UI/ControlCenterResources.xaml.cs -Raw) -match '\[Export\(')) { throw "Legacy QSM Control Center resources must not be exported into N.I.N.A." }
 
       - name: Gate dashboard, UI, artwork and manifest contracts
         shell: pwsh
