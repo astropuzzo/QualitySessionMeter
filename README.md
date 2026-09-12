@@ -8,7 +8,7 @@ QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combin
 
 ## Release status
 
-`1.3.1.0` is the first official N.I.N.A. catalog candidate after the completed 1.3.0.x pre-store field-test cycle.
+`1.3.1.1` is the first official N.I.N.A. catalog candidate after the completed 1.3.0.x pre-store field-test cycle.
 
 Compatibility floor:
 
@@ -192,7 +192,7 @@ The official release pipeline verifies:
 - manifest generation from the immutable final DLL;
 - manifest validation against the current `isbeorn/nina.plugin.manifests` repository.
 
-Online visual regression also renders the actual QSM WPF templates and embedded Web Dashboard on GitHub-hosted runners. Real N.I.N.A. host testing was completed during the 1.3.0.x field-test cycle before the 1.3.1.0 catalog freeze.
+Online visual regression also renders the actual QSM WPF templates and embedded Web Dashboard on GitHub-hosted runners. Real N.I.N.A. host testing was completed during the 1.3.0.x field-test cycle before the 1.3.1.1 catalog freeze.
 
 ## N.I.N.A. catalog and updates
 

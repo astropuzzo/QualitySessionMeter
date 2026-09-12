@@ -2,6 +2,15 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.3.1.1] - 2026-09-12
+
+### Production packaging correction
+
+- Preserve the production DLL before the synthetic regression rebuilds the shared output as a development assembly.
+- Check compiled type metadata and the preserved DLL checksum before packaging; reject Synthetic Lab, test harnesses and the removed dockable.
+- Supersede the 1.3.1.0 package, whose development DLL was detected during post-release inspection and was not submitted to the N.I.N.A. catalog.
+- Keep runtime behavior, plugin GUID and minimum N.I.N.A. version unchanged.
+
 ## [1.3.1.0] - 2026-09-10
 
 ### First N.I.N.A. catalog candidate

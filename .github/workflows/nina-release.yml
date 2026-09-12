@@ -119,6 +119,14 @@ jobs:
       - name: Build immutable production plugin
         run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=false -p:Version=${{ github.ref_name }} -p:AssemblyVersion=${{ github.ref_name }} -p:FileVersion=${{ github.ref_name }}
 
+      - name: Preserve production DLL before development regression
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.dll" "package/QualitySessionMeter.dll"
+          ./tools/VerifyProductionAssembly.ps1 -File "package/QualitySessionMeter.dll" -ExpectedVersion '${{ github.ref_name }}'
+          (Get-FileHash "package/QualitySessionMeter.dll" -Algorithm SHA256).Hash | Set-Content production-dll.sha256
+
       - name: Restore synthetic checker
         run: dotnet restore QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj
 
@@ -131,8 +139,8 @@ jobs:
       - name: Prepare official package directory
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path package | Out-Null
-          Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.dll" "package/QualitySessionMeter.dll" -Force
+          if ((Get-FileHash "package/QualitySessionMeter.dll" -Algorithm SHA256).Hash -ne (Get-Content production-dll.sha256)) { throw "Preserved production DLL changed during regression." }
+          ./tools/VerifyProductionAssembly.ps1 -File "package/QualitySessionMeter.dll" -ExpectedVersion '${{ github.ref_name }}'
           Copy-Item README.md, CHANGELOG.md, LICENSE, SECURITY.md "package/" -Force
           if (Test-Path docs) { Copy-Item docs "package/docs" -Recurse -Force }
 

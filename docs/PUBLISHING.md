@@ -5,9 +5,9 @@ This is the release procedure for the official production package. The upstream 
 ## First catalog release
 
 ```text
-QualitySessionMeter:       1.3.1.0
+QualitySessionMeter:       1.3.1.1
 N.I.N.A. minimum version: 3.3.0.1057
-Manifest path:            manifests/Q/QualitySessionMeter/3.3.0.1057/1.3.1.0/manifest.json
+Manifest path:            manifests/Q/QualitySessionMeter/3.3.0.1057/1.3.1.1/manifest.json
 Plugin GUID:              bf861692-b3de-4fdc-8a74-d2b97434f49d
 ```
 
@@ -15,7 +15,7 @@ The GUID is permanent and must never be changed for later releases.
 
 ## Validation status
 
-The 1.3.0.x pre-store line was used for iterative field testing. Before the 1.3.1.0 catalog freeze the maintainer confirmed the current plugin loads and operates correctly in the real N.I.N.A. host after the final UI cleanup. Automated release gates additionally cover production/field-test source isolation, V1/V2/V3 deterministic regression, WPF independent-STA dispatcher safety, Web Dashboard security contracts and online WPF/browser visual regression.
+The 1.3.0.x pre-store line was used for iterative field testing. Before the 1.3.1.1 catalog freeze the maintainer confirmed the current plugin loads and operates correctly in the real N.I.N.A. host after the final UI cleanup. Automated release gates additionally cover production/field-test source isolation, V1/V2/V3 deterministic regression, WPF independent-STA dispatcher safety, Web Dashboard security contracts and online WPF/browser visual regression.
 
 Synthetic Lab is a development/field-test facility and is excluded from the official production package.
 
@@ -47,7 +47,7 @@ The upstream manifest PR must state that `astropuzzo` is the accountable human m
 
 `.github/workflows/nina-release.yml` runs only for a four-part tag **without** a leading `v`.
 
-For `1.3.1.0` it:
+For `1.3.1.1` it:
 
 1. verifies tag/project version equality;
 2. verifies the official source set excludes Synthetic Lab, visual/test harnesses and the removed duplicate QSM Control Center;
@@ -62,7 +62,9 @@ For `1.3.1.0` it:
 11. publishes the exact ZIP + manifest to the GitHub release;
 12. optionally creates the manifest branch/PR automatically when the maintainer fork and `PAT` secret are available.
 
-The DLL is never rebuilt after the manifest/checksum pair is generated.
+The production DLL is copied into `package/` immediately after its production build, before the synthetic checker rebuilds the shared `bin/` output with development features. `VerifyProductionAssembly.ps1` inspects its compiled types, and the preserved DLL checksum is checked again after regression. Packaging uses only this preserved copy. The DLL is never rebuilt after the manifest/checksum pair is generated.
+
+The published 1.3.1.0 archive contained the development DLL due to the previous packaging order and was not submitted to the catalog. Version 1.3.1.1 supersedes it without replacing the old checksummed assets.
 
 ## One-time upstream setup
 
@@ -78,22 +80,22 @@ If the fork/PAT are absent, the official release still produces a fully validate
 Only after the release-preparation PR has been merged into `main`, create and push:
 
 ```text
-1.3.1.0
+1.3.1.1
 ```
 
-Do not use `v1.3.1.0`: the `v...` prefix is reserved for pre-store field-test releases.
+Do not use `v1.3.1.1`: the `v...` prefix is reserved for pre-store field-test releases.
 
 ## Upstream pull request
 
 The generated manifest belongs at:
 
 ```text
-manifests/Q/QualitySessionMeter/3.3.0.1057/1.3.1.0/manifest.json
+manifests/Q/QualitySessionMeter/3.3.0.1057/1.3.1.1/manifest.json
 ```
 
 The PR should state that the manifest was generated from the immutable production DLL, validated with the official manifest pipeline, and include the required AI-assistance disclosure.
 
-If upstream review requires a plugin binary/code change, do not modify the already-checksummed 1.3.1.0 asset. Create a higher plugin version and regenerate the manifest/checksum.
+If upstream review requires a plugin binary/code change, do not modify the already-checksummed 1.3.1.1 asset. Create a higher plugin version and regenerate the manifest/checksum.
 
 ## After merge
 

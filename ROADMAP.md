@@ -11,14 +11,14 @@ Remote/mobile observability is an additional read-only layer and must never weak
 ## Current release state — 2026-09-10
 
 ```text
-Official catalog candidate: 1.3.1.0
+Official catalog candidate: 1.3.1.1
 N.I.N.A.:                  3.3.0.1057 / NIGHTLY #057
 NINA.Plugin:               3.3.0.1057-nightly
 .NET:                      10
 Windows:                   x64
 ```
 
-The 1.3.0.x line was used for pre-store field validation. Real-host validation on N.I.N.A. has now been completed successfully by the maintainer. `1.3.1.0` is the first official N.I.N.A. catalog candidate.
+The 1.3.0.x line was used for pre-store field validation. Real-host validation on N.I.N.A. has now been completed successfully by the maintainer. `1.3.1.1` is the first official N.I.N.A. catalog candidate.
 
 ## Public product model
 
@@ -87,7 +87,7 @@ Therefore Synthetic Lab and test-only UI are excluded. The interactive Synthetic
 
 A four-part tag without a leading `v` starts `.github/workflows/nina-release.yml`.
 
-For `1.3.1.0` the workflow must:
+For `1.3.1.1` the workflow must:
 
 1. verify tag/project version equality;
 2. verify production source-set isolation and absence of the removed Control Center;
@@ -107,13 +107,13 @@ The stable plugin GUID is `bf861692-b3de-4fdc-8a74-d2b97434f49d` and must never 
 The first official manifest belongs at:
 
 ```text
-manifests/Q/QualitySessionMeter/3.3.0.1057/1.3.1.0/manifest.json
+manifests/Q/QualitySessionMeter/3.3.0.1057/1.3.1.1/manifest.json
 ```
 
 Material AI assistance used during development must be disclosed in the upstream pull request. The human maintainer remains accountable for understanding, testing, security, privacy, licensing, provenance, debugging and maintenance.
 
 After upstream merge, normal discovery and updates are handled by the N.I.N.A. Plugin Manager. QSM does not implement a separate self-updater.
 
-## Next work after 1.3.1.0
+## Next work after 1.3.1.1
 
 Do not expand scope before the first catalog release stabilizes. Post-release work should prioritize bug fixes, compatibility with newer N.I.N.A. builds, localization/accessibility improvements and regression coverage. New decision rules require explicit design and dedicated synthetic + real-sky validation.
