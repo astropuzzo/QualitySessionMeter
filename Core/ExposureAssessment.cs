@@ -22,7 +22,7 @@ public static class ExposureAssessment {
             || (settings.EnableSustainedExcursion && result.SustainedGuideExcursionSeconds >= Math.Max(settings.ExcursionMinimumDuration, input.ExposureSeconds * 0.10))
             || (settings.EnableGuideRms && result.GuideRmsArcsec > settings.MaxGuideRms);
         bool confirmedShape = settings.ImageEvidenceEnabled && image.Compromised;
-        if (guideRule && settings.ImageEvidenceEnabled && image.Available && !extreme && !confirmedShape) {
+        if (guideRule && settings.ImageEvidenceEnabled && image.HasRescueMargin && !extreme) {
             result.GuideFalsePositive = true;
             result.ReviewReasons.AddRange(result.RejectReasons.Where(x => x.Contains("GUIDE", StringComparison.Ordinal)));
             result.RejectReasons.RemoveAll(x => x.Contains("GUIDE", StringComparison.Ordinal));
@@ -47,13 +47,15 @@ public static class ExposureAssessment {
         result.DecisionSummary = result.Status == FrameStatus.Rejected
             ? confirmedShape && guideRule ? "Rejected: guide failure confirmed by star shapes outside your tolerances."
                 : guideRule && extreme ? "Rejected: exposure RMS, prolonged disturbance or extreme peak exceeds the rescue safety limits; central stars cannot certify the whole exposure."
+                : guideRule && settings.ImageEvidenceEnabled && image.Available && !image.HasRescueMargin ? $"Rejected: borderline stellar shape. Eccentricity {image.Eccentricity:0.00} must be below {image.Limits.RescueMaxEccentricity:0.00} for automatic rescue; original guide rejection retained."
                 : guideRule ? settings.ImageEvidenceEnabled ? "Rejected: stellar check inconclusive; original guide limit retained." : "Rejected: guide limit exceeded; stellar second pass is disabled."
                 : result.GuideFalsePositive ? "Guide false positive cleared, but an independent star-count or background rule still rejects this frame."
                 : "Rejected: star-count or background limit exceeded."
-            : result.GuideFalsePositive ? "Kept for review: guide false positive. Measured stars are within tolerance; no BAD_ prefix or move is applied."
+            : result.GuideFalsePositive ? "Kept for review: measured stars support clearing the guide flag, with a safety margin; no BAD_ prefix or move is applied."
             : result.Status == FrameStatus.Learning ? "Learning: building the reference for this target and imaging setup."
             : result.Status == FrameStatus.Warning ? "Kept for review: low diagnostic score; no enabled rejection rule failed."
             : "Kept: no enabled rejection rule failed. Stellar second pass was not needed.";
         result.ThresholdsUsed += $"; secondPass={settings.ImageEvidenceEnabled}; eccentricity>={image.Limits.MaxEccentricity:R} in >={image.Limits.DeformedFraction:P0} stars; tail>={image.Limits.MaxTailPercent:R}%; doublePeak>={image.Limits.MaxDoublePeakPercent:R}%; minStars={image.Limits.MinimumStars}; targetStars={image.Limits.TargetStars}; rescue requires RMS<={settings.MaxGuideRms:R} when enabled, peak<{Math.Max(6, settings.HardExcursionThreshold*2):R} when enabled, sustained<{Math.Max(settings.ExcursionMinimumDuration,input.ExposureSeconds*.1):R}s when enabled";
+        result.ThresholdsUsed += $"; rescueEccentricity<{image.Limits.RescueMaxEccentricity:R} (0.05 margin)";
     }
 }

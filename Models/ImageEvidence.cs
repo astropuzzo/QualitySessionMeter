@@ -21,7 +21,8 @@ public sealed class ImageEvidence {
     public double Eccentricity => AxisRatio >= 1 ? Math.Sqrt(1 - 1 / (AxisRatio * AxisRatio)) : double.NaN;
     public bool Compromised => Available && ((Eccentricity >= Limits.MaxEccentricity && ElongatedFraction >= Limits.DeformedFraction)
         || TailStrength >= Limits.MaxTailPercent / 100 || DoublePeakStrength >= Limits.MaxDoublePeakPercent / 100);
-    public string Summary => !Available ? "NOT VERIFIED" : Compromised ? "SHAPE LIMIT EXCEEDED" : "SHAPES WITHIN LIMITS";
+    public bool HasRescueMargin => Available && !Compromised && Eccentricity < Limits.RescueMaxEccentricity;
+    public string Summary => !Available ? "NOT VERIFIED" : Compromised ? "SHAPE LIMIT EXCEEDED" : HasRescueMargin ? "SHAPES WITHIN RESCUE LIMITS" : "BORDERLINE — REJECTION RETAINED";
     public string PreviewCaption => !Available ? "" : "Left: median of measured stars. Right: six individual stars. Same display stretch; tails are enhanced. Measurements use linear pixels.";
     [JsonIgnore]
     public BitmapSource Preview {
@@ -44,6 +45,8 @@ public sealed record StarShapeLimits {
     public int TargetStars { get; init; } = 100;
     public int MinimumStars { get; init; } = 20;
     public double MaxEccentricity { get; init; } = 0.60;
+    // Rescue requires stronger evidence than merely not exceeding the damage threshold.
+    public double RescueMaxEccentricity => Math.Max(0, MaxEccentricity - 0.05);
     public double DeformedFraction { get; init; } = 0.60;
     public double MaxTailPercent { get; init; } = 2;
     public double MaxDoublePeakPercent { get; init; } = 8;

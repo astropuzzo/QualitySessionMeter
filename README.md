@@ -8,7 +8,7 @@ QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combin
 
 ## Release status
 
-`1.4.0.0` is a field-test candidate with post-exposure stellar verification. It supersedes neither the existing catalog submission nor its real-host validation automatically. A new N.I.N.A. acquisition run is required before promoting 1.4 to the catalog.
+`1.4.0.1` is a field-test candidate with post-exposure stellar verification. It supersedes neither the existing catalog submission nor its real-host validation automatically. A new N.I.N.A. acquisition run is required before promoting 1.4 to the catalog.
 
 New in 1.4: candidate-only raw-star second pass, configurable eccentricity/tail/repeated-peak tolerances, persistent visual proof, clear frame/session score labels, and removal of all Smart Recovery waits. See [validation and limitations](docs/1.4-VALIDATION.md).
 

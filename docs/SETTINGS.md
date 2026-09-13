@@ -208,7 +208,9 @@ QSM copies at most a 1024 × 1024 central field while N.I.N.A. still owns the ra
 
 These are this algorithm's measurements, not interchangeable with another application's fitted PSF eccentricity. Focus, undersampling, optics, crowding and narrowband signal can affect reliability. The small central field does not certify corner quality or defects elsewhere.
 
-If measured shapes are within all tolerances and the guide failure is within the rescue safety bounds, the guide reasons move to the audit/review history. The frame is **WARNING / kept**, or **LEARNING** while its signal baseline is immature. A separate star-count/background failure still rejects it. Rescued warning frames do not train the clean baseline or adaptive calibration. Baseline-eligible learning frames retain the existing learning behavior.
+Automatic rescue also requires median eccentricity strictly below `Maximum Eccentricity − 0.05` (below 0.55 with the default 0.60). This is a conservative decision margin, not a statistical confidence interval. Borderline shapes retain the original guide rejection and are labeled explicitly; they are not described as proven stellar damage.
+
+If measured shapes satisfy this margin and all other tolerances and the guide failure is within the rescue safety bounds, the guide reasons move to the audit/review history. The frame is **WARNING / kept**, or **LEARNING** while its signal baseline is immature. A separate star-count/background failure still rejects it. Rescued warning frames do not train the clean baseline or adaptive calibration. Baseline-eligible learning frames retain the existing learning behavior.
 
 Unavailable pixels, too few reliable stars, inadequate field coverage, rejection of most candidate objects, or a 1.5-second analysis budget overrun cannot rescue a guide rejection. Shape damage confirms the rejection. With each corresponding guide rule enabled, these safety bounds also retain rejection even if the central cores look round:
 

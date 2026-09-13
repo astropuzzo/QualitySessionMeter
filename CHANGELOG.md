@@ -2,6 +2,11 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.0.1] - 2026-09-13 (field-test candidate)
+
+- Require a 0.05 eccentricity margin below the configured damage limit for automatic guide-flag rescue. Borderline measured shapes retain the original rejection with an explicit explanation.
+- Add decision-margin tests and update the private replay: six recoveries, seven retained rejects, including the user-reviewed borderline exposure.
+
 ## [1.4.0.0] - 2026-09-13 (field-test candidate)
 
 - Verify guide-reject candidates using a bounded central raw field, with Bayer-cell averaging, isolated-star moments, median-profile tail detection and repeated-secondary-peak evidence.

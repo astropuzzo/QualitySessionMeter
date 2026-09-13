@@ -38,6 +38,15 @@ FrameQualityResult Assess(ImageEvidence image, double peak, double rms = .9, dou
     Guide = new GuideExposureMetrics { HasData=true, Samples=54, RmsArcsec=rms, MaxExcursionArcsec=peak, MaxSustainedExcursionSeconds=duration }
 },settings);
 var spike = Assess(round,3.03);
+ImageEvidence ShapeAt(double eccentricity, double limit=.60) => new() {
+    Attempted=true, Available=true, Stars=100, AxisRatio=1/Math.Sqrt(1-eccentricity*eccentricity),
+    ElongatedFraction=0, TailStrength=0, DoublePeakStrength=0, Limits=new StarShapeLimits {MaxEccentricity=limit}
+};
+var borderline = Assess(ShapeAt(.58),3.03);
+Check(borderline.Status==FrameStatus.Rejected && !borderline.GuideFalsePositive && !borderline.ImageEvidence.Compromised && borderline.DecisionSummary.Contains("borderline"), "borderline stars retain guide rejection without claiming confirmed shape damage");
+Check(Assess(ShapeAt(.54),3.03).GuideFalsePositive, "clear margin still rescues round-enough stars");
+Check(Assess(ShapeAt(.56),3.03).Status==FrameStatus.Rejected, "near-limit shape is not rescued merely for passing the damage limit");
+Check(Assess(ShapeAt(.58,.65),3.03).GuideFalsePositive, "rescue margin follows the configured eccentricity tolerance");
 Check(spike.Status==FrameStatus.Warning && spike.IsUsable && spike.OverallQuality>80, "isolated moderate peak retains a round image for review without score collapse");
 Check(Assess(elongated,3.9).Status==FrameStatus.Rejected, "moderate guide failure plus damaged stars still rejects");
 Check(Assess(trailed,21,3.9,12).Status==FrameStatus.Rejected, "large guide excursion and stellar tail still reject");
@@ -99,7 +108,7 @@ if (args.Length>0) {
         replay.Add(result);
         var id=row.GetProperty("id").GetInt32();
         File.WriteAllBytes(Path.Combine(outDir,$"{id}-stars.png"),Convert.FromBase64String(shape.PreviewPngBase64));
-        Check(new[]{561,562,563,564,567,695}.Contains(id) ? result.Status==FrameStatus.Rejected : result.GuideFalsePositive && result.Status!=FrameStatus.Rejected, $"real sample {id}: expected damaged/retained group");
+        Check(new[]{561,562,563,564,565,567,695}.Contains(id) ? result.Status==FrameStatus.Rejected : result.GuideFalsePositive && result.Status!=FrameStatus.Rejected, $"real sample {id}: expected excluded/retained group");
         Console.WriteLine(JsonSerializer.Serialize(new { id=row.GetProperty("id").GetInt32(),shape.Stars,shape.AxisRatio,shape.TailStrength,shape.Compromised,result.StatusText,result.OverallQuality,result.DecisionSummary,milliseconds=sw.ElapsedMilliseconds }));
     }
     var options=new JsonSerializerOptions {WriteIndented=true}; options.Converters.Add(new FiniteDoubleJsonConverter());
