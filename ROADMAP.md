@@ -4,21 +4,22 @@ QualitySessionMeter (QSM) is a N.I.N.A. quality-control plugin with three produc
 
 - **V1** — per-frame measurements, independent hard rejection rules and 0–100 diagnostic Quality scoring;
 - **V2** — confidence, temporal/session intelligence, event grouping and reporting;
-- **V3** — quality-aware Advanced Sequencer tools, including Valid Frame Target and Smart Recovery.
+- **V3** — quality-aware Advanced Sequencer tools, including Valid Frame Target; Smart Recovery retired in 1.4.
 
 Remote/mobile observability is an additional read-only layer and must never weaken decision, provenance or file-safety behavior.
 
-## Current release state — 2026-09-10
+## Current release state — 2026-09-13
 
 ```text
-Official catalog candidate: 1.3.1.1
+1.4 field-test candidate:   1.4.0.0
+Prior catalog submission:  1.3.1.1
 N.I.N.A.:                  3.3.0.1057 / NIGHTLY #057
 NINA.Plugin:               3.3.0.1057-nightly
 .NET:                      10
 Windows:                   x64
 ```
 
-The 1.3.0.x line was used for pre-store field validation. Real-host validation on N.I.N.A. has now been completed successfully by the maintainer. `1.3.1.1` is the first official N.I.N.A. catalog candidate.
+The 1.3.0.x line was used for pre-store field validation. Real-host validation on N.I.N.A. has now been completed successfully by the maintainer. That validation does not cover 1.4. Stellar second pass has synthetic and local replay coverage; a new host acquisition remains required.
 
 ## Public product model
 
@@ -43,7 +44,7 @@ The former controlled-block-only monitoring scope was removed from both the publ
 - Star-count and background rules use mature rolling clean baselines isolated by target/filter/exposure/gain/binning/camera.
 - REJECTED/WARNING/ERROR frames never contaminate the clean baseline.
 - Missing required analysis fails safe rather than silently accepting a frame.
-- HFR/FWHM/eccentricity are not hard rejection inputs in this release.
+- Raw stellar eccentricity, tails and repeated secondary peaks verify guide rejections within documented rescue limits.
 
 ### Files and Advanced Sequencer
 
@@ -51,14 +52,14 @@ The former controlled-block-only monitoring scope was removed from both the publ
 - Rename/move actions require eligible provenance and Monitor Only OFF.
 - Undo BAD changes only physical file disposition; the original automatic verdict/history remains intact.
 - Valid Frame Target counts correlated usable frames and fails safe when classification is missing.
-- Smart Recovery runs only between exposures and never aborts an active exposure.
+- Smart Recovery inserts no waits; saved legacy instances execute immediately.
 
 ### UI and WPF safety
 
 - Plugin Options follow the N.I.N.A. host theme and remain left-aligned/readable.
 - Shared WPF fallback brushes are immutable/frozen; no bound mutable Freezable crosses AvalonDock dispatcher boundaries.
 - Shared keyed Styles are prohibited in dispatcher-sensitive exported QSM ResourceDictionaries.
-- The multichannel timeline exposes Quality+Confidence, Guide RMS, Stars Δ+Background Δ, active limits, event markers and adaptive Frame # ticks.
+- The multichannel timeline exposes Quality+Evidence strength, Guide RMS, Stars Δ+Background Δ, active limits, event markers and adaptive Frame # ticks.
 - Online visual regression renders actual QSM WPF templates and the actual embedded Web Dashboard at every UI release candidate.
 
 ### Web Dashboard

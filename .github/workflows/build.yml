@@ -30,6 +30,9 @@ jobs:
           "QSM_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "QSM_TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Verify 1.4 post-exposure assessment
+        run: dotnet run --project QualitySessionMeter.AssessmentCheck/QualitySessionMeter.AssessmentCheck.csproj -c Release
+
       - name: Restore plugin
         run: dotnet restore QualitySessionMeter.csproj
 

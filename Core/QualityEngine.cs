@@ -12,6 +12,8 @@ public sealed class QualityEngine {
 
     public FrameQualityResult Evaluate(FrameQualityInput input, QualitySettings settings) {
         var result = new FrameQualityResult {
+            AssessmentVersion = settings.UseExposureAssessment ? "1.4" : "1.3",
+            ImageEvidence = input.ImageEvidence ?? new ImageEvidence(),
             FrameIndex = input.FrameIndex,
             TimestampUtc = input.TimestampUtc,
             OriginalPath = input.OriginalPath,
@@ -139,6 +141,7 @@ public sealed class QualityEngine {
             result.ErrorMessage = string.Join(", ", dataErrors);
             result.ProbableCause = "ANALYSIS DATA UNAVAILABLE";
             confidenceEngine.Apply(input, result, settings);
+            result.DecisionSummary = "Unassessed: required analysis data is missing. The file is retained; this is not a successful stellar rescue.";
             return result;
         }
 
@@ -153,8 +156,16 @@ public sealed class QualityEngine {
             result.Status = FrameStatus.Accepted;
         }
 
+        if (settings.UseExposureAssessment) ExposureAssessment.Apply(input, result, settings);
         result.ProbableCause = ClassifyCause(result);
         confidenceEngine.Apply(input, result, settings);
+        if (settings.UseExposureAssessment) {
+            result.ConfidenceScore = Math.Min(result.ConfidenceScore, result.ImageEvidence.Available ? 85 : 65);
+            result.ConfidenceReason = "Evidence strength, not a probability that the photograph is good or bad. " + result.DecisionSummary;
+            if (result.RejectReasons.Any(x => x.StartsWith("STAR_SHAPE"))) result.ProbableCause = "MEASURED STAR-SHAPE DAMAGE";
+            else if (result.RejectReasons.Any(x => x.Contains("GUIDE"))) result.ProbableCause = "GUIDE LIMIT EXCEEDED";
+            else if (result.ReviewReasons.Count > 0) result.ProbableCause = "REVIEW RECOMMENDED";
+        }
         return result;
     }
 

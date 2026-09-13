@@ -7,10 +7,10 @@ This document defines the meaning of the values shown by QualitySessionMeter (QS
 QSM deliberately separates **display scores** from **hard rejection rules**.
 
 - `Quality` is a 0–100 composite presentation score.
-- `Confidence` estimates how reliable/complete the current assessment is.
+- **Evidence strength** (stored as `ConfidenceScore` for compatibility) describes completeness/agreement of the available diagnostics; it is not a calibrated probability.
 - `ACCEPTED`, `WARNING`, `REJECTED`, `LEARNING` and `ERROR` are frame states.
-- A frame is `REJECTED` when at least one enabled hard rule fails. A high Quality score does not override a failed hard rule.
-- A `WARNING` frame did not fail a hard rule but has degraded overall quality.
+- A frame is `REJECTED` when at least one enabled rule remains failed after the optional stellar second pass. A high Quality score does not override a failed hard rule.
+- A `WARNING` frame is kept: it either has degraded diagnostic quality or a guide flag cleared by the stellar second pass.
 
 This separation is intentional. It prevents a good value in one channel from numerically hiding a severe failure in another.
 
@@ -20,7 +20,7 @@ This separation is intentional. It prevents a good value in one channel from num
 |---|---|---:|---:|
 | `LEARNING` | Same-context baseline is still being established. | No | Yes |
 | `ACCEPTED` | No enabled hard rule failed. | Yes | Yes |
-| `WARNING` | No enabled hard rule failed, but overall quality is degraded. | Yes | No |
+| `WARNING` | Kept for review: low score or stellar-confirmed guide false positive. | Yes | No |
 | `REJECTED` | One or more enabled hard rules failed. | No | No |
 | `ERROR` | QSM could not assess the frame safely. | No | No |
 
@@ -49,7 +49,7 @@ A single isolated spike has sustained duration zero and cannot satisfy a duratio
 
 **Unit:** arcseconds.
 
-The hard-excursion rule is an emergency ceiling on total guide-error magnitude. A sufficiently large individual excursion can reject a frame even when it is too short to meet the sustained-duration rule.
+The hard-excursion rule flags total guide-error magnitude. In 1.4 a moderate failure can be cleared by the stellar second pass; extreme failures retain the rescue safety ceiling described in SETTINGS.md. A sufficiently large individual excursion can reject a frame even when it is too short to meet the sustained-duration rule.
 
 Because excursion thresholds apply to total magnitude, the Web Dashboard draws them on the **Total error magnitude** guide plot, not over the signed RA/DEC plot.
 
@@ -98,9 +98,13 @@ Only `LEARNING` and `ACCEPTED` frames update the clean baseline. `WARNING`, `REJ
 
 Quality combines available channel sub-scores while deliberately weighting the weakest channel more heavily than the arithmetic mean.
 
-The configurable **Worst Metric Weight** affects this display score only. It does not change the semantics of the independent hard rules.
+In 1.4, `Quality = 0.75 × mean(available channel scores) + 0.25 × min(available channel scores)`. Guide RMS, transparency and background retain their channel mappings. Stability becomes `clamp(100 − 300 × longest sustained excursion / exposure duration, 0, 100)` when excursion diagnostics are enabled. A lone spike no longer zeroes that component. This duration is the longest run, not total disturbed time.
 
-Current labels:
+For analyzed candidates the stellar channel is also included: `clamp(100 − max(180 × max(0, axisRatio − 1.10), 2200 × max(0, tailStrength − 0.003)), 0, 100)`. It is a heuristic diagnostic, not a calibrated image-quality estimate. A secondary peak can confirm rejection even if its composite score is high. The score and the rule result are separate.
+
+The former Worst-channel Influence option is retired. Disabling stellar verification keeps the 1.4 score and strict guide rejection; it does not restore the 1.3 score. Historical V1/V2/V3 fixtures explicitly select their legacy scoring only in development builds.
+
+Rejected frames show **STAR DAMAGE** or **LIMIT EXCEEDED**; warnings show **KEPT FOR REVIEW**. These explain disposition rather than disguising it as an aesthetic grade. Other assessed frames retain these score labels:
 
 | Score | Label |
 |---:|---|
@@ -110,11 +114,9 @@ Current labels:
 | 50–64 | POOR |
 | 0–49 | BAD |
 
-## Confidence 0–100
+## Evidence strength 0–100
 
-Confidence represents how trustworthy/complete the current assessment is, considering the evidence available to the engine. It is not a replacement for Quality and is not itself a hard rejection switch.
-
-A low-confidence result should be interpreted as "QSM has less reliable evidence for this assessment", not automatically as "bad frame".
+The existing completeness, baseline maturity, threshold separation and channel agreement diagnostics are retained. In 1.4 the displayed score is capped at 85 with usable stellar evidence and 65 without it. These caps deliberately avoid false certainty; they are not empirically calibrated probabilities. `85 / 100` does not mean an 85% probability of a bad photograph. A low score is not itself a reject rule.
 
 ## Session summary values
 
@@ -124,8 +126,8 @@ The Web Dashboard and N.I.N.A. dock use these definitions:
 - **Usable** — `ACCEPTED + WARNING`.
 - **Rejected** — number of `REJECTED` frames.
 - **Acceptance** — `Usable / (Usable + Rejected) × 100`. `LEARNING` and `ERROR` are deliberately excluded from the denominator.
-- **Session Q** — mean Quality of usable frames.
-- **Session Confidence** — mean finite Confidence of usable frames.
+- **Usable frame quality** — mean Quality of usable frames.
+- **Mean evidence strength** — mean finite Confidence of usable frames.
 
 ## Probable cause
 
@@ -137,8 +139,6 @@ Probable cause is a diagnostic interpretation of measured evidence, for example:
 
 It is explanatory metadata. It does **not** replace the explicit rejection reason(s), threshold values or frame state.
 
-## HFR / FWHM / eccentricity
+## Stellar shape, tails and repeated peaks
 
-QSM does not use HFR, FWHM or eccentricity as the primary hard-rejection criteria in the current decision model. They can be useful image diagnostics, but real acquisition tests showed that some visibly wind-damaged point–streak–point stars can retain deceptively similar scalar shape metrics.
-
-The plugin therefore prioritizes exposure guiding behaviour and robust session-relative image statistics for automatic rejection.
+The optional second pass measures central raw stars only on guide-reject candidates. It combines core eccentricity with median-profile tails and repeated secondary peaks; eccentricity alone can miss a round core with a faint streak. See [SETTINGS.md](SETTINGS.md#stellar-second-pass) for exact thresholds, rescue safety bounds, computational limits and visual-proof interpretation.

@@ -14,7 +14,7 @@ try {
     foreach ($handle in $metadata.TypeDefinitions) {
         $type = $metadata.GetTypeDefinition($handle)
         $name = $metadata.GetString($type.Namespace) + '.' + $metadata.GetString($type.Name)
-        if ($name -match '\.Synthetic\.|\.SyntheticLabDockable$|\.SyntheticResources$|\.QsmControlCenterDockable$|VisualHarness|VisualSlices|DispatcherCheck|SyntheticCheck') {
+        if ($name -match '\.Synthetic\.|\.SyntheticLabDockable$|\.SyntheticResources$|\.QsmControlCenterDockable$|VisualHarness|VisualSlices|DispatcherCheck|SyntheticCheck|AssessmentCheck') {
             throw "Production DLL contains development or removed UI type: $name"
         }
     }

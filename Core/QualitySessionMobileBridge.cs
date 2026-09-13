@@ -120,7 +120,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
                 ["maxBackgroundDecreasePercent"] = settings.MaxBackgroundDecreasePercent,
                 ["predictiveWarningsEnabled"] = settings.PredictiveWarningsEnabled,
                 ["environmentalCorrelationEnabled"] = settings.EnvironmentalCorrelationEnabled,
-                ["smartRecoveryEnabled"] = settings.SmartPauseEnabled
+                ["imageEvidenceEnabled"] = settings.ImageEvidenceEnabled
             },
             ["series"] = new Dictionary<string, object> {
                 ["quality"] = Series("Quality", "#8AB4F8", "score", "0–100; higher is better"),
@@ -168,6 +168,21 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
         : Math.Sqrt(values.Select(x => x * x).Average());
 
     private static IDictionary<string, object> MobileFrame(FrameQualityResult frame) => new Dictionary<string, object> {
+        ["assessmentVersion"] = frame.AssessmentVersion,
+        ["decisionSummary"] = frame.DecisionSummary,
+        ["reviewReasons"] = frame.ReviewReasons,
+        ["guideFalsePositive"] = frame.GuideFalsePositive,
+        ["secondPassText"] = frame.SecondPassText,
+        ["starProofPng"] = frame.ImageEvidence.PreviewPngBase64,
+        ["starProofCaption"] = frame.ImageEvidence.PreviewCaption,
+        ["starEccentricity"] = JsonNumber(frame.ImageEvidence.Eccentricity),
+        ["starMedianFlux"] = JsonNumber(frame.ImageEvidence.MedianFlux),
+        ["starDoublePeak"] = JsonNumber(frame.ImageEvidence.DoublePeakStrength),
+        ["imageEvidenceAvailable"] = frame.ImageEvidence.Available,
+        ["imageEvidenceDetail"] = frame.ImageEvidence.Detail,
+        ["imageStarsMeasured"] = frame.ImageEvidence.Stars,
+        ["starAxisRatio"] = JsonNumber(frame.ImageEvidence.AxisRatio),
+        ["starTailStrength"] = JsonNumber(frame.ImageEvidence.TailStrength),
         ["frameIndex"] = frame.FrameIndex,
         ["timestampUtc"] = frame.TimestampUtc == default ? null : frame.TimestampUtc.ToUniversalTime().ToString("O"),
         ["status"] = frame.StatusText,

@@ -18,7 +18,7 @@
                 <TextBlock Text="Options" FontSize="18" Margin="0,0,0,6"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,12"/>
                 <TextBlock Margin="16,0,0,8" Width="910" FontSize="11" Opacity="0.76" TextWrapping="Wrap"
-                           Text="Hard rejection rules and diagnostic scores are independent: Quality and Confidence describe the session but never override an enabled reject rule."/>
+                           Text="Keep capturing. QSM assesses completed exposures using guide history, signal and raw star shapes. Review frames remain usable; evidence strength is not a probability."/>
 
                 <TextBlock Text="General" FontSize="14" FontWeight="SemiBold" Margin="0,10,0,6"/>
 
@@ -199,14 +199,40 @@
                     <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
-                <TextBlock Text="Quality &amp; Session Intelligence" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
-
-                <Grid Margin="16,5,0,5" ToolTip="Controls only the displayed Overall Quality score: worst channel × weight + average × (1 − weight). Hard rejection rules are independent.">
+                <TextBlock Text="Stellar Second Pass" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Only guide-reject candidates are checked. Round stars can rescue a false positive before BAD_ is applied. Too few reliable stars retain the original rejection. Stars and background rules remain independent."/>
+                <Grid Margin="16,5,0,5">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Worst-channel Influence" VerticalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Text="{Binding Settings.WorstMetricWeight, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="0.50–0.95" VerticalAlignment="Center" Opacity="0.72"/>
+                    <TextBlock Text="Verify Guide Rejections with Stars" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding Settings.ImageEvidenceEnabled}" HorizontalAlignment="Left"/>
                 </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Stars to Measure" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.ShapeTargetStars, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="20–200 · at least 20 reliable stars" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Maximum Eccentricity" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.ShapeMaxEccentricity, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="0.30–0.90 · 0 = round, closer to 1 = elongated" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Maximum Asymmetric Tail" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.ShapeMaxTailPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="% of stellar peak · 0.5–10" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Maximum Repeated Secondary Peak" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.ShapeMaxDoublePeakPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="% of stellar peak · 2–30" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <TextBlock Margin="40,6,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Eccentricity must exceed the limit in at least 60% of measured stars. Tail and secondary-peak limits use the median stellar profile. Flux is recorded as a diagnostic, not compared between unmatched stars."/>
+                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Rescue safety: enabled exposure RMS still applies. Peaks at or above max(6 arcsec, 2 × hard limit), or sustained excursions lasting at least max(your duration limit, 10% of the exposure), remain rejected. A small central field cannot certify extreme disturbances. No recovery waits are inserted."/>
+                <TextBlock Text="Session &amp; File Handling" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
 
                 <Grid Margin="16,5,0,5" ToolTip="Filesystem action attempted only for an eligible REJECTED frame when Monitor Only is OFF. QSM never deletes an image and all rename/move actions are collision-safe.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -228,37 +254,6 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Use Environmental Data for Hints" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnvironmentalCorrelationEnabled}" HorizontalAlignment="Left"/>
-                </Grid>
-
-                <TextBlock Text="Smart Recovery (Advanced Sequencer)" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,3"/>
-                <TextBlock Margin="16,0,0,7" Width="910" FontSize="11" Opacity="0.74" TextWrapping="Wrap"
-                           Text="Optional sequence helper. Place QSM Smart Recovery Gate after Take Exposure; it only waits between exposures and never aborts one already in progress."/>
-
-                <Grid Margin="16,5,0,5" ToolTip="Enables the optional QSM Smart Recovery Gate. After a configured streak of REJECTED/ERROR results it waits, checks guide recovery when possible, then permits the next probe exposure.">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Enable Smart Recovery Gate" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <CheckBox Grid.Column="1" IsChecked="{Binding Settings.SmartPauseEnabled}" HorizontalAlignment="Left"/>
-                </Grid>
-
-                <Grid Margin="16,5,0,5" ToolTip="Consecutive REJECTED or ERROR results associated with the sequence loop required before Smart Recovery activates. ACCEPTED/WARNING results break the streak.">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Reject / Error Streak" VerticalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseRejectStreak, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="frames (2–10)" VerticalAlignment="Center" Opacity="0.72"/>
-                </Grid>
-
-                <Grid Margin="16,5,0,5" ToolTip="Cooldown inserted between exposures after persistent degradation.">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Recovery Wait" VerticalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseSeconds, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="seconds (10–1800)" VerticalAlignment="Center" Opacity="0.72"/>
-                </Grid>
-
-                <Grid Margin="16,5,0,10" ToolTip="Healthy guide samples required after cooldown before reporting recovery. If recovery cannot be confirmed before the safety timeout, QSM permits one probe exposure instead of waiting forever.">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Healthy Guide Samples to Resume" VerticalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Text="{Binding Settings.SmartResumeHealthyGuideChecks, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="samples (1–10)" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
                 <TextBlock Text="Web Dashboard" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,3"/>
@@ -315,7 +310,7 @@
                 <TextBlock Text="Features" FontSize="18" Margin="0,16,0,5"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>
                 <TextBlock Margin="16,0,0,0" Width="910" TextWrapping="Wrap"
-                           Text="• Quality and independent Confidence scores&#x0a;• Exposure guide RMS plus sustained/hard excursion rules&#x0a;• Rolling star/background baselines&#x0a;• Reversible rejected-file handling&#x0a;• Session events, predictive diagnostics and reports&#x0a;• Valid Frame Target and optional Smart Recovery integration&#x0a;• Read-only local Web Dashboard&#x0a;• Separate tokenized OpenAstro companion API"/>
+                           Text="• Last-frame quality and diagnostic evidence strength&#x0a;• Exposure guide RMS plus sustained/hard excursion rules&#x0a;• Rolling star/background baselines&#x0a;• Reversible rejected-file handling&#x0a;• Session events, predictive diagnostics and reports&#x0a;• Valid Frame Target without recovery waits; stellar second pass with visual proof&#x0a;• Read-only local Web Dashboard&#x0a;• Separate tokenized OpenAstro companion API"/>
 
                 <TextBlock Text="Getting Help" FontSize="18" Margin="0,16,0,5"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>

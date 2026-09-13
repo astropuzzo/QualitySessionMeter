@@ -151,12 +151,6 @@ public sealed class QualitySessionRuntime : IDisposable {
         return restored;
     }
 
-    public bool HasPersistentControlledDegradation() {
-        int required = settings.SmartPauseRejectStreak;
-        var recent = sessionStore.Results.Where(x => x.QsmControlled).TakeLast(required).ToArray();
-        return recent.Length == required && recent.All(x => x.Status is FrameStatus.Rejected or FrameStatus.Error);
-    }
-
     public void ApplyCurrentCalibrationSuggestion() {
         var suggestion = currentCalibrationSuggestion;
         if (suggestion?.Available != true) return;
@@ -224,6 +218,8 @@ public sealed class QualitySessionRuntime : IDisposable {
         lock (sourceSync) {
             var cutoff = DateTime.UtcNow.AddMinutes(-10);
             pendingSources.RemoveAll(x => x.CapturedUtc < cutoff);
+            // Keep provenance but release abandoned pixel copies (at most eight pending central fields).
+            foreach (var pending in pendingSources.Take(Math.Max(0, pendingSources.Count - 7))) pending.Source.ImageSample = null;
             pendingSources.Add(new PendingFrameSource(
                 imageId,
                 exposureNumber,
@@ -256,6 +252,14 @@ public sealed class QualitySessionRuntime : IDisposable {
         var source = CaptureSource(meta.Sequence?.Title ?? "");
         FreezeSource(meta.Image.Id, meta.Image.ExposureNumber, meta.Image.ExposureStart, source);
         if (!source.MonitoringEligible) return;
+        if (settings.ImageEvidenceEnabled) {
+            try {
+                var raw = e.Image.RawImageData;
+                source.ImageSample = ImageEvidenceAnalyzer.Capture(raw.Data?.FlatArray, raw.Properties.Width, raw.Properties.Height, raw.Properties.IsBayered);
+            } catch (Exception ex) {
+                Logger.Warning($"QSM raw image evidence unavailable: {ex.Message}");
+            }
+        }
 
         try {
             var analysis = e.Image.RawImageData.StarDetectionAnalysis;
@@ -301,6 +305,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         await processingLock.WaitAsync();
 
         if (IsSyntheticMode || !settings.Enabled) {
+            source.ImageSample = null;
             processingLock.Release();
             return;
         }
@@ -325,6 +330,17 @@ public sealed class QualitySessionRuntime : IDisposable {
                 meta.Camera?.Name);
 
             var snapshot = baseline.GetSnapshot(key, settings.MinimumLearningFrames);
+            var imageEvidence = new ImageEvidence();
+            if (settings.ImageEvidenceEnabled && ExposureAssessment.IsGuideRejectCandidate(guide, settings)) {
+                var sample = source.ImageSample;
+                var limits = settings.GetStarShapeLimits();
+                try { imageEvidence = await Task.Run(() => ImageEvidenceAnalyzer.Analyze(sample, limits)); }
+                catch (Exception ex) {
+                    imageEvidence = ImageEvidenceAnalyzer.Analyze(null, limits);
+                    Logger.Warning($"QSM image evidence failed: {ex.Message}");
+                }
+            }
+            source.ImageSample = null;
             var input = new FrameQualityInput {
                 FrameIndex = assignedFrameIndex,
                 TimestampUtc = frameTimestampUtc,
@@ -339,7 +355,8 @@ public sealed class QualitySessionRuntime : IDisposable {
                 StarCount = e.StarDetectionAnalysis?.DetectedStars ?? -1,
                 BackgroundMedian = e.Statistics?.Median ?? double.NaN,
                 Baseline = snapshot,
-                Guide = guide
+                Guide = guide,
+                ImageEvidence = imageEvidence
             };
 
             var result = qualityEngine.Evaluate(input, settings);
@@ -406,6 +423,7 @@ public sealed class QualitySessionRuntime : IDisposable {
             try { await sessionStore.AppendAsync(result); } catch { }
             FrameProcessed?.Invoke(this, result);
         } finally {
+            source.ImageSample = null;
             processingLock.Release();
         }
     }

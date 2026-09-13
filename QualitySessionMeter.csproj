@@ -17,9 +17,9 @@
     <Description>Real-time subframe quality control, session diagnostics and accepted-frame acquisition for N.I.N.A.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <Platforms>AnyCPU;x64</Platforms>
-    <Version>1.3.1.1</Version>
-    <AssemblyVersion>1.3.1.1</AssemblyVersion>
-    <FileVersion>1.3.1.1</FileVersion>
+    <Version>1.4.0.0</Version>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
+    <FileVersion>1.4.0.0</FileVersion>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -32,6 +32,10 @@
 
   <ItemGroup>
     <Compile Remove="QualitySessionMeter.SyntheticCheck\**\*.cs" />
+    <Compile Remove="QualitySessionMeter.AssessmentCheck\**\*.cs" />
+    <None Remove="QualitySessionMeter.AssessmentCheck\**\*" />
+    <EmbeddedResource Remove="QualitySessionMeter.AssessmentCheck\**\*" />
+    <Page Remove="QualitySessionMeter.AssessmentCheck\**\*.xaml" />
     <None Remove="QualitySessionMeter.SyntheticCheck\**\*" />
     <Compile Remove="QualitySessionMeter.VisualHarness\**\*.cs" />
     <EmbeddedResource Remove="QualitySessionMeter.VisualHarness\**\*" />

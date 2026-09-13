@@ -17,4 +17,5 @@ public sealed class FrameQualityInput {
     public double BackgroundMedian { get; init; } = double.NaN;
     public BaselineSnapshot Baseline { get; init; }
     public GuideExposureMetrics Guide { get; init; }
+    public ImageEvidence ImageEvidence { get; init; }
 }
