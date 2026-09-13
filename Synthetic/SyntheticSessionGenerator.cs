@@ -59,6 +59,7 @@ public static class SyntheticSessionGenerator {
         BaselineWindow = 8,
         MinimumLearningFrames = 4,
         WorstMetricWeight = 0.70,
+        ImageEvidenceEnabled = false, LegacyAssessmentForRegression = true, // Historical V1/V2/V3 contract; independent 1.4 suite covers production.
         RejectedFileAction = RejectedFileAction.KeepInPlace
     };
 

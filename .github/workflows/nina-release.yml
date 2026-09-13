@@ -47,7 +47,7 @@ jobs:
           $text = ($compile -join "`n") + "`n" + ($pages -join "`n")
           $syntheticPattern = 'SyntheticSessionGenerator\.cs|SyntheticConfidenceOracle\.cs|SyntheticEventOracle\.cs|SyntheticGuidePatternOracle\.cs|SyntheticTrendOracle\.cs|SyntheticLabDockable\.cs|SyntheticResources\.xaml'
           if ($text -match $syntheticPattern) { throw "Official production source set contains Synthetic Lab/test UI." }
-          if ($text -match 'QualitySessionMeter\.DispatcherCheck|QualitySessionMeter\.VisualHarness|QualitySessionMeter\.VisualSlices') { throw "Official production source set contains test harness code." }
+          if ($text -match 'QualitySessionMeter\.AssessmentCheck|QualitySessionMeter\.DispatcherCheck|QualitySessionMeter\.VisualHarness|QualitySessionMeter\.VisualSlices') { throw "Official production source set contains test harness code." }
           if (Test-Path UI/QsmControlCenterDockable.cs) { throw "Removed duplicate QSM Control Center dockable returned to the production tree." }
           # The legacy resource dictionary remains for dispatcher regression checks, without a MEF export.
           if ((Test-Path UI/ControlCenterResources.xaml.cs) -and ((Get-Content UI/ControlCenterResources.xaml.cs -Raw) -match '\[Export\(')) { throw "Legacy QSM Control Center resources must not be exported into N.I.N.A." }
@@ -115,6 +115,9 @@ jobs:
 
       - name: Verify sealed QSM templates across independent STA dispatchers
         run: dotnet run --project QualitySessionMeter.DispatcherCheck/QualitySessionMeter.DispatcherCheck.csproj -c Release --no-restore
+
+      - name: Verify 1.4 post-exposure assessment
+        run: dotnet run --project QualitySessionMeter.AssessmentCheck/QualitySessionMeter.AssessmentCheck.csproj -c Release
 
       - name: Build immutable production plugin
         run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=false -p:Version=${{ github.ref_name }} -p:AssemblyVersion=${{ github.ref_name }} -p:FileVersion=${{ github.ref_name }}

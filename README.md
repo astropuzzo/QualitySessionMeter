@@ -8,7 +8,9 @@ QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combin
 
 ## Release status
 
-`1.3.1.1` is the first official N.I.N.A. catalog candidate after the completed 1.3.0.x pre-store field-test cycle.
+`1.4.0.0` is a field-test candidate with post-exposure stellar verification. It supersedes neither the existing catalog submission nor its real-host validation automatically. A new N.I.N.A. acquisition run is required before promoting 1.4 to the catalog.
+
+New in 1.4: candidate-only raw-star second pass, configurable eccentricity/tail/repeated-peak tolerances, persistent visual proof, clear frame/session score labels, and removal of all Smart Recovery waits. See [validation and limitations](docs/1.4-VALIDATION.md).
 
 Compatibility floor:
 
@@ -25,7 +27,9 @@ QSM deliberately separates the human-readable score from hard frame rejection:
 
 ```text
 Quality score != reject switch
-ANY enabled hard rule fails -> REJECTED
+Guide rule fails -> optional stellar verification -> final guide verdict
+Signal rule fails -> REJECTED
+Any remaining failed rule -> REJECTED
 ```
 
 Frame states are `LEARNING`, `ACCEPTED`, `WARNING`, `REJECTED` and `ERROR`.
@@ -38,7 +42,7 @@ The current hard-rule channels are:
 - relative star-count loss versus the mature same-context clean baseline;
 - background increase/decrease versus the mature same-context clean baseline.
 
-QSM does not use HFR/FWHM/eccentricity alone as a hard rejection criterion in this release.
+QSM 1.4 checks core eccentricity, asymmetric tails and repeated secondary peaks in raw central stars to verify guide rejections. It rescues moderate guide false positives only with sufficient evidence; it retains extreme guide failures and independent signal rejects. Exact bounds are visible in Plugin Options and [SETTINGS.md](docs/SETTINGS.md#stellar-second-pass).
 
 Baselines are isolated by:
 
@@ -54,14 +58,14 @@ QSM has one configuration surface: **Plugin Options**. The duplicate development
 
 The normal Imaging dock is operational/observational and provides:
 
-- current Quality, Confidence and frame status;
+- last-frame Quality, Evidence strength and frame status;
 - explicit rejection reason and probable-cause diagnostics;
 - exposure Guide RMS and guide-pattern diagnostics;
 - Stars Δ and Background Δ versus rolling baselines;
 - captured / usable / rejected / acceptance summaries;
-- Session Quality and Session Confidence;
+- Usable frame quality and Mean evidence strength;
 - a three-band multichannel timeline with active limits, event markers and adaptive **Frame #** axis;
-- session events and frame history;
+- session events, frame history and stellar-proof hover/expand views;
 - rejected-frame review in N.I.N.A. Image;
 - reversible QSM-applied `BAD_` / `Rejected` file actions;
 - session report/folder controls;
@@ -78,12 +82,9 @@ The former controlled-block-only monitoring mode has been removed.
 
 ## Advanced Sequencer
 
-QSM includes quality-aware sequence primitives such as:
+**QSM Valid Frame Target** tracks usable correlated frames toward a requested target.
 
-- **QSM Valid Frame Target** — tracks usable correlated frames toward a requested target;
-- **QSM Smart Recovery Gate** — optional between-exposure recovery behavior after persistent degradation.
-
-Smart Recovery never aborts an active exposure. Public sequencer type names are treated as compatibility-sensitive once released.
+Smart Recovery was removed in 1.4. QSM does not pause acquisition to wait for better conditions. Old saved recovery items deserialize as immediate no-ops, preserving sequence compatibility.
 
 ## Rejected-file safety
 

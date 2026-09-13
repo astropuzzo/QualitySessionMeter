@@ -1,4 +1,5 @@
 using NINA.Plugin.QualitySessionMeter.Models;
+using NINA.Plugin.QualitySessionMeter.Core;
 using NINA.Plugin.QualitySessionMeter.UI;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -14,6 +15,7 @@ using System.Windows.Threading;
 namespace QualitySessionMeter.VisualHarness;
 
 internal static class Program {
+    private static ObservableCollection<FrameQualityResult> replayFrames;
     private static string outputDirectory = "visual-output";
 
     [STAThread]
@@ -22,6 +24,10 @@ internal static class Program {
         CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
         outputDirectory = Path.GetFullPath(args.FirstOrDefault() ?? "visual-output");
         Directory.CreateDirectory(outputDirectory);
+        if (args.Length > 1) {
+            var options = new JsonSerializerOptions(); options.Converters.Add(new FiniteDoubleJsonConverter());
+            replayFrames = new ObservableCollection<FrameQualityResult>(JsonSerializer.Deserialize<List<FrameQualityResult>>(File.ReadAllText(args[1]), options));
+        }
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         try {
@@ -44,9 +50,15 @@ internal static class Program {
         var suffix = dark ? "dark" : "light";
 
         var settings = PreviewData.Settings();
-        var frames = PreviewData.Frames();
-        var events = PreviewData.Events();
+        var frames = replayFrames ?? PreviewData.Frames();
+        var events = replayFrames == null ? PreviewData.Events() : new ObservableCollection<SessionEvent>();
+        if (replayFrames != null) { settings.MaxGuideRms = 1.6; settings.HardExcursionThreshold = 3; settings.ExcursionMinimumDuration = 5; }
         var current = frames.Last();
+        var evidenceFrame = frames.LastOrDefault(f => f.ImageEvidence.Available);
+        if (evidenceFrame != null) {
+            RenderElement((FrameworkElement)StarEvidencePresentation.CreateTooltip(evidenceFrame, evidenceFrame.FrameIdentity), 560, 370, $"wpf-star-evidence-{suffix}.png");
+            File.WriteAllText(Path.Combine(outputDirectory,"star-evidence.json"), JsonSerializer.Serialize(evidenceFrame.ImageEvidence));
+        }
 
         var optionsVm = new OptionsPreviewVm {
             Settings = settings,
@@ -58,12 +70,12 @@ internal static class Program {
             "QualitySessionMeter_Options_Polished",
             optionsVm,
             1180,
-            1720,
+            1000,
             $"wpf-options-{suffix}.png");
 
         var mainVm = new MainPreviewVm(settings, frames, events) {
             CurrentFrame = current,
-            ModeText = "ACTIVE REJECT HANDLING · Advanced Sequencer LIGHTs",
+            ModeText = replayFrames == null ? "ACTIVE REJECT HANDLING · Advanced Sequencer LIGHTs" : "LOCAL REPLAY · 13 sample images · no file changes",
             SessionFolder = @"C:\Users\astro\AppData\Local\NINA\QualitySessionMeter\Sessions\2026-09-08_22-24-00",
             ReviewMessage = "Select a rejected frame to review it in N.I.N.A.'s Image view."
         };
@@ -72,7 +84,7 @@ internal static class Program {
             "NINA.Plugin.QualitySessionMeter.UI.QualitySessionMeterDockable_Dockable",
             mainVm,
             1420,
-            1540,
+            1000,
             $"wpf-main-panel-{suffix}.png");
 
         var controlVm = new ControlCenterPreviewVm {
@@ -414,10 +426,11 @@ internal sealed class PreviewSettings {
     public int RejectedFileActionIndex { get; set; } = 1;
     public bool PredictiveWarningsEnabled { get; set; } = true;
     public bool EnvironmentalCorrelationEnabled { get; set; } = true;
-    public bool SmartPauseEnabled { get; set; }
-    public int SmartPauseRejectStreak { get; set; } = 3;
-    public int SmartPauseSeconds { get; set; } = 120;
-    public int SmartResumeHealthyGuideChecks { get; set; } = 3;
+    public bool ImageEvidenceEnabled { get; set; } = true;
+    public int ShapeTargetStars { get; set; } = 100;
+    public double ShapeMaxEccentricity { get; set; } = .6;
+    public double ShapeMaxTailPercent { get; set; } = 2;
+    public double ShapeMaxDoublePeakPercent { get; set; } = 8;
     public bool WebDashboardEnabled { get; set; } = true;
     public int WebDashboardPort { get; set; } = 18974;
     public bool WebDashboardRequirePassword { get; set; }
@@ -448,6 +461,7 @@ internal sealed class ControlCenterPreviewVm {
 }
 
 internal sealed class MainPreviewVm {
+    public Visibility CalibrationSuggestionVisibility => Visibility.Collapsed;
     public MainPreviewVm(PreviewSettings settings, ObservableCollection<FrameQualityResult> frames, ObservableCollection<SessionEvent> events) {
         Settings = settings;
         Frames = frames;
@@ -469,6 +483,7 @@ internal sealed class MainPreviewVm {
     public string ModeText { get; set; }
     public string SessionFolder { get; set; }
     public string ReviewMessage { get; set; }
+    public IEnumerable<FrameQualityResult> SecondPassFrames => Frames.Where(x => x.ImageEvidence.Attempted).Reverse().Take(50);
     public int Captured => Frames.Count;
     public int Accepted => Frames.Count(x => x.Status == FrameStatus.Accepted);
     public int Warning => Frames.Count(x => x.Status == FrameStatus.Warning);
@@ -520,6 +535,12 @@ internal static class PreviewData {
 
     public static ObservableCollection<FrameQualityResult> Frames() {
         var frames = new ObservableCollection<FrameQualityResult>();
+        const int size = 512;
+        var field = Enumerable.Repeat(1000f, size*size).ToArray();
+        for (int y=40;y<480;y+=48) for(int x=40;x<480;x+=48)
+            for(int dy=-12;dy<=12;dy++) for(int dx=-12;dx<=12;dx++)
+                field[(y+dy)*size+x+dx] += (float)(6000*Math.Exp(-.5*(dx*dx/5.0+dy*dy/1.4)));
+        var evidence = ImageEvidenceAnalyzer.Analyze(new ImageSample(field,size,size));
         var random = new Random(1305);
         for (var i = 1; i <= 36; i++) {
             var status = i <= 4 ? FrameStatus.Learning : FrameStatus.Accepted;
@@ -569,6 +590,9 @@ internal static class PreviewData {
             var final = status == FrameStatus.Rejected ? $@"C:\Astro\M31\2026-09-08\BAD_frame_{i:000}_M31_L_180s.fits" : original;
 
             var frame = new FrameQualityResult {
+                AssessmentVersion = "1.4",
+                ImageEvidence = i is 12 or 13 ? evidence : new ImageEvidence(),
+                DecisionSummary = status == FrameStatus.Rejected ? "Rejected: configured limit exceeded." : "Kept: no enabled rejection rule failed.",
                 FrameIndex = i,
                 TimestampUtc = new DateTime(2026, 9, 8, 20, 30, 0, DateTimeKind.Utc).AddMinutes(i * 3),
                 OriginalPath = original,
@@ -596,7 +620,7 @@ internal static class PreviewData {
                 StarTrendKind = i > 23 && i < 30 ? TrendInterpretationKind.GradualChange : TrendInterpretationKind.Stable,
                 BackgroundTrendKind = i > 23 && i < 30 ? TrendInterpretationKind.GradualChange : TrendInterpretationKind.Stable,
                 OverallQuality = quality,
-                ConfidenceScore = confidence,
+                ConfidenceScore = Math.Min(confidence,65),
                 ConfidenceReason = status == FrameStatus.Learning ? $"Adaptive baseline is still learning ({i}/4 minimum samples)." : "Measured channels complete and consistent with the active context.",
                 Status = status,
                 ProbableCause = cause,

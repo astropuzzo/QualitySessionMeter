@@ -88,6 +88,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     }
 
 #endif
+    public System.Collections.Generic.IEnumerable<FrameQualityResult> SecondPassFrames => Frames.Where(x => x.ImageEvidence.Attempted).Reverse().Take(50);
     public int Captured => Frames.Count;
     public int Accepted => Frames.Count(x => x.Status == FrameStatus.Accepted);
     public int Warning => Frames.Count(x => x.Status == FrameStatus.Warning);
@@ -343,6 +344,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     }
 
     private void RefreshDerivedViews() {
+        RaisePropertyChanged(nameof(SecondPassFrames));
         BestAccepted.Clear();
         foreach (var frame in Frames.Where(x => x.Status == FrameStatus.Accepted)
                      .OrderByDescending(x => x.OverallQuality).ThenByDescending(x => x.ConfidenceScore).Take(5)) BestAccepted.Add(frame);

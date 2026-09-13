@@ -8,7 +8,7 @@ A core rule applies throughout QSM:
 Quality score != hard rejection
 ```
 
-The displayed 0–100 Quality score is diagnostic. A frame is rejected only when at least one enabled hard rule fails.
+The displayed 0–100 Quality score is diagnostic. A frame is rejected when an enabled rule remains failed after the optional stellar second pass. The score itself never clears a rejection.
 
 All configurable QSM settings live in **N.I.N.A. Plugin Options**. The Imaging dock is operational only: it shows session state, metrics, history/review tools and, when Suggest Only has a proposal ready, compact **Apply / Ignore** actions. There is no second QSM settings/control-center panel.
 
@@ -193,30 +193,36 @@ These values define the loosest limits Automatic calibration is permitted to gen
 
 They exist to prevent automatic learning from silently creating excessively permissive rejection thresholds.
 
-## Quality & Session Intelligence
+## Stellar Second Pass
 
-### Worst-channel influence
+**Verify Guide Rejections with Stars** is ON by default. Only exposures that fail an enabled guide rule are analyzed. OFF keeps the guide rules strict; the 1.4 diagnostic score is unchanged.
 
-Internal setting name: `WorstMetricWeight`.
+QSM copies at most a 1024 × 1024 central field while N.I.N.A. still owns the raw pixels (4 MiB per pending sample). Complete Bayer 2 × 2 cells are averaged for color cameras. After save, candidate-only analysis runs on a worker before any rejected-file action. It does not read the whole FITS file back or use a stretched/JPEG preview.
 
-It controls only the displayed Overall Quality score.
+| Setting | Default | Meaning |
+|---|---:|---|
+| Stars to Measure | 100 | Target, adjustable 20–200. At least 20 reliable isolated stars spread over three of nine central-field cells are required. |
+| Maximum Eccentricity | 0.60 | `sqrt(1 − (b/a)²)` from background-subtracted core moments. 0 is round; 1 is a line. Equivalent default axis ratio `a/b = 1.25`. At least 60% of the sample must reach this limit to confirm common elongation. |
+| Maximum Asymmetric Tail | 2% | Maximum opposite-side excess in the median, normalized stellar profile, at radii 5–10 sampled pixels. |
+| Maximum Repeated Secondary Peak | 8% | Detached secondary local maximum at radii 3–10 sampled pixels, relative to stellar peak, surviving the median profile. |
 
-QSM combines available channel scores as:
+These are this algorithm's measurements, not interchangeable with another application's fitted PSF eccentricity. Focus, undersampling, optics, crowding and narrowband signal can affect reliability. The small central field does not certify corner quality or defects elsewhere.
 
-```text
-Overall Quality = worst channel * weight + average channel score * (1 - weight)
-```
+If measured shapes are within all tolerances and the guide failure is within the rescue safety bounds, the guide reasons move to the audit/review history. The frame is **WARNING / kept**, or **LEARNING** while its signal baseline is immature. A separate star-count/background failure still rejects it. Rescued warning frames do not train the clean baseline or adaptive calibration. Baseline-eligible learning frames retain the existing learning behavior.
 
-With the default `0.70`:
+Unavailable pixels, too few reliable stars, inadequate field coverage, rejection of most candidate objects, or a 1.5-second analysis budget overrun cannot rescue a guide rejection. Shape damage confirms the rejection. With each corresponding guide rule enabled, these safety bounds also retain rejection even if the central cores look round:
 
-```text
-70% = worst available channel
-30% = average of all available channels
-```
+- exposure RMS above its configured maximum;
+- peak at or above `max(6 arcsec, 2 × hard-excursion limit)`;
+- sustained duration at or above `max(configured duration, 10% of exposure length)`.
 
-A higher value makes one weak channel drag the displayed Quality score down more strongly.
+The verdict is finalized **before** `BAD_` or a move is applied. The second pass does not retrospectively rename historical files. The existing manual restore action remains available for historical rejections.
 
-**It does not change any hard reject threshold and cannot override a hard rejection.**
+The dock shows a recent-check list and the latest measured proof directly. Hover a timeline frame or evidence cell for the median profile and six individual stars. The browser supports timeline hover and expandable row evidence; reports preserve the same proof. The display stretch enhances faint wings; all decisions use linear pixels. Flux (background/noise-subtracted core sum) is recorded as a diagnostic only: it is not compared between unmatched stars or used as a universal mass-loss rejection rule.
+
+Session JSON records measurements, applied shape limits, preview PNG, original guide reasons, the final decision, and up to 512 guide samples. CSV adds numeric measurements and decision provenance. The small proof is sufficient for review, not a replacement for the original science image.
+
+## Session & File Handling
 
 ### Rejected File Action
 
@@ -262,13 +268,11 @@ QSM can then add explanatory hints, for example:
 
 **Environmental data is not an independent hard rejection rule in this release.**
 
-## Smart Recovery (Advanced Sequencer)
+## Retired Smart Recovery
 
-Smart Recovery is an optional Advanced Sequencer helper. Place **QSM Smart Recovery Gate** after **Take Exposure** in the sequence loop where recovery behaviour is wanted.
+QSM 1.4 removes Smart Recovery controls and the toolbox item. It never inserts recovery waits between exposures. Old saved sequences can deserialize the existing item type; it completes immediately and can be removed from the sequence.
 
-It never aborts an active exposure.
-
-### Enable Smart Recovery Gate
+## Enable Smart Recovery Gate
 
 Allows the Smart Recovery Gate to react after a configured streak of sequence-frame degradation.
 

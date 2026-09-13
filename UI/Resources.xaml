@@ -16,21 +16,37 @@
     <SolidColorBrush x:Key="QsmSecondaryText" Color="#9AA0A6"/>
     <SolidColorBrush x:Key="QsmAccent" Color="#8AB4F8"/>
 
+    <DataTemplate x:Key="QsmStarEvidenceCell">
+        <TextBlock Text="{Binding SecondPassText}" Padding="2" ToolTipService.ShowDuration="60000">
+            <TextBlock.ToolTip>
+                <StackPanel MaxWidth="540">
+                    <TextBlock Text="{Binding FrameIdentity}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding DecisionSummary}" TextWrapping="Wrap" Margin="0,4,0,4"/>
+                    <TextBlock Text="{Binding ImageEvidence.Detail}" TextWrapping="Wrap"/>
+                    <Image Source="{Binding ImageEvidence.Preview}" Width="405" MaxHeight="162" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                    <TextBlock Text="{Binding ImageEvidence.PreviewCaption}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                </StackPanel>
+            </TextBlock.ToolTip>
+        </TextBlock>
+    </DataTemplate>
+
     <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.UI.QualitySessionMeterDockable_Dockable">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Loaded="DockableLoaded">
             <StackPanel Margin="6">
+                <TextBlock Text="Quality rates the last exposure, not the percentage of accepted photos. Usable frame quality is the session average. Evidence strength is a diagnostic score, not a probability." TextWrapping="Wrap" Margin="5,2,5,8" Opacity="0.8"/>
+
                 <Border Background="{DynamicResource SecondaryBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="130"/><ColumnDefinition Width="145"/><ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="155"/><ColumnDefinition Width="165"/><ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="QUALITY" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
+                            <TextBlock Text="LAST FRAME QUALITY" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
                             <TextBlock Text="{Binding CurrentFrame.QualityText, TargetNullValue=—}" FontSize="38" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
                             <TextBlock Text="{Binding CurrentFrame.QualityLabel, TargetNullValue=Waiting for frame}" Foreground="{StaticResource QsmAccent}" FontWeight="SemiBold"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                            <TextBlock Text="CONFIDENCE" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
+                            <TextBlock Text="EVIDENCE STRENGTH" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
                             <TextBlock Text="{Binding CurrentFrame.ConfidenceText, TargetNullValue=—}" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
                             <TextBlock Text="{Binding CurrentFrame.ConfidenceLabel, TargetNullValue=Waiting}" Foreground="{StaticResource QsmAccent}" FontWeight="SemiBold"/>
                         </StackPanel>
@@ -39,7 +55,12 @@
                             <TextBlock Text="{Binding CurrentFrame.StatusText, TargetNullValue=IDLE}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
                             <TextBlock Text="{Binding CurrentFrame.ProbableCause, TargetNullValue=Waiting for first LIGHT frame}" Foreground="{StaticResource QsmSecondaryText}" Margin="0,3,0,0"/>
                             <TextBlock Text="{Binding CurrentFrame.ReasonText}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            <TextBlock Text="{Binding CurrentFrame.ConfidenceReason}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,3,0,0" FontStyle="Italic"/>
+                            <TextBlock Text="{Binding CurrentFrame.DecisionSummary}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,3,0,0" FontStyle="Italic"/>
+                            <TextBlock Text="{Binding CurrentFrame.FrameIdentity}" TextWrapping="Wrap" Margin="0,5,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
+                            <TextBlock Text="{Binding CurrentFrame.ImageEvidence.Detail}" TextWrapping="Wrap" Margin="0,3,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
+                            <Image Source="{Binding CurrentFrame.ImageEvidence.Preview}" Width="405" MaxHeight="162" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                            <TextBlock Text="{Binding CurrentFrame.ImageEvidence.PreviewCaption}" TextWrapping="Wrap" FontSize="11" Opacity="0.75"/>
+
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -86,8 +107,8 @@
                         <StackPanel Grid.Column="1"><TextBlock Text="USABLE" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding Usable}" FontSize="16"/></StackPanel>
                         <StackPanel Grid.Column="2"><TextBlock Text="REJECTED" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding Rejected}" FontSize="16"/></StackPanel>
                         <StackPanel Grid.Column="3"><TextBlock Text="ACCEPTANCE" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding AcceptanceRate, StringFormat={}{0:0.0}%}" FontSize="16"/></StackPanel>
-                        <StackPanel Grid.Column="4"><TextBlock Text="SESSION QUALITY" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding SessionQuality, StringFormat={}{0:0}}" FontSize="16"/></StackPanel>
-                        <StackPanel Grid.Column="5"><TextBlock Text="SESSION CONF." Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding SessionConfidence, StringFormat={}{0:0}%}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="4"><TextBlock Text="USABLE FRAME QUALITY" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding SessionQuality, StringFormat={}{0:0}}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="5"><TextBlock Text="MEAN EVIDENCE" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding SessionConfidence, StringFormat={}{0:0} / 100}" FontSize="16"/></StackPanel>
                     </Grid>
                 </Border>
 
@@ -110,6 +131,21 @@
                             <Button Content="Ignore" Command="{Binding IgnoreCalibrationCommand}" IsEnabled="{Binding CalibrationAvailable}" Padding="10,4" ToolTip="Dismiss this proposal for the current imaging context."/>
                         </StackPanel>
                     </Grid>
+                </Border>
+
+                <Border Background="{DynamicResource SecondaryBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="STELLAR SECOND PASS — recent checks" FontWeight="SemiBold" FontSize="11"/>
+                        <TextBlock Text="Guide false positive = guide flag cleared by measured stars. WARNING is kept. Hover the evidence cell or timeline frame to see the stars." TextWrapping="Wrap" Opacity="0.78" Margin="0,4,0,7"/>
+                        <DataGrid ItemsSource="{Binding SecondPassFrames}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" MaxHeight="180" MinHeight="45">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="45"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="110"/>
+                                <DataGridTemplateColumn Header="Stellar evidence (hover)" CellTemplate="{StaticResource QsmStarEvidenceCell}" Width="200"/>
+                                <DataGridTextColumn Header="Why" Binding="{Binding DecisionSummary}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
                 </Border>
 
                 <Border Background="{DynamicResource SecondaryBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
@@ -140,7 +176,7 @@
                                 <DataGridTextColumn Header="Time" Binding="{Binding TimeRangeText}" Width="90"/>
                                 <DataGridTextColumn Header="Type" Binding="{Binding TypeText}" Width="170"/>
                                 <DataGridTextColumn Header="Frames" Binding="{Binding AffectedFrames}" Width="62"/>
-                                <DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="65"/>
+                                <DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="65"/>
                                 <DataGridTextColumn Header="Severity" Binding="{Binding SeverityText}" Width="75"/>
                                 <DataGridTextColumn Header="Primary cause" Binding="{Binding PrimaryCause}" Width="*"/>
                             </DataGrid.Columns>
@@ -155,14 +191,14 @@
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="125"/></Grid.RowDefinitions>
                             <TextBlock Text="BEST ACCEPTED" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
                             <DataGrid Grid.Row="1" ItemsSource="{Binding BestAccepted}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
-                                <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/><DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/><DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="62"/><DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*"/></DataGrid.Columns>
+                                <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/><DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/><DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="62"/><DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*"/></DataGrid.Columns>
                             </DataGrid>
                         </Grid>
                         <Grid Grid.Column="2">
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="125"/></Grid.RowDefinitions>
                             <TextBlock Text="WORST ACCEPTED" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
                             <DataGrid Grid.Row="1" ItemsSource="{Binding WorstAccepted}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
-                                <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/><DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/><DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="62"/><DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*"/></DataGrid.Columns>
+                                <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/><DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/><DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="62"/><DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*"/></DataGrid.Columns>
                             </DataGrid>
                         </Grid>
                     </Grid>
@@ -182,7 +218,7 @@
                                 <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="2*"/>
                                 <DataGridTextColumn Header="File action" Binding="{Binding FileDispositionText}" Width="105"/>
                                 <DataGridTextColumn Header="Q" Binding="{Binding QualityText}" Width="45"/>
-                                <DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="60"/>
+                                <DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="60"/>
                                 <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="66"/>
                                 <DataGridTextColumn Header="Stars Δ" Binding="{Binding StarDeltaText}" Width="72"/>
                                 <DataGridTextColumn Header="BG Δ" Binding="{Binding BackgroundDeltaText}" Width="72"/>
@@ -207,7 +243,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/>
                                 <DataGridTextColumn Header="Q" Binding="{Binding QualityText}" Width="45"/>
-                                <DataGridTextColumn Header="Conf." Binding="{Binding ConfidenceText}" Width="58"/>
+                                <DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="58"/>
                                 <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="88"/>
                                 <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="180"/>
                                 <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="65"/>

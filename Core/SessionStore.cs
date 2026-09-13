@@ -110,7 +110,7 @@ public sealed class SessionStore {
                 "Confidence,ConfidenceLabel,ConfidenceDataCompleteness,ConfidenceBaselineMaturity,ConfidenceThresholdSeparation,ConfidenceAgreement,ConfidenceReason," +
                 "PredictiveWarning,PredictiveConfidence,PredictiveChannel,PredictiveMessage,PredictiveFramesToThreshold," +
                 "EnvironmentAvailable,CloudCover,Humidity,WindSpeed,WindGust,SkyQuality,AmbientTemperature,DewPoint,EnvironmentalHint," +
-                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly");
+                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly,AssessmentVersion,ReviewReasons,DecisionSummary,ImageEvidenceAvailable,ImageStars,StarAxisRatio,StarTailStrength,ThresholdsUsed,GuideFalsePositive,StarEccentricity,StarDoublePeak,StarMedianFlux,ShapeAnalysisMs");
         }
 
         string[] fields = {
@@ -136,7 +136,9 @@ public sealed class SessionStore {
             Bool(r.PredictiveWarning), Num(r.PredictiveConfidence), Csv(r.PredictiveChannel), Csv(r.PredictiveMessage), Num(r.PredictiveFramesToThreshold),
             Bool(r.EnvironmentAvailable), Num(r.CloudCover), Num(r.Humidity), Num(r.WindSpeed), Num(r.WindGust), Num(r.SkyQuality),
             Num(r.AmbientTemperature), Num(r.DewPoint), Csv(r.EnvironmentalHint),
-            r.Status.ToString(), Csv(r.ReasonText), Csv(r.ProbableCause), Csv(r.ErrorMessage), Bool(r.MonitorOnly)
+            r.Status.ToString(), Csv(r.ReasonText), Csv(r.ProbableCause), Csv(r.ErrorMessage), Bool(r.MonitorOnly), Csv(r.AssessmentVersion), Csv(string.Join(", ", r.ReviewReasons)),
+            Csv(r.DecisionSummary), Bool(r.ImageEvidence.Available), r.ImageEvidence.Stars.ToString(CultureInfo.InvariantCulture),
+            Num(r.ImageEvidence.AxisRatio), Num(r.ImageEvidence.TailStrength), Csv(r.ThresholdsUsed), Bool(r.GuideFalsePositive), Num(r.ImageEvidence.Eccentricity), Num(r.ImageEvidence.DoublePeakStrength), Num(r.ImageEvidence.MedianFlux), Num(r.ImageEvidence.ElapsedMilliseconds)
         };
         await writer.WriteLineAsync(string.Join(",", fields));
     }
@@ -256,15 +258,4 @@ public sealed class SessionStore {
     private static string Bool(bool value) => value ? "true" : "false";
     private static string Csv(string value) { value ??= ""; return "\"" + value.Replace("\"", "\"\"") + "\""; }
 
-    private sealed class FiniteDoubleJsonConverter : JsonConverter<double> {
-        public override double Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) {
-            if (reader.TokenType == JsonTokenType.Null) return double.NaN;
-            if (reader.TokenType == JsonTokenType.Number) return reader.GetDouble();
-            throw new JsonException($"Unexpected token {reader.TokenType} for double value.");
-        }
-
-        public override void Write(Utf8JsonWriter writer, double value, JsonSerializerOptions options) {
-            if (!Finite(value)) writer.WriteNullValue(); else writer.WriteNumberValue(value);
-        }
-    }
 }
