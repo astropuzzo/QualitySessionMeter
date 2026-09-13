@@ -11,15 +11,15 @@ Remote/mobile observability is an additional read-only layer and must never weak
 ## Current release state — 2026-09-13
 
 ```text
-1.4 field-test candidate:   1.4.0.2
-Prior catalog submission:  1.3.1.1
+Current catalog submission: 1.4.0.2
+Superseded submission:       1.3.1.1
 N.I.N.A.:                  3.3.0.1057 / NIGHTLY #057
 NINA.Plugin:               3.3.0.1057-nightly
 .NET:                      10
 Windows:                   x64
 ```
 
-The 1.3.0.x line was used for pre-store field validation. Real-host validation on N.I.N.A. has now been completed successfully by the maintainer. That validation does not cover 1.4. Stellar second pass has synthetic and local replay coverage; a new host acquisition remains required.
+The 1.3.0.x line was used for pre-store field validation. Real-host validation on N.I.N.A. has now been completed successfully by the maintainer. The 1.4 runtime has been observed receiving real acquisitions through OpenAstro. Stellar rejection/recovery has synthetic and local replay coverage; a complete end-to-end night on 1.4.0.2 is not yet documented. See docs/1.4-VALIDATION.md.
 
 ## Public product model
 

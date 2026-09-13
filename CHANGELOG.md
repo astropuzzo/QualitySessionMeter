@@ -2,7 +2,7 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
-## [1.4.0.2] - 2026-09-13 (field-test candidate)
+## [1.4.0.2] - 2026-09-13
 
 - Give the public dashboard a dedicated, persistent stellar inspector: median profile, six measured stars, rescue/damage limits, tail, secondary peak, flux and final decision.
 - Expose applied limits and verification state through the read-only companion API for OpenAstro. Missing limits stay unavailable, never replaced by assumed defaults.
