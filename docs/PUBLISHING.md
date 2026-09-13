@@ -100,3 +100,18 @@ If upstream review requires a plugin binary/code change, do not modify the alrea
 ## After merge
 
 After `isbeorn/nina.plugin.manifests` merges the PR, N.I.N.A.'s catalog pipeline makes QSM discoverable for compatible N.I.N.A. installations. Future updates follow the same higher-version manifest process. QSM must not implement a parallel self-updater; the N.I.N.A. Plugin Manager is the normal public update channel.
+
+## Update visibility and automation (verified 2026-09-13)
+
+The first catalog submission remains open: https://github.com/isbeorn/nina.plugin.manifests/pull/689
+for 1.3.1.1. A GitHub release alone is not a catalog update. Once the upstream
+manifest is merged and published, N.I.N.A. compares compatible manifest versions
+against the installed version using the permanent plugin GUID. Each subsequent
+release requires a higher four-part version and its own immutable manifest/archive.
+
+The existing numeric-tag workflow already generates, validates and publishes the
+archive/manifest, then optionally submits an upstream PR. The maintainer fork exists;
+the repository currently has no PAT secret, so automatic PR submission is skipped.
+Manual submission with the authenticated maintainer account remains available.
+Never paste a token into chat or commit it. No custom self-updater is needed.
+Version 1.4.0.2 is a candidate, not an approved catalog release.

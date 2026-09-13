@@ -11,7 +11,7 @@ Remote/mobile observability is an additional read-only layer and must never weak
 ## Current release state — 2026-09-13
 
 ```text
-1.4 field-test candidate:   1.4.0.1
+1.4 field-test candidate:   1.4.0.2
 Prior catalog submission:  1.3.1.1
 N.I.N.A.:                  3.3.0.1057 / NIGHTLY #057
 NINA.Plugin:               3.3.0.1057-nightly

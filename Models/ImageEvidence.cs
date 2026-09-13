@@ -17,13 +17,13 @@ public sealed class ImageEvidence {
     public double ElapsedMilliseconds { get; init; }
     public StarShapeLimits Limits { get; init; } = new();
     public string PreviewPngBase64 { get; init; } = "";
-    public string Detail { get; init; } = "Stellar second pass not run: no guide rejection to verify.";
+    public string Detail { get; init; } = "Not checked: no guiding rejection.";
     public double Eccentricity => AxisRatio >= 1 ? Math.Sqrt(1 - 1 / (AxisRatio * AxisRatio)) : double.NaN;
     public bool Compromised => Available && ((Eccentricity >= Limits.MaxEccentricity && ElongatedFraction >= Limits.DeformedFraction)
         || TailStrength >= Limits.MaxTailPercent / 100 || DoublePeakStrength >= Limits.MaxDoublePeakPercent / 100);
     public bool HasRescueMargin => Available && !Compromised && Eccentricity < Limits.RescueMaxEccentricity;
     public string Summary => !Available ? "NOT VERIFIED" : Compromised ? "SHAPE LIMIT EXCEEDED" : HasRescueMargin ? "SHAPES WITHIN RESCUE LIMITS" : "BORDERLINE — REJECTION RETAINED";
-    public string PreviewCaption => !Available ? "" : "Left: median of measured stars. Right: six individual stars. Same display stretch; tails are enhanced. Measurements use linear pixels.";
+    public string PreviewCaption => !Available ? "" : "Median profile (left) · 6 sample stars (right) · enhanced contrast";
     [JsonIgnore]
     public BitmapSource Preview {
         get {

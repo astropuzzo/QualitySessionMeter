@@ -89,6 +89,15 @@ Check(!typeof(QsmSmartRecoveryGate).GetCustomAttributes(false).Any(x=>x.GetType(
 var legacyGate = Newtonsoft.Json.JsonConvert.DeserializeObject<QsmSmartRecoveryGate>("{\"Name\":\"QSM Smart Recovery Gate\",\"SmartPauseEnabled\":true,\"SmartPauseSeconds\":120}");
 Check(legacyGate.Execute(null,CancellationToken.None).IsCompletedSuccessfully, "saved recovery configuration deserializes and never waits");
 
+var exportedFrame = new FrameQualityResult { Status = FrameStatus.Learning, ImageEvidence = new ImageEvidence {
+    Attempted = true, Available = true, AxisRatio = 1.23, Limits = new StarShapeLimits { MaxEccentricity = .68, MaxTailPercent = 3.5 }
+}};
+var mapFrame = typeof(QualitySessionMobileBridge).GetMethod("MobileFrame", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+var exported = (IDictionary<string, object>)mapFrame.Invoke(null, new object[] { exportedFrame });
+Check((double)exported["starEccentricityLimit"] == .68 && Math.Abs((double)exported["starRescueEccentricityLimit"]-.63)<1e-10
+    && (double)exported["starTailLimitPercent"] == 3.5, "remote analysis exports applied per-frame limits, not current defaults");
+Check(exported["quality"] == null && (bool)exported["imageEvidenceAttempted"] && (bool)exported["imageEvidenceAvailable"], "remote learning quality stays null while measured evidence remains available");
+
 if (args.Length>0) {
     var replay = new List<FrameQualityResult>();
     string outDir = args.Length>1 ? Path.GetFullPath(args[1]) : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[0])),"replay");

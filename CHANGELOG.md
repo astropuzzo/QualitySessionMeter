@@ -2,6 +2,13 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.0.2] - 2026-09-13 (field-test candidate)
+
+- Give the public dashboard a dedicated, persistent stellar inspector: median profile, six measured stars, rescue/damage limits, tail, secondary peak, flux and final decision.
+- Expose applied limits and verification state through the read-only companion API for OpenAstro. Missing limits stay unavailable, never replaced by assumed defaults.
+- Keep selected/expanded evidence during polling, show unavailable session quality without a misleading zero, and distinguish a cleared guide flag from a final rejection due to independent rules.
+- Preserve the 0.05 eccentricity rescue margin and all decision thresholds from 1.4.0.1; frame 0565 remains rejected.
+
 ## [1.4.0.1] - 2026-09-13 (field-test candidate)
 
 - Require a 0.05 eccentricity margin below the configured damage limit for automatic guide-flag rescue. Borderline measured shapes retain the original rejection with an explicit explanation.

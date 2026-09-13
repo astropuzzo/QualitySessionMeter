@@ -33,7 +33,6 @@
     <DataTemplate x:Key="NINA.Plugin.QualitySessionMeter.UI.QualitySessionMeterDockable_Dockable">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Loaded="DockableLoaded">
             <StackPanel Margin="6">
-                <TextBlock Text="Quality rates the last exposure, not the percentage of accepted photos. Usable frame quality is the session average. Evidence strength is a diagnostic score, not a probability." TextWrapping="Wrap" Margin="5,2,5,8" Opacity="0.8"/>
 
                 <Border Background="{DynamicResource SecondaryBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                     <Grid>
@@ -135,7 +134,7 @@
 
                 <Border Background="{DynamicResource SecondaryBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="STELLAR SECOND PASS — recent checks" FontWeight="SemiBold" FontSize="11"/>
+                        <TextBlock Text="STELLAR ANALYSIS — recent checks" FontWeight="SemiBold" FontSize="11"/>
                         <TextBlock Text="Guide false positive = guide flag cleared by measured stars. WARNING is kept. Hover the evidence cell or timeline frame to see the stars." TextWrapping="Wrap" Opacity="0.78" Margin="0,4,0,7"/>
                         <DataGrid ItemsSource="{Binding SecondPassFrames}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" MaxHeight="180" MinHeight="45">
                             <DataGrid.Columns>

@@ -45,6 +45,9 @@ jobs:
       - name: Render actual Web Dashboard HTML
         run: node tools/visual/render-web.mjs artifacts/visual
 
+      - name: Verify stellar inspector decisions
+        run: node --test tools/visual/test-stellar-ui.cjs
+
       - name: List generated visual evidence
         shell: pwsh
         run: |

@@ -200,7 +200,7 @@
                 </Grid>
 
                 <TextBlock Text="Stellar Second Pass" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
-                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Only guide-reject candidates are checked. Round stars can rescue a false positive before BAD_ is applied. Too few reliable stars retain the original rejection. Stars and background rules remain independent."/>
+                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Checks star shapes on guiding-rejection candidates. Requires at least 20 reliable stars."/>
                 <Grid Margin="16,5,0,5">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Verify Guide Rejections with Stars" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -230,8 +230,8 @@
                     <TextBox Grid.Column="1" Text="{Binding Settings.ShapeMaxDoublePeakPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="% of stellar peak · 2–30" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <TextBlock Margin="40,6,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Automatic rescue requires median eccentricity at least 0.05 below your limit (below 0.55 with the default 0.60). Borderline shapes retain the guide rejection. Confirmed elongation requires the damage limit in at least 60% of measured stars. Tail and secondary-peak limits use the median stellar profile. Flux is recorded as a diagnostic, not compared between unmatched stars."/>
-                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Rescue safety: enabled exposure RMS still applies. Peaks at or above max(6 arcsec, 2 × hard limit), or sustained excursions lasting at least max(your duration limit, 10% of the exposure), remain rejected. A small central field cannot certify extreme disturbances. No recovery waits are inserted."/>
+                <TextBlock Margin="40,6,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Recovery requires eccentricity below the limit minus 0.05. Confirmed elongation requires at least 60% deformed stars. Tail and secondary-peak limits apply to the median profile."/>
+                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Recovery limits: exposure RMS unchanged; peak below max(6 arcsec, 2 × hard limit); sustained duration below max(configured duration, 10% of exposure)."/>
                 <TextBlock Text="Session &amp; File Handling" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
 
                 <Grid Margin="16,5,0,5" ToolTip="Filesystem action attempted only for an eligible REJECTED frame when Monitor Only is OFF. QSM never deletes an image and all rename/move actions are collision-safe.">
@@ -258,7 +258,7 @@
 
                 <TextBlock Text="Web Dashboard" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,3"/>
                 <TextBlock Margin="16,0,0,7" Width="910" FontSize="11" Opacity="0.74" TextWrapping="Wrap"
-                           Text="Optional read-only browser dashboard for LAN/VPN monitoring. QSM does not open router ports or create an Internet tunnel."/>
+                           Text="Read-only browser dashboard for LAN or VPN access."/>
 
                 <Grid Margin="16,5,0,5" ToolTip="Starts QSM's self-contained read-only HTTP dashboard on this N.I.N.A. computer.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -305,19 +305,19 @@
                 <TextBlock Text="Description" FontSize="18" Margin="0,20,0,5"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>
                 <TextBlock Margin="16,0,0,0" Width="910" TextWrapping="Wrap"
-                           Text="QualitySessionMeter evaluates LIGHT frames using exposure-specific guiding, rolling same-context star/background baselines, temporal session intelligence and explicit hard rejection rules. Rejected images are never deleted."/>
+                           Text="LIGHT frame assessment using guiding, star shapes, star count and background. Rejected files can be marked or moved."/>
 
                 <TextBlock Text="Features" FontSize="18" Margin="0,16,0,5"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>
                 <TextBlock Margin="16,0,0,0" Width="910" TextWrapping="Wrap"
-                           Text="• Last-frame quality and diagnostic evidence strength&#x0a;• Exposure guide RMS plus sustained/hard excursion rules&#x0a;• Rolling star/background baselines&#x0a;• Reversible rejected-file handling&#x0a;• Session events, predictive diagnostics and reports&#x0a;• Valid Frame Target without recovery waits; stellar second pass with visual proof&#x0a;• Read-only local Web Dashboard&#x0a;• Separate tokenized OpenAstro companion API"/>
+                           Text="• Last-frame quality and diagnostic evidence strength&#x0a;• Exposure guide RMS plus sustained/hard excursion rules&#x0a;• Rolling star/background baselines&#x0a;• Reversible rejected-file handling&#x0a;• Session events, predictive diagnostics and reports&#x0a;• Valid Frame Target; stellar analysis&#x0a;• Read-only local Web Dashboard&#x0a;• Separate tokenized OpenAstro companion API"/>
 
                 <TextBlock Text="Getting Help" FontSize="18" Margin="0,16,0,5"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>
                 <TextBlock Margin="16,0,0,0" Width="910" TextWrapping="Wrap"
                            Text="Repository, documentation and issue tracker: github.com/astropuzzo/QualitySessionMeter"/>
                 <TextBlock Margin="16,5,0,0" Width="910" FontSize="11" Opacity="0.72" TextWrapping="Wrap"
-                           Text="See docs/SETTINGS.md for detailed option help, docs/METRICS.md for metric definitions and SECURITY.md for the Web Dashboard security model."/>
+                           Text="Settings, metric definitions and dashboard setup: project documentation."/>
             </StackPanel>
         </ScrollViewer>
     </DataTemplate>
