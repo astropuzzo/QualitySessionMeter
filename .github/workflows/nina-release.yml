@@ -67,7 +67,7 @@ jobs:
           $syntheticCode = if (Test-Path UI/SyntheticResources.xaml.cs) { Get-Content UI/SyntheticResources.xaml.cs -Raw } else { '' }
           $frameAxis = Get-Content UI/TimelineFrameAxisAdorner.cs -Raw
 
-          foreach ($required in @('function drawTimeline','function drawGuide','function drawFrameAxis','function frameTickIndexes','adaptive Frame # axis','lastPreviewGeneration','function updatePreview','meta.generation','Metric definitions','rolling 20 s')) {
+          foreach ($required in @('function drawTimeline','function drawGuide','function drawFrameAxis','function frameTickIndexes','frameTickIndexes(frames.length,ticks)','lastPreviewGeneration','function updatePreview','meta.generation','Metric definitions','rolling 20 s')) {
             if ($web -notmatch [regex]::Escape($required)) { throw "Dashboard contract missing: $required" }
           }
           if ($web -match 'setInterval\(preview') { throw "Dashboard regressed to blind preview reloads." }

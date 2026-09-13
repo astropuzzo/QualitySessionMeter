@@ -77,7 +77,7 @@ jobs:
             'function drawGuide',
             'function drawFrameAxis',
             'function frameTickIndexes',
-            'adaptive Frame # axis',
+            'frameTickIndexes(frames.length,ticks)',
             'lastPreviewGeneration',
             'function updatePreview',
             'meta.generation',
