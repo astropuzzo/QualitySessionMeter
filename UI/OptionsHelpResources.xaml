@@ -18,7 +18,7 @@
                 <TextBlock Text="Options" FontSize="18" Margin="0,0,0,6"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,12"/>
                 <TextBlock Margin="16,0,0,8" Width="910" FontSize="11" Opacity="0.76" TextWrapping="Wrap"
-                           Text="Keep capturing. QSM assesses completed exposures using guide history, signal and raw star shapes. Review frames remain usable; evidence strength is not a probability."/>
+                           Text="Completed LIGHTs are checked against guiding, stellar shape and signal limits."/>
 
                 <TextBlock Text="General" FontSize="14" FontWeight="SemiBold" Margin="0,10,0,6"/>
 
@@ -199,11 +199,11 @@
                     <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
-                <TextBlock Text="Stellar Second Pass" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
-                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Checks star shapes on guiding-rejection candidates. Requires at least 20 reliable stars."/>
+                <TextBlock Text="Stellar Analysis" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Checks star shapes on each LIGHT. Guide and star-count flags trigger an extended check."/>
                 <Grid Margin="16,5,0,5">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Verify Guide Rejections with Stars" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="Enable Stellar Analysis" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.ImageEvidenceEnabled}" HorizontalAlignment="Left"/>
                 </Grid>
                 <Grid Margin="16,5,0,5">
@@ -231,7 +231,36 @@
                     <TextBlock Grid.Column="2" Text="% of stellar peak · 2–30" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
                 <TextBlock Margin="40,6,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Recovery requires eccentricity below the limit minus 0.05. Confirmed elongation requires at least 60% deformed stars. Tail and secondary-peak limits apply to the median profile."/>
-                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Recovery limits: exposure RMS unchanged; peak below max(6 arcsec, 2 × hard limit); sustained duration below max(configured duration, 10% of exposure)."/>
+                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Extended recovery requires at least four verified regions, no repeated distant image, and coverage of the guide peak. RMS above 3 × the limit or disturbance lasting 25% of the exposure retains the guide flag."/>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Maximum Distant Stellar Image" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.ShapeMaxRemotePeakPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="% of peak · 0.2–5 · repeated in at least 60% of stars" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Reject Stellar Signal Loss" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding Settings.RejectSignalDegradation}" HorizontalAlignment="Left"/>
+                </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Signal Loss with Brighter Sky" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.MaxCloudSignalLossPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="% · with background +3% and star loss of at least half its limit (minimum 10%)" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Verify Star-count Flags" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding Settings.VerifyStarCountWithFlux}" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="Compare matched stars with prior clean frames" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Maximum Stellar Signal Loss" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.MaxMeasuredFluxLossPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="% · 5–80 · matched stellar signal" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
                 <TextBlock Text="Session &amp; File Handling" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
 
                 <Grid Margin="16,5,0,5" ToolTip="Filesystem action attempted only for an eligible REJECTED frame when Monitor Only is OFF. QSM never deletes an image and all rename/move actions are collision-safe.">
