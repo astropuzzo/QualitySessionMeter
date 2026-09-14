@@ -121,6 +121,14 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         get => Clamp(accessor.GetValueInt32(nameof(ShapeTargetStars), 100), 20, 200);
         set { accessor.SetValueInt32(nameof(ShapeTargetStars), Clamp(value, 20, 200)); Raise(); }
     }
+    public bool RejectSignalDegradation {
+        get => accessor.GetValueBoolean(nameof(RejectSignalDegradation), true);
+        set { accessor.SetValueBoolean(nameof(RejectSignalDegradation), value); Raise(); }
+    }
+    public double MaxCloudSignalLossPercent {
+        get => SafeShapeValue(nameof(MaxCloudSignalLossPercent),20,10,50);
+        set { accessor.SetValueDouble(nameof(MaxCloudSignalLossPercent),double.IsFinite(value)?Clamp(value,10,50):20);Raise(); }
+    }
     public bool VerifyStarCountWithFlux {
         get => accessor.GetValueBoolean(nameof(VerifyStarCountWithFlux), true);
         set { accessor.SetValueBoolean(nameof(VerifyStarCountWithFlux), value); Raise(); }

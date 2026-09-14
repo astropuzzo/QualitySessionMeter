@@ -390,10 +390,10 @@ public sealed class QualitySessionRuntime : IDisposable {
             result.DewPoint = environment.DewPoint;
             result.EnvironmentalHint = environment.CorrelationHint;
 
-            if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
+            if (ExposureAssessment.CanTrainBaseline(result)) {
                 baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow);
             }
-            stellarAnalysis.AddReference(key,sample,imageEvidence,result.Status,frameTimestampUtc,pierSide,settings.BaselineWindow);
+            if (ExposureAssessment.CanTrainBaseline(result)) stellarAnalysis.AddReference(key,sample,imageEvidence,result.Status,frameTimestampUtc,pierSide,settings.BaselineWindow);
 
             if (result.Status == FrameStatus.Rejected && !settings.MonitorOnly) {
                 try {
@@ -542,7 +542,7 @@ public sealed class QualitySessionRuntime : IDisposable {
                 var result = qualityEngine.Evaluate(input, syntheticSettings);
                 result.MonitorOnly = true;
 
-                if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
+                if (ExposureAssessment.CanTrainBaseline(result)) {
                     syntheticBaseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, syntheticSettings.BaselineWindow);
                 }
 

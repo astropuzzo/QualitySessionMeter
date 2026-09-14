@@ -144,3 +144,9 @@ It is explanatory metadata. It does **not** replace the explicit rejection reaso
 ## Stellar shape, tails and repeated peaks
 
 Optional stellar analysis measures central raw stars on every monitored LIGHT. Guide, shape and star-count suspects also receive an extended profile and outer-region check. Eccentricity alone can miss a round core with a faint distant image. Matched flux uses only prior clean same-context, same-pier-side references. See [SETTINGS.md](SETTINGS.md#stellar-second-pass) for exact thresholds, rescue safety bounds, computational limits and visual-proof interpretation.
+
+## Measured sky and signal loss (1.4.1.1)
+
+Matched stellar flux is also an enabled hard-rule input. A loss above 35% (default) can reject independently of the star-count rule. A loss of at least 20% together with brighter sky (+3%) and fewer stars (at least half the star-loss limit, minimum 10%) triggers the combined rule. All thresholds and switches are described in [SETTINGS.md](SETTINGS.md#stellar-second-pass).
+
+This is an image-degradation diagnosis; it is not proof of a particular weather condition. The intensity is measured above local background in matched stellar apertures, not inferred from a stretched preview. Moderately degraded usable frames are excluded from reference training. The reference age limit is 120 minutes in this candidate; context and pier-side isolation remain enforced.

@@ -79,7 +79,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
 
         var result = new Dictionary<string, object> {
             ["contractVersion"] = ContractVersion,
-            ["assessmentVersion"] = "1.4.1",
+            ["assessmentVersion"] = "1.4.1.1",
             ["available"] = true,
             ["readOnly"] = true,
             ["generatedUtc"] = DateTimeOffset.UtcNow.ToString("O"),
@@ -123,6 +123,8 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
                 ["environmentalCorrelationEnabled"] = settings.EnvironmentalCorrelationEnabled,
                 ["imageEvidenceEnabled"] = settings.ImageEvidenceEnabled,
                 ["verifyStarCountWithFlux"] = settings.VerifyStarCountWithFlux,
+                ["rejectSignalDegradation"] = settings.RejectSignalDegradation,
+                ["maxCloudSignalLossPercent"] = settings.MaxCloudSignalLossPercent,
                 ["maxMeasuredFluxLossPercent"] = settings.MaxMeasuredFluxLossPercent
             },
             ["series"] = new Dictionary<string, object> {

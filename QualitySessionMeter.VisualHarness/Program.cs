@@ -432,6 +432,11 @@ internal sealed class PreviewSettings {
     public double ShapeMaxEccentricity { get; set; } = .6;
     public double ShapeMaxTailPercent { get; set; } = 2;
     public double ShapeMaxDoublePeakPercent { get; set; } = 8;
+    public double ShapeMaxRemotePeakPercent { get; set; } = .5;
+    public bool VerifyStarCountWithFlux { get; set; } = true;
+    public bool RejectSignalDegradation { get; set; } = true;
+    public double MaxMeasuredFluxLossPercent { get; set; } = 35;
+    public double MaxCloudSignalLossPercent { get; set; } = 20;
     public bool WebDashboardEnabled { get; set; } = true;
     public int WebDashboardPort { get; set; } = 18974;
     public bool WebDashboardRequirePassword { get; set; }

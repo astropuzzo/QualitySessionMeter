@@ -15,7 +15,7 @@ public sealed class StellarReferenceEngine {
         if(sample==null || !current.Available || !references.TryGetValue((context,Geometry(sample,side)),out var queue))return current;
         var ratios=new List<double>();var widths=new List<double>();var counts=new List<int>();
         foreach(var reference in queue) {
-            if(time < reference.Time || time-reference.Time > TimeSpan.FromMinutes(40))continue;
+            if(time < reference.Time || time-reference.Time > TimeSpan.FromMinutes(120))continue;
             var match=Match(current.Catalog,reference.Stars);
             if(match.Count<20 || !double.IsFinite(match.Ratio))continue;
             ratios.Add(match.Ratio);counts.Add(match.Count);widths.Add(reference.Fwhm);

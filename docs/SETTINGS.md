@@ -204,10 +204,12 @@ They exist to prevent automatic learning from silently creating excessively perm
 | Maximum tail | 2% | Asymmetric median-profile wings relative to the central peak. |
 | Maximum secondary peak | 8% | Repeated close secondary peak. |
 | Maximum distant image | 0.5% | Repeated asymmetric signal in the extended profile, supported by at least 60% of sampled stars and above the measured noise threshold. |
-| Minimum reliable stars | 20 | Minimum count; distribution and valid-measurement fraction must also pass. |
+| Minimum reliable stars (fixed) | 20 | Minimum count; distribution and valid-measurement fraction must also pass. |
 | Target stars | 100 | Upper target for the central sample. |
-| Verify star-count loss with signal | On | Match stellar identities to previous clean references before clearing or confirming a count-loss flag. |
-| Maximum measured signal loss | 35% | Confirms an existing star-count rejection when matched flux falls below 65% of the reference. It does not create a standalone flux rejection. |
+| Verify Star-count Flags | On | Match stellar identities to previous clean references before clearing or confirming a count-loss flag. |
+| Maximum measured signal loss | 35% | Rejects when matched flux falls below 65% of the clean reference with Reject Stellar Signal Loss enabled; also confirms an existing count flag when count verification is enabled. |
+
+**Reject Stellar Signal Loss** (default On) enables direct measured signal rejection and the combined sky check. **Signal Loss with Brighter Sky** defaults to 20%: it requires that much measured attenuation, background at least 3% higher and star-count loss of at least `max(10%, half the configured star-count loss limit)`. These are simultaneous conditions; sky brightness or round star shapes alone do not determine this verdict. The direct loss limit defaults to 35%. Both rules require stellar analysis and at least 20 matched stars against two prior clean references. Missing corroborating measurements cannot trigger the combined rule.
 
 The central sample is bounded to 1024 × 1024 pixels. Four outer samples are bounded to 384 × 384 each. Bayer data uses aligned 2 × 2 cell averages; measurement decisions use linear pixels. A valid core fit supplements the moment estimate where aperture truncation would underestimate elongation.
 
@@ -225,7 +227,7 @@ Recovery beyond those bounds additionally requires:
 
 These are limits on recovery, not new guide-rejection thresholds. A guide flag remains if this proof is missing.
 
-Signal verification requires at least 20 matched stars and two clean prior references no more than 40 minutes old. References are separated by target, filter, exposure, gain, binning, camera, image geometry and pier side. Only accepted or clean learning frames enter the bounded reference window. Future frames are never used. A count flag can be cleared only with clean extended shape evidence and flux loss no greater than `min(20%, configured signal-loss limit − 5 percentage points)`. Background rejection remains independent.
+Signal verification requires at least 20 matched stars and two clean prior references no more than 120 minutes old. References are separated by target, filter, exposure, gain, binning, camera, image geometry and pier side. Only baseline-eligible accepted or learning frames enter the bounded reference window. With signal rejection enabled, a measured signal loss of at least 10% combined with a count decrease of 10% or background rise of 2% marks the frame for review. Fewer stars (−10%) together with a brighter sky (+3%) also protects the reference, even if matched flux is stable. Such frames remain usable below reject thresholds but cannot train either baseline. This prevents a slow deterioration from redefining normal conditions. References still expire, remain bounded, and are reset by context/session changes. Future frames are never used. A count flag can be cleared only with clean extended shape evidence and flux loss no greater than `min(20%, configured signal-loss limit − 5 percentage points)`. With signal rejection enabled, count rescue also requires background rise below 3%. Background rejection remains independent.
 
 The verdict is finalized before a file action. QSM does not rename historical files during replay. JSON, CSV and reports retain the measurements, applied limits and cleared flags. Native and browser inspectors show central and extended proof; display contrast enhances faint wings without altering measurements. Missing measurements display as unavailable. FWHM is reported in original pixels and relative to matched prior references; its change contributes to the diagnostic score, not an independent reject rule.
 

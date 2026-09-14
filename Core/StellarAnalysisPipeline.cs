@@ -17,7 +17,7 @@ public sealed class StellarAnalysisPipeline {
             && starCount<baseline.StarMedian*(1-settings.MaxStarLossPercent/100);
         if(ExposureAssessment.IsGuideRejectCandidate(guide,settings)||evidence.Compromised||countDrop)
             evidence=ExtendedStarAnalyzer.Verify(sample,evidence,guide?.HasData==true?guide.MaxExcursionArcsec:double.NaN);
-        if(settings.VerifyStarCountWithFlux)evidence=references.Compare(context,sample,evidence,time,side);
+        if(settings.VerifyStarCountWithFlux || settings.RejectSignalDegradation)evidence=references.Compare(context,sample,evidence,time,side);
         return evidence with {ElapsedMilliseconds=clock.Elapsed.TotalMilliseconds};
     }
     public void AddReference(BaselineKey context,ImageSample sample,ImageEvidence evidence,FrameStatus status,DateTime time,string side,int window)

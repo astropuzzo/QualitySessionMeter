@@ -38,8 +38,8 @@ internal static class FieldReplay {
             var input=new FrameQualityInput{FrameIndex=(int)Value("frame"),TimestampUtc=time,OriginalPath=row.GetProperty("filename").GetString(),
                 Target="Cocoon Nebula",Filter="QUAD",ExposureSeconds=120,Gain=100,BinX=1,BinY=1,Camera="ZWO ASI2600MC Pro",StarCount=(int)Value("stars"),BackgroundMedian=Value("background"),Baseline=snap,Guide=guide,ImageEvidence=image};
             var result=engine.Evaluate(input,settings);results.Add(result);
-            if(result.Status is FrameStatus.Accepted or FrameStatus.Learning)baseline.AddAccepted(key,input.StarCount,input.BackgroundMedian,8);
-            stellarAnalysis.AddReference(key,sample,image,result.Status,time,side,8);
+            if(ExposureAssessment.CanTrainBaseline(result))baseline.AddAccepted(key,input.StarCount,input.BackgroundMedian,8);
+            if (ExposureAssessment.CanTrainBaseline(result)) stellarAnalysis.AddReference(key,sample,image,result.Status,time,side,8);
             if(image.PreviewPngBase64.Length>0)File.WriteAllBytes(Path.Combine(output,$"{id}-stars.png"),Convert.FromBase64String(image.PreviewPngBase64));
             if(image.ExtendedPreviewPngBase64.Length>0)File.WriteAllBytes(Path.Combine(output,$"{id}-extended.png"),Convert.FromBase64String(image.ExtendedPreviewPngBase64));
             var summary=new {id,original=row.GetProperty("originalStatus").GetString(),status=result.Status.ToString(),result.GuideFalsePositive,result.StarCountFalsePositive,
@@ -57,11 +57,19 @@ internal static class FieldReplay {
         if(args.Contains("--assert-cocoon")) {
             var byId=results.ToDictionary(r=>int.Parse(Path.GetFileNameWithoutExtension(r.OriginalPath).Split('_').Last()));
             void Require(bool condition,string message){if(!condition)throw new Exception(message);Console.WriteLine("FIELD PASS "+message);}
-            foreach(int id in new[]{859,967,1025,1042})Require(byId[id].IsUsable&&byId[id].GuideFalsePositive,$"{id} recovered with extended evidence");
+            foreach(int id in new[]{859,967,1025,1042})Require(byId[id].GuideFalsePositive,$"{id} guide flag cleared with extended evidence; independent rules preserved");
             foreach(int id in new[]{850,862,863,888,889,890,891,893,898,964,971,989,990,1005,1023,1024,1034})Require(byId[id].Status==FrameStatus.Rejected,$"{id} image defect retained");
             foreach(int id in new[]{820,821,913,1001,1004,1006,1007,1008,1009,1013,1028,1029,1030,1031,1032,1033,1036,1037,1043,1044})Require(byId[id].Status==FrameStatus.Rejected,$"{id} signal loss retained");
             Require(byId[856].RejectReasons.Contains("STAR_SHAPE_CONFIRMED"),"856 elongated stars detected without a guide trigger");
             Require(byId[989].ImageEvidence.RemotePeakConfirmed,"989 distant repeated image measured");
+        }
+        if(args.Contains("--assert-clouds")) {
+            var byId=results.ToDictionary(r=>int.Parse(Path.GetFileNameWithoutExtension(r.OriginalPath).Split('_').Last()));
+            void Require(bool condition,string message){if(!condition)throw new Exception(message);Console.WriteLine("CLOUD PASS "+message);}
+            foreach(int id in new[]{903,912,914,933,934,935,936,937,938,948,949,966,969,995,1000,1002,1003,1010,1012,1014,1015,1016,1027,1035})
+                Require(byId[id].Status==FrameStatus.Rejected,$"{id} attenuated retained-file case now rejected");
+            foreach(int id in new[]{900,919,920,959,982,1019,1026,1038,1041})Require(byId[id].IsUsable,$"{id} control retained");
+            foreach(int id in new[]{911,967})Require(byId[id].GuideFalsePositive&&byId[id].Status==FrameStatus.Rejected,$"{id} guide rescue cannot clear measured sky degradation");
         }
         Console.WriteLine($"Frames {results.Count}; "+string.Join("; ",results.GroupBy(r=>r.Status).Select(g=>$"{g.Key} {g.Count()}"))+$"; replay {clock.Elapsed.TotalSeconds:0.0}s");
     }
