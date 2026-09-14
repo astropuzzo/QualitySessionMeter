@@ -193,36 +193,41 @@ These values define the loosest limits Automatic calibration is permitted to gen
 
 They exist to prevent automatic learning from silently creating excessively permissive rejection thresholds.
 
-## Stellar Second Pass
+<a id="stellar-second-pass"></a>
+## Stellar Analysis
 
-**Verify Guide Rejections with Stars** is ON by default. Only exposures that fail an enabled guide rule are analyzed. OFF keeps the guide rules strict; the 1.4 diagnostic score is unchanged.
-
-QSM copies at most a 1024 × 1024 central field while N.I.N.A. still owns the raw pixels (4 MiB per pending sample). Complete Bayer 2 × 2 cells are averaged for color cameras. After save, candidate-only analysis runs on a worker before any rejected-file action. It does not read the whole FITS file back or use a stretched/JPEG preview.
+**Enable Stellar Analysis** measures the central raw field of every monitored LIGHT. Confirmed stellar damage can reject a frame even with normal guiding. Disable this option to retain guide, count and background rules without image verification.
 
 | Setting | Default | Meaning |
-|---|---:|---|
-| Stars to Measure | 100 | Target, adjustable 20–200. At least 20 reliable isolated stars spread over three of nine central-field cells are required. |
-| Maximum Eccentricity | 0.60 | `sqrt(1 − (b/a)²)` from background-subtracted core moments. 0 is round; 1 is a line. Equivalent default axis ratio `a/b = 1.25`. At least 60% of the sample must reach this limit to confirm common elongation. |
-| Maximum Asymmetric Tail | 2% | Maximum opposite-side excess in the median, normalized stellar profile, at radii 5–10 sampled pixels. |
-| Maximum Repeated Secondary Peak | 8% | Detached secondary local maximum at radii 3–10 sampled pixels, relative to stellar peak, surviving the median profile. |
+| --- | --- | --- |
+| Maximum eccentricity | 0.60 | Reject when the shape limit is reached in at least 60% of measured stars. Rescue requires eccentricity below 0.55 (a 0.05 margin). |
+| Maximum tail | 2% | Asymmetric median-profile wings relative to the central peak. |
+| Maximum secondary peak | 8% | Repeated close secondary peak. |
+| Maximum distant image | 0.5% | Repeated asymmetric signal in the extended profile, supported by at least 60% of sampled stars and above the measured noise threshold. |
+| Minimum reliable stars | 20 | Minimum count; distribution and valid-measurement fraction must also pass. |
+| Target stars | 100 | Upper target for the central sample. |
+| Verify star-count loss with signal | On | Match stellar identities to previous clean references before clearing or confirming a count-loss flag. |
+| Maximum measured signal loss | 35% | Confirms an existing star-count rejection when matched flux falls below 65% of the reference. It does not create a standalone flux rejection. |
 
-These are this algorithm's measurements, not interchangeable with another application's fitted PSF eccentricity. Focus, undersampling, optics, crowding and narrowband signal can affect reliability. The small central field does not certify corner quality or defects elsewhere.
+The central sample is bounded to 1024 × 1024 pixels. Four outer samples are bounded to 384 × 384 each. Bayer data uses aligned 2 × 2 cell averages; measurement decisions use linear pixels. A valid core fit supplements the moment estimate where aperture truncation would underestimate elongation.
 
-Automatic rescue also requires median eccentricity strictly below `Maximum Eccentricity − 0.05` (below 0.55 with the default 0.60). This is a conservative decision margin, not a statistical confidence interval. Borderline shapes retain the original guide rejection and are labeled explicitly; they are not described as proven stellar damage.
+Guide-reject candidates, confirmed core damage and star-count drops trigger extended verification. It examines the outer samples and a median profile with radius 32–64 sampled pixels (48 without a known image scale). Each analysis stage has a 1.5-second processing budget. Insufficient evidence or a timeout cannot clear an existing rejection.
 
-If measured shapes satisfy this margin and all other tolerances and the guide failure is within the rescue safety bounds, the guide reasons move to the audit/review history. The frame is **WARNING / kept**, or **LEARNING** while its signal baseline is immature. A separate star-count/background failure still rejects it. Rescued warning frames do not train the clean baseline or adaptive calibration. Baseline-eligible learning frames retain the existing learning behavior.
+Moderate guide recovery requires the eccentricity margin and clean core checks, no measured compromised outer region, and a completed extended check when attempted. The original moderate bounds are: RMS at or below its enabled maximum, peak below `max(6 arcsec, 2 × hard limit)`, and longest sustained excursion below `max(configured duration, 10% of exposure)`.
 
-Unavailable pixels, too few reliable stars, inadequate field coverage, rejection of most candidate objects, or a 1.5-second analysis budget overrun cannot rescue a guide rejection. Shape damage confirms the rejection. With each corresponding guide rule enabled, these safety bounds also retain rejection even if the central cores look round:
+Recovery beyond those bounds additionally requires:
 
-- exposure RMS above its configured maximum;
-- peak at or above `max(6 arcsec, 2 × hard-excursion limit)`;
-- sustained duration at or above `max(configured duration, 10% of exposure length)`.
+- at least four of five regions verified, none compromised, and every verified region below the eccentricity limit;
+- tail and close secondary peak below half their limits, with no confirmed distant image;
+- known image scale and the recorded guide peak contained within the searched area;
+- RMS at or below three times its enabled limit;
+- longest sustained excursion below `max(configured duration, 25% of exposure)` when that rule is enabled.
 
-The verdict is finalized **before** `BAD_` or a move is applied. The second pass does not retrospectively rename historical files. The existing manual restore action remains available for historical rejections.
+These are limits on recovery, not new guide-rejection thresholds. A guide flag remains if this proof is missing.
 
-The dock shows a recent-check list and the latest measured proof directly. Hover a timeline frame or evidence cell for the median profile and six individual stars. The browser supports timeline hover and expandable row evidence; reports preserve the same proof. The display stretch enhances faint wings; all decisions use linear pixels. Flux (background/noise-subtracted core sum) is recorded as a diagnostic only: it is not compared between unmatched stars or used as a universal mass-loss rejection rule.
+Signal verification requires at least 20 matched stars and two clean prior references no more than 40 minutes old. References are separated by target, filter, exposure, gain, binning, camera, image geometry and pier side. Only accepted or clean learning frames enter the bounded reference window. Future frames are never used. A count flag can be cleared only with clean extended shape evidence and flux loss no greater than `min(20%, configured signal-loss limit − 5 percentage points)`. Background rejection remains independent.
 
-Session JSON records measurements, applied shape limits, preview PNG, original guide reasons, the final decision, and up to 512 guide samples. CSV adds numeric measurements and decision provenance. The small proof is sufficient for review, not a replacement for the original science image.
+The verdict is finalized before a file action. QSM does not rename historical files during replay. JSON, CSV and reports retain the measurements, applied limits and cleared flags. Native and browser inspectors show central and extended proof; display contrast enhances faint wings without altering measurements. Missing measurements display as unavailable. FWHM is reported in original pixels and relative to matched prior references; its change contributes to the diagnostic score, not an independent reject rule.
 
 ## Session & File Handling
 
@@ -273,36 +278,6 @@ QSM can then add explanatory hints, for example:
 ## Retired Smart Recovery
 
 QSM 1.4 removes Smart Recovery controls and the toolbox item. It never inserts recovery waits between exposures. Old saved sequences can deserialize the existing item type; it completes immediately and can be removed from the sequence.
-
-## Enable Smart Recovery Gate
-
-Allows the Smart Recovery Gate to react after a configured streak of sequence-frame degradation.
-
-### Reject / Error Streak
-
-Number of consecutive **REJECTED** or **ERROR** results associated with that sequence loop required before the recovery gate activates.
-
-Accepted/warning frames break the streak.
-
-### Recovery Wait
-
-Cooldown inserted between exposures after persistent degradation.
-
-### Healthy Guide Samples to Resume
-
-After the cooldown, number of consecutive healthy guide samples required before the gate reports recovery and permits the next exposure.
-
-If QSM cannot obtain a reliable guide-recovery signal before the safety timeout, the gate deliberately allows one probe exposure rather than blocking the sequence forever.
-
-Example:
-
-```text
-Reject/Error streak: 3
-Recovery wait: 120 s
-Healthy samples: 3
-```
-
-After three consecutive REJECTED/ERROR results associated with the loop, QSM waits 120 seconds. It then waits for three consecutive healthy guide samples before the next exposure. If recovery cannot be confirmed before the safety timeout, one probe exposure is allowed.
 
 ## Web Dashboard
 

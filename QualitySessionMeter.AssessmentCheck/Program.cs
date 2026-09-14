@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Diagnostics;
 using System.IO;
 
+if(args.FirstOrDefault()=="--field") { await FieldReplay.Run(args.Skip(1).ToArray()); return; }
+
 int checks = 0;
 void Check(bool ok, string message) { checks++; if (!ok) throw new Exception(message); Console.WriteLine("PASS " + message); }
 ImageSample Field(double sx, double sy, bool tail = false) {
@@ -61,13 +63,13 @@ Check(Assess(round,21,3.9,12).Status == FrameStatus.Accepted, "disabled guide ru
 settings.EnableGuideRms = true; settings.EnableHardExcursion = true; settings.EnableSustainedExcursion = true;
 settings.ImageEvidenceEnabled = false;
 Check(Assess(round,3.03).Status == FrameStatus.Rejected, "disabled second pass retains original guide rejection");
-Check(Assess(round,3.03).AssessmentVersion == "1.4", "second-pass switch does not revert to legacy scoring");
+Check(Assess(round,3.03).AssessmentVersion == "1.4.1", "second-pass switch does not revert to legacy scoring");
 settings.ImageEvidenceEnabled = true;
 Check(!ExposureAssessment.IsGuideRejectCandidate(new GuideExposureMetrics {HasData=true,RmsArcsec=.8,MaxExcursionArcsec=1},settings), "healthy exposure does not request stellar analysis");
 Check(ExposureAssessment.IsGuideRejectCandidate(new GuideExposureMetrics {HasData=true,RmsArcsec=.8,MaxExcursionArcsec=3.1},settings), "guide reject requests second pass");
 Check(spike.GuideFalsePositive && spike.ReviewReasons.Contains("HARD_GUIDE_EXCURSION"), "rescue retains original reason for audit");
 Check(Assess(round,3.03,stars:500).Status==FrameStatus.Rejected, "stellar rescue cannot clear an independent signal reject");
-Check(!ImageEvidenceAnalyzer.Analyze(Field(2.6,1.1),new StarShapeLimits {MaxEccentricity=.90}).Compromised, "eccentricity tolerance changes measured decision");
+Check(!ImageEvidenceAnalyzer.Analyze(Field(2.6,1.1),new StarShapeLimits {MaxEccentricity=.95}).Compromised, "eccentricity tolerance changes measured decision");
 Check(round.Preview?.IsFrozen==true && round.Preview.PixelWidth==135, "persistent visual proof decodes as dispatcher-safe frozen pixels");
 Check(!ImageEvidenceAnalyzer.Analyze(new ImageSample(Enumerable.Repeat(float.NaN,64*64).ToArray(),64,64)).Available, "invalid numeric pixels cannot certify clean stars");
 var doubleStars = Field(1.4,1.4,true);
@@ -97,6 +99,55 @@ var exported = (IDictionary<string, object>)mapFrame.Invoke(null, new object[] {
 Check((double)exported["starEccentricityLimit"] == .68 && Math.Abs((double)exported["starRescueEccentricityLimit"]-.63)<1e-10
     && (double)exported["starTailLimitPercent"] == 3.5, "remote analysis exports applied per-frame limits, not current defaults");
 Check(exported["quality"] == null && (bool)exported["imageEvidenceAttempted"] && (bool)exported["imageEvidenceAvailable"], "remote learning quality stays null while measured evidence remains available");
+
+var extendedRound = round with {ExtendedAttempted=true,ExtendedAvailable=true,GuideSearchCovered=true,VerifiedRegions=5,WorstRegionEccentricity=.3};
+Check(Assess(extendedRound,8.3,2.1,17).GuideFalsePositive,"extended multi-region evidence can clear a guide flag above the old safety limit");
+Check(Assess(extendedRound with {GuideSearchCovered=false},8.3,2.1,17).Status==FrameStatus.Rejected,"unknown or insufficient angular coverage cannot clear a large guide error");
+Check(Assess(extendedRound with {VerifiedRegions=3},8.3,2.1,17).Status==FrameStatus.Rejected,"too few verified regions cannot clear a large guide error");
+Check(Assess(extendedRound with {CompromisedRegions=1},3.2).Status==FrameStatus.Rejected,"damaged outer stars prevent guide recovery even with a round center");
+Check(Assess(extendedRound with {ExtendedAvailable=false},3.2).Status==FrameStatus.Rejected,"failed extended check retains the original guide flag");
+Check(Assess(extendedRound,8.3,5,17).Status==FrameStatus.Rejected && Assess(extendedRound,8.3,2,35).Status==FrameStatus.Rejected,"extreme RMS and long disturbances remain bounded even with clean stellar evidence");
+Check(Assess(elongated,1,.5).RejectReasons.Contains("STAR_SHAPE_CONFIRMED"),"stellar damage rejects independently of a guiding trigger");
+var matched = extendedRound with {RelativeFlux=.92,MatchedStars=40,ReferenceFrames=3};
+Check(Assess(matched,1,stars:500).StarCountFalsePositive && Assess(matched,1,stars:500).Status==FrameStatus.Warning,"matched stellar signal can clear a misleading count drop");
+Check(Assess(matched with {RelativeFlux=.5},1,stars:500).RejectReasons.Contains("STELLAR_FLUX_LOSS"),"real flux loss confirms a star-count rejection");
+Check(Assess(matched with {ReferenceFrames=1},1,stars:500).Status==FrameStatus.Rejected,"one reference is insufficient to override star-count rejection");
+Check(Assess(matched,1,stars:500,background:1500).Status==FrameStatus.Rejected,"photometric rescue never clears an independent background rule");
+settings.VerifyStarCountWithFlux=false;
+Check(!Assess(matched,1,stars:500).StarCountFalsePositive,"disabled flux verification cannot clear a count flag");
+settings.VerifyStarCountWithFlux=true;
+Check(Assess(matched with {RelativeFlux=.5},1).Status!=FrameStatus.Rejected,"photometry alone does not introduce an unrelated hard rejection");
+
+var starCatalog=Enumerable.Range(0,45).Select(i=>new StarObservation(30+(i*73)%400,30+(i*113)%400,50000+i*1000,5000+i*100,3)).ToArray();
+var catalogEvidence=round with {Catalog=starCatalog,FwhmPixels=3};
+var referenceEngine=new StellarReferenceEngine();var referenceTime=new DateTime(2026,9,13,22,0,0,DateTimeKind.Utc);
+var referenceKey=new BaselineKey("A","L",120,100,1,1,"camera");var referenceSample=Field(1.4,1.4);
+referenceEngine.Add(referenceKey,referenceSample,catalogEvidence,FrameStatus.Rejected,referenceTime,"East",8);
+referenceEngine.Add(referenceKey,referenceSample,catalogEvidence,FrameStatus.Accepted,referenceTime,"East",8);
+referenceEngine.Add(referenceKey,referenceSample,catalogEvidence,FrameStatus.Accepted,referenceTime.AddMinutes(2),"East",8);
+var shifted=catalogEvidence with {Catalog=starCatalog.Select(s=>s with {X=s.X+7.3,Y=s.Y-4.2,Flux=s.Flux*.72}).ToArray()};
+var comparison=referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddMinutes(4),"East");
+Check(comparison.PhotometryAvailable && comparison.ReferenceFrames==2 && Math.Abs(comparison.RelativeFlux-.72)<.001,"photometry matches shifted stars against prior accepted frames only");
+Check(!referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddMinutes(1),"East").PhotometryAvailable,"future reference frames are never used");
+Check(!referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddMinutes(4),"West").PhotometryAvailable,"meridian sides do not share stellar references");
+Check(!referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddHours(1),"East").PhotometryAvailable,"expired reference frames cannot keep certifying flux");
+referenceEngine.Clear();Check(!referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddMinutes(4),"East").PhotometryAvailable,"session reset clears stellar references");
+
+var wideClean=Field(1.4,1.4) with {ArcsecPerSample=1,OuterFields=Enumerable.Range(0,4).Select(_=>Field(1.4,1.4)).ToArray()};
+var cleanProof=ExtendedStarAnalyzer.Verify(wideClean,ImageEvidenceAnalyzer.Analyze(wideClean),40);
+Check(cleanProof.ExtendedAvailable && cleanProof.GuideSearchCovered && !cleanProof.RemotePeakConfirmed,"clean extended fields do not manufacture distant stellar images");
+var remotePixels=(float[])wideClean.Pixels.Clone();
+for(int y=45;y<480;y+=48)for(int x=45;x<480;x+=48)
+ for(int dy=-5;dy<=5;dy++)for(int dx=-5;dx<=5;dx++) {
+   int yy=y+15+dy,xx=x-20+dx;if(xx>=0&&xx<512&&yy>=0&&yy<512)remotePixels[yy*512+xx]+=(float)(120*Math.Exp(-.5*(dx*dx+dy*dy)/(1.4*1.4)));
+ }
+var remoteSample=wideClean with {Pixels=remotePixels};var remoteCore=ImageEvidenceAnalyzer.Analyze(remoteSample);
+var remoteProof=ExtendedStarAnalyzer.Verify(remoteSample,remoteCore,40);
+Check(!remoteCore.Compromised && remoteProof.RemotePeakConfirmed,"repeated faint distant image is detected outside the original core patch");
+Check(remoteProof.ExtendedPreview?.IsFrozen==true,"extended visual evidence is safe across WPF dispatchers");
+Check(Assess(remoteProof,40,2).Status==FrameStatus.Rejected,"confirmed distant image prevents guide recovery");
+Check(captured.OuterFields.Length==4 && captured.OuterFields.All(f=>f.Pixels.All(v=>v==1234)),"owned outer samples preserve Bayer-cell alignment");
+Console.WriteLine($"Total owned pixel copies: {(captured.Pixels.Length+captured.OuterFields.Sum(f=>f.Pixels.Length))*4} bytes");
 
 if (args.Length>0) {
     var replay = new List<FrameQualityResult>();

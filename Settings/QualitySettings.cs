@@ -121,6 +121,18 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         get => Clamp(accessor.GetValueInt32(nameof(ShapeTargetStars), 100), 20, 200);
         set { accessor.SetValueInt32(nameof(ShapeTargetStars), Clamp(value, 20, 200)); Raise(); }
     }
+    public bool VerifyStarCountWithFlux {
+        get => accessor.GetValueBoolean(nameof(VerifyStarCountWithFlux), true);
+        set { accessor.SetValueBoolean(nameof(VerifyStarCountWithFlux), value); Raise(); }
+    }
+    public double ShapeMaxRemotePeakPercent {
+        get => SafeShapeValue(nameof(ShapeMaxRemotePeakPercent), .5, .2, 5);
+        set { accessor.SetValueDouble(nameof(ShapeMaxRemotePeakPercent), double.IsFinite(value) ? Clamp(value,.2,5) : .5); Raise(); }
+    }
+    public double MaxMeasuredFluxLossPercent {
+        get => SafeShapeValue(nameof(MaxMeasuredFluxLossPercent),35,5,80);
+        set { accessor.SetValueDouble(nameof(MaxMeasuredFluxLossPercent),double.IsFinite(value)?Clamp(value,5,80):35);Raise(); }
+    }
     public double ShapeMaxEccentricity {
         get => SafeShapeValue(nameof(ShapeMaxEccentricity), .60, .30, .90);
         set { accessor.SetValueDouble(nameof(ShapeMaxEccentricity), double.IsFinite(value) ? Clamp(value, .30, .90) : .60); Raise(); }
@@ -139,7 +151,7 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     }
     public StarShapeLimits GetStarShapeLimits() => new() {
         TargetStars = ShapeTargetStars, MaxEccentricity = ShapeMaxEccentricity,
-        MaxTailPercent = ShapeMaxTailPercent, MaxDoublePeakPercent = ShapeMaxDoublePeakPercent
+        MaxTailPercent = ShapeMaxTailPercent, MaxDoublePeakPercent = ShapeMaxDoublePeakPercent, MaxRemotePeakPercent = ShapeMaxRemotePeakPercent
     };
 
     public bool EnableGuideRms {

@@ -79,7 +79,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
 
         var result = new Dictionary<string, object> {
             ["contractVersion"] = ContractVersion,
-            ["assessmentVersion"] = "1.4",
+            ["assessmentVersion"] = "1.4.1",
             ["available"] = true,
             ["readOnly"] = true,
             ["generatedUtc"] = DateTimeOffset.UtcNow.ToString("O"),
@@ -121,14 +121,16 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
                 ["maxBackgroundDecreasePercent"] = settings.MaxBackgroundDecreasePercent,
                 ["predictiveWarningsEnabled"] = settings.PredictiveWarningsEnabled,
                 ["environmentalCorrelationEnabled"] = settings.EnvironmentalCorrelationEnabled,
-                ["imageEvidenceEnabled"] = settings.ImageEvidenceEnabled
+                ["imageEvidenceEnabled"] = settings.ImageEvidenceEnabled,
+                ["verifyStarCountWithFlux"] = settings.VerifyStarCountWithFlux,
+                ["maxMeasuredFluxLossPercent"] = settings.MaxMeasuredFluxLossPercent
             },
             ["series"] = new Dictionary<string, object> {
                 ["quality"] = Series("Quality", "#8AB4F8", "score", "0–100; higher is better"),
                 ["confidence"] = Series("Evidence strength", "#C58AF9", "score", "0–100 diagnostic index; not a calibrated probability"),
                 ["guideRms"] = Series("Guide RMS", "#81C995", "arcsec", "absolute RMS; lower is better"),
-                ["starDelta"] = Series("Stars Δ", "#FDD663", "% vs rolling baseline", "negative means fewer stars than the rolling clean-frame reference"),
-                ["backgroundDelta"] = Series("Background Δ", "#F28B82", "% vs rolling baseline", "positive = brighter than baseline; negative = darker")
+                ["starDelta"] = Series("Stars Î”", "#FDD663", "% vs rolling baseline", "negative means fewer stars than the rolling clean-frame reference"),
+                ["backgroundDelta"] = Series("Background Î”", "#F28B82", "% vs rolling baseline", "positive = brighter than baseline; negative = darker")
             },
             ["guidingLive"] = MobileLiveGuide(liveGuide),
             ["currentFrame"] = current == null ? null : MobileFrame(current),
@@ -173,6 +175,19 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
         ["decisionSummary"] = frame.DecisionSummary,
         ["reviewReasons"] = frame.ReviewReasons,
         ["guideFalsePositive"] = frame.GuideFalsePositive,
+        ["starCountFalsePositive"] = frame.StarCountFalsePositive,
+        ["extendedStarProofPng"] = frame.ImageEvidence.ExtendedPreviewPngBase64,
+        ["extendedStarCheckAvailable"] = frame.ImageEvidence.ExtendedAvailable,
+        ["verifiedStarRegions"] = frame.ImageEvidence.VerifiedRegions,
+        ["starRemotePeak"] = JsonNumber(frame.ImageEvidence.RemotePeakStrength),
+        ["starRemotePeakLimitPercent"] = frame.ImageEvidence.Limits.MaxRemotePeakPercent,
+        ["starRemotePeakSupport"] = JsonNumber(frame.ImageEvidence.RemotePeakSupport),
+        ["starSearchRadiusArcsec"] = JsonNumber(frame.ImageEvidence.SearchRadiusArcsec),
+        ["relativeStellarFlux"] = JsonNumber(frame.ImageEvidence.RelativeFlux),
+        ["matchedStars"] = frame.ImageEvidence.MatchedStars,
+        ["stellarReferenceFrames"] = frame.ImageEvidence.ReferenceFrames,
+        ["starFwhmPixels"] = JsonNumber(frame.ImageEvidence.FwhmPixels),
+        ["starFwhmRatio"] = JsonNumber(frame.ImageEvidence.FwhmRatio),
         ["secondPassText"] = frame.SecondPassText,
         ["starProofPng"] = frame.ImageEvidence.PreviewPngBase64,
         ["starProofCaption"] = frame.ImageEvidence.PreviewCaption,

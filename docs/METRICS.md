@@ -10,7 +10,7 @@ QSM deliberately separates **display scores** from **hard rejection rules**.
 - **Evidence strength** (stored as `ConfidenceScore` for compatibility) describes completeness/agreement of the available diagnostics; it is not a calibrated probability.
 - `ACCEPTED`, `WARNING`, `REJECTED`, `LEARNING` and `ERROR` are frame states.
 - A frame is `REJECTED` when at least one enabled rule remains failed after the optional stellar second pass. A high Quality score does not override a failed hard rule.
-- A `WARNING` frame is kept: it either has degraded diagnostic quality or a guide flag cleared by the stellar second pass.
+- A `WARNING` frame is kept: it has reduced diagnostic quality, inconclusive/borderline stellar evidence, or a guide/count flag cleared by stellar verification.
 
 This separation is intentional. It prevents a good value in one channel from numerically hiding a severe failure in another.
 
@@ -49,7 +49,7 @@ A single isolated spike has sustained duration zero and cannot satisfy a duratio
 
 **Unit:** arcseconds.
 
-The hard-excursion rule flags total guide-error magnitude. In 1.4 a moderate failure can be cleared by the stellar second pass; extreme failures retain the rescue safety ceiling described in SETTINGS.md. A sufficiently large individual excursion can reject a frame even when it is too short to meet the sustained-duration rule.
+The hard-excursion rule flags total guide-error magnitude. In 1.4.1 a failure can be cleared by stellar verification only within the evidence and safety bounds described in SETTINGS.md. A sufficiently large individual excursion can reject a frame even when it is too short to meet the sustained-duration rule.
 
 Because excursion thresholds apply to total magnitude, the Web Dashboard draws them on the **Total error magnitude** guide plot, not over the signed RA/DEC plot.
 
@@ -100,7 +100,9 @@ Quality combines available channel sub-scores while deliberately weighting the w
 
 In 1.4, `Quality = 0.75 × mean(available channel scores) + 0.25 × min(available channel scores)`. Guide RMS, transparency and background retain their channel mappings. Stability becomes `clamp(100 − 300 × longest sustained excursion / exposure duration, 0, 100)` when excursion diagnostics are enabled. A lone spike no longer zeroes that component. This duration is the longest run, not total disturbed time.
 
-For analyzed candidates the stellar channel is also included: `clamp(100 − max(180 × max(0, axisRatio − 1.10), 2200 × max(0, tailStrength − 0.003)), 0, 100)`. It is a heuristic diagnostic, not a calibrated image-quality estimate. A secondary peak can confirm rejection even if its composite score is high. The score and the rule result are separate.
+For measured LIGHTs the stellar channel is also included: `clamp(100 − max(180 × max(0, axisRatio − 1.10), 2200 × max(0, tailStrength − 0.003)), 0, 100)`. It is a heuristic diagnostic, not a calibrated image-quality estimate. A secondary peak can confirm rejection even if its composite score is high. The score and the rule result are separate.
+
+In 1.4.1, a cleared guide flag removes guide/stability penalties from the score; a cleared count flag removes its count penalty. Available matched flux contributes `clamp(100 × relative flux, 0, 100)`. FWHM ratio contributes `clamp(100 − 100 × max(0, ratio − 1.1), 0, 100)`. These remain diagnostics; they cannot override remaining hard rules.
 
 The former Worst-channel Influence option is retired. Disabling stellar verification keeps the 1.4 score and strict guide rejection; it does not restore the 1.3 score. Historical V1/V2/V3 fixtures explicitly select their legacy scoring only in development builds.
 
@@ -141,4 +143,4 @@ It is explanatory metadata. It does **not** replace the explicit rejection reaso
 
 ## Stellar shape, tails and repeated peaks
 
-The optional second pass measures central raw stars only on guide-reject candidates. It combines core eccentricity with median-profile tails and repeated secondary peaks; eccentricity alone can miss a round core with a faint streak. See [SETTINGS.md](SETTINGS.md#stellar-second-pass) for exact thresholds, rescue safety bounds, computational limits and visual-proof interpretation.
+Optional stellar analysis measures central raw stars on every monitored LIGHT. Guide, shape and star-count suspects also receive an extended profile and outer-region check. Eccentricity alone can miss a round core with a faint distant image. Matched flux uses only prior clean same-context, same-pier-side references. See [SETTINGS.md](SETTINGS.md#stellar-second-pass) for exact thresholds, rescue safety bounds, computational limits and visual-proof interpretation.

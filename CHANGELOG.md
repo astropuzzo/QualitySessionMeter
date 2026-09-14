@@ -2,6 +2,14 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.1.0] - Unreleased field-test candidate
+
+- Measure central stellar shapes on every monitored LIGHT; reject confirmed elongation even when guiding does not flag the frame. Fit adequately sampled cores to reduce aperture-truncation bias.
+- Check four outer regions and an expanded median profile on guide, shape or star-count suspects. Detect faint repeated distant images and require search coverage before clearing severe guide flags.
+- Verify star-count drops against matched aperture flux from prior clean frames in the same imaging context and pier side. Preserve independent background rejections and inconclusive cases.
+- Record extended proof, signal references, FWHM, coverage and original cleared flags. Show the new measurements in the native panel, public dashboard, companion API and HTML report.
+- Replay 241 real LIGHTs chronologically: 195 usable, 42 rejected and 4 learning, versus 192 / 45 / 4 originally. Retain all 37 reviewed defect/signal cases and the previous-night 0565 regression. See [validation](docs/1.4.1-FIELD-VALIDATION.md).
+
 ## [1.4.0.2] - 2026-09-13
 
 - Give the public dashboard a dedicated, persistent stellar inspector: median profile, six measured stars, rescue/damage limits, tail, secondary peak, flux and final decision.

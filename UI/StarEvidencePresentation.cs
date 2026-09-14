@@ -20,6 +20,11 @@ public static class StarEvidencePresentation {
             panel.Children.Add(image);
             Text(frame.ImageEvidence.PreviewCaption);
         }
+        if (frame.ImageEvidence.ExtendedPreview is { } extended) {
+            Text("Extended stellar profile");
+            var image = new System.Windows.Controls.Image { Source=extended,Width=240,Height=240,HorizontalAlignment=HorizontalAlignment.Left };
+            RenderOptions.SetBitmapScalingMode(image,BitmapScalingMode.NearestNeighbor);panel.Children.Add(image);
+        }
         return panel;
     }
 }

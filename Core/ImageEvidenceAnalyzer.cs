@@ -12,7 +12,7 @@ namespace NINA.Plugin.QualitySessionMeter.Core;
 /// <summary>Bounded, linear-pixel shape diagnostics. Never analyze stretched previews or JPEGs.</summary>
 public static class ImageEvidenceAnalyzer {
     // Copy a central field, averaging complete Bayer cells. Own the copy before leaving the save callback.
-    public static ImageSample Capture(ushort[] pixels, int width, int height, bool bayer) {
+    public static ImageSample Capture(ushort[] pixels, int width, int height, bool bayer, double arcsecPerPixel = double.NaN) {
         if (pixels == null || width < 64 || height < 64 || (long)width * height > pixels.Length) return null;
         int step = bayer ? 2 : 1;
         int w = Math.Min(1024, width / step), h = Math.Min(1024, height / step);
@@ -22,13 +22,25 @@ public static class ImageEvidenceAnalyzer {
             int p = (y0 + y * step) * width + x0 + x * step;
             copy[y * w + x] = step == 1 ? pixels[p] : (pixels[p] + (float)pixels[p + 1] + pixels[p + width] + pixels[p + width + 1]) / 4;
         }
-        return new ImageSample(copy, w, h);
+        var outer = new List<ImageSample>();
+        int side = Math.Min(384, Math.Min(width, height) / step / 4);
+        if (side >= 64) foreach (var (cx, cy) in new[] { (.22,.22),(.78,.22),(.22,.78),(.78,.78) }) {
+            int ox = Math.Clamp((int)(width * cx - side * step / 2.0) / step * step, 0, width - side * step);
+            int oy = Math.Clamp((int)(height * cy - side * step / 2.0) / step * step, 0, height - side * step);
+            var field = new float[side * side];
+            for (int y = 0; y < side; y++) for (int x = 0; x < side; x++) {
+                int p = (oy + y * step) * width + ox + x * step;
+                field[y * side + x] = step == 1 ? pixels[p] : (pixels[p] + (float)pixels[p+1] + pixels[p+width] + pixels[p+width+1]) / 4;
+            }
+            outer.Add(new ImageSample(field, side, side) { PixelsPerSample = step, ArcsecPerSample = arcsecPerPixel * step });
+        }
+        return new ImageSample(copy, w, h) { PixelsPerSample = step, ArcsecPerSample = arcsecPerPixel * step, OuterFields = outer.ToArray() };
     }
 
     public static ImageEvidence Analyze(ImageSample sample, StarShapeLimits limits = null) {
         limits ??= new StarShapeLimits();
         var clock = Stopwatch.StartNew();
-        ImageEvidence Unavailable(int count, string why) => new() { Attempted = true, Stars = count, Limits = limits, ElapsedMilliseconds = clock.Elapsed.TotalMilliseconds, Detail = "Second pass inconclusive: " + why + " Original guide rejection retained." };
+        ImageEvidence Unavailable(int count, string why) => new() { Attempted = true, Stars = count, Limits = limits, ElapsedMilliseconds = clock.Elapsed.TotalMilliseconds, Detail = "Stellar check unavailable: " + why };
         if (sample == null) return Unavailable(0, "raw pixels unavailable.");
         var a = sample.Pixels; int w = sample.Width, h = sample.Height;
         if (a == null || w < 40 || h < 40 || w > 1024 || h > 1024 || (long)w * h != a.Length || a.Any(v => !float.IsFinite(v))) return Unavailable(0, "invalid raw field.");
@@ -45,7 +57,7 @@ public static class ImageEvidenceAnalyzer {
         }
         var centers = new List<(int X, int Y)>();
         var ratios = new List<double>(); var patches = new List<double[]>(); var cells = new HashSet<int>();
-        var fluxes = new List<double>(); int attempted = 0;
+        var fluxes = new List<double>(); var catalog = new List<StarObservation>(); int attempted = 0;
         foreach (var star in candidates.OrderByDescending(x => x.Peak)) {
             if (clock.ElapsedMilliseconds > 1500) return Unavailable(ratios.Count, "analysis time budget exceeded.");
             if (centers.Any(p => Math.Abs(p.X - star.X) < 20 && Math.Abs(p.Y - star.Y) < 20)) continue;
@@ -74,13 +86,22 @@ public static class ImageEvidenceAnalyzer {
             xx /= mass; yy /= mass; xy /= mass;
             double delta = Math.Sqrt((xx - yy) * (xx - yy) + 4 * xy * xy);
             double minor = (xx + yy - delta) / 2, major = (xx + yy + delta) / 2;
-            if (minor < 0.35 || major > 9) continue; // hot pixels, undersampled or blended objects: insufficient evidence
             double peak = star.Peak - local;
+            var fit = FitCore(a,w,x,y,local,peak,noise);
+            if (minor < 0.2 || major > 9 || (minor < .35 && !fit.Valid)) continue;
+            // A finite aperture rounds elongated cores. A well-constrained fit can expose this bias;
+            // moments remain a conservative fallback when tails violate the Gaussian model.
+            double ratioValue = Math.Sqrt(major/minor);
+            if(fit.Valid) ratioValue = Math.Max(ratioValue,fit.Ratio);
             var patch = new double[625];
             for (int dy = -12; dy <= 12; dy++) for (int dx = -12; dx <= 12; dx++)
                 patch[(dy + 12) * 25 + dx + 12] = (Bilinear(a, w, x + mx + dx, y + my + dy) - local) / peak;
-            centers.Add((x, y)); ratios.Add(Math.Sqrt(major / minor)); patches.Add(patch);
+            centers.Add((x, y)); ratios.Add(ratioValue); patches.Add(patch);
             fluxes.Add(mass);
+            double apertureFlux = 0;
+            for (int dy = -8; dy <= 8; dy++) for (int dx = -8; dx <= 8; dx++)
+                if (dx*dx+dy*dy<=64) apertureFlux += a[(y+dy)*w+x+dx]-local;
+            catalog.Add(new StarObservation(x+mx,y+my,apertureFlux,peak,(fit.Valid?fit.Fwhm:2.35482*Math.Pow(major*minor,.25))*sample.PixelsPerSample));
             cells.Add((y * 3 / h) * 3 + x * 3 / w);
             if (ratios.Count >= Math.Clamp(limits.TargetStars, 20, 200)) break;
         }
@@ -109,8 +130,36 @@ public static class ImageEvidenceAnalyzer {
         return new ImageEvidence {
             Attempted = true, Available = true, Stars = ratios.Count, AxisRatio = ratio, ElongatedFraction = elongated, TailStrength = tail,
             DoublePeakStrength = doublePeak, MedianFlux = Median(fluxes), Limits = limits, PreviewPngBase64 = proof, ElapsedMilliseconds = clock.Elapsed.TotalMilliseconds,
+            Catalog = catalog.ToArray(), FwhmPixels = Median(catalog.Select(s=>s.Fwhm)), VerifiedRegions = 1, WorstRegionEccentricity = eccentricity,
             Detail = $"{ratios.Count} central stars · eccentricity {eccentricity:0.00} / limit {limits.MaxEccentricity:0.00} · deformed {elongated:P0} / {limits.DeformedFraction:P0} · tail {tail*100:0.0}% / {limits.MaxTailPercent:0.0}% · secondary peak {doublePeak*100:0.0}% / {limits.MaxDoublePeakPercent:0.0}%."
         };
+    }
+
+    private static (bool Valid,double Ratio,double Fwhm) FitCore(float[] a,int w,int x,int y,double bg,double peak,double noise) {
+        var matrix=new double[6,7];int points=0;
+        var observations=new List<(double[] Basis,double Log,double Weight)>();
+        for(int dy=-5;dy<=5;dy++)for(int dx=-5;dx<=5;dx++) {
+            double signal=a[(y+dy)*w+x+dx]-bg;
+            if(signal<Math.Max(peak*.03,noise*8))continue;
+            double[] basis={1,dx,dy,dx*dx,dx*dy,dy*dy};double log=Math.Log(signal),weight=signal/peak;
+            observations.Add((basis,log,weight));points++;
+            for(int i=0;i<6;i++) { for(int j=0;j<6;j++)matrix[i,j]+=weight*basis[i]*basis[j];matrix[i,6]+=weight*basis[i]*log; }
+        }
+        if(points<10)return(false,0,0);
+        for(int k=0;k<6;k++) {
+            int pivot=k;for(int i=k+1;i<6;i++)if(Math.Abs(matrix[i,k])>Math.Abs(matrix[pivot,k]))pivot=i;
+            if(Math.Abs(matrix[pivot,k])<1e-9)return(false,0,0);
+            for(int j=k;j<=6;j++)(matrix[k,j],matrix[pivot,j])=(matrix[pivot,j],matrix[k,j]);
+            double div=matrix[k,k];for(int j=k;j<=6;j++)matrix[k,j]/=div;
+            for(int i=0;i<6;i++)if(i!=k) { double m=matrix[i,k];for(int j=k;j<=6;j++)matrix[i,j]-=m*matrix[k,j]; }
+        }
+        double xx=-2*matrix[3,6],xy=-matrix[4,6],yy=-2*matrix[5,6];
+        double delta=Math.Sqrt((xx-yy)*(xx-yy)+4*xy*xy),small=(xx+yy-delta)/2,large=(xx+yy+delta)/2;
+        if(small<=0 || large<=0 || 1/large<.2 || 1/small>16)return(false,0,0);
+        double error=0,weightSum=0;
+        foreach(var o in observations) { double model=0;for(int i=0;i<6;i++)model+=matrix[i,6]*o.Basis[i];error+=o.Weight*(model-o.Log)*(model-o.Log);weightSum+=o.Weight; }
+        if(Math.Sqrt(error/weightSum)>.15)return(false,0,0);
+        return(true,Math.Sqrt(large/small),2.35482/Math.Pow(small*large,.25));
     }
 
     private static string MakePreview(double[] stack, List<double[]> patches) {
