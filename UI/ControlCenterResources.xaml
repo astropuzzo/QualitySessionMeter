@@ -126,44 +126,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="#171A20" BorderBrush="#2A3039" BorderThickness="1" CornerRadius="8" Padding="14">
-                    <StackPanel>
-                        <TextBlock Text="SMART RECOVERY" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,8" TextAlignment="Left"
-                                   ToolTip="Optional Advanced Sequencer gate behavior. After persistent controlled-frame degradation it waits between exposures for a cooldown/healthy-guiding condition. It never aborts an exposure already in progress."/>
 
-                        <Grid ToolTip="Enables the opt-in Smart Recovery Gate. This affects only sequences that actually contain/use that QSM gate; enabling the setting alone does not inject new sequence instructions.">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="Enable Smart Recovery behavior" FontWeight="SemiBold"/>
-                                <TextBlock Text="Wait between exposures after persistent degradation; never abort an active exposure." Opacity="0.68" TextWrapping="Wrap" FontSize="11" TextAlignment="Left"/>
-                            </StackPanel>
-                            <CheckBox Grid.Column="1" IsChecked="{Binding Settings.SmartPauseEnabled}" VerticalAlignment="Center" Margin="18,0,0,0"
-                                      ToolTip="OFF: the Smart Recovery Gate passes without recovery waiting. ON: the gate can enter a bounded between-exposure recovery wait after the configured reject/error streak."/>
-                        </Grid>
-
-                        <Grid Margin="0,12,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="270"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Reject/error streak before wait" VerticalAlignment="Center"
-                                       ToolTip="How many consecutive rejected or analysis-error QSM-controlled frames are required before Smart Recovery considers degradation persistent."/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseRejectStreak, UpdateSourceTrigger=LostFocus}"
-                                     ToolTip="Consecutive controlled REJECTED/ERROR frames required to trigger recovery waiting. A single bad frame should not pause the sequence."/>
-                        </Grid>
-                        <Grid Margin="0,6,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="270"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Cooldown seconds" VerticalAlignment="Center"
-                                       ToolTip="Minimum delay used by the recovery gate before re-checking whether conditions are healthy enough to continue."/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartPauseSeconds, UpdateSourceTrigger=LostFocus}"
-                                     ToolTip="Cooldown duration in seconds between recovery checks."/>
-                        </Grid>
-                        <Grid Margin="0,6,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="270"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
-                            <TextBlock Text="Healthy guide samples to resume" VerticalAlignment="Center"
-                                       ToolTip="Number of consecutive healthy guide checks required before Smart Recovery allows the Advanced Sequencer to proceed again."/>
-                            <TextBox Grid.Column="1" Text="{Binding Settings.SmartResumeHealthyGuideChecks, UpdateSourceTrigger=LostFocus}"
-                                     ToolTip="Consecutive healthy guide checks needed to resume. Requiring several checks reduces pause/resume oscillation."/>
-                        </Grid>
-                    </StackPanel>
-                </Border>
             </StackPanel>
         </ScrollViewer>
     </DataTemplate>

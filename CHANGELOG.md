@@ -2,6 +2,28 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.0.2] - 2026-09-13
+
+- Give the public dashboard a dedicated, persistent stellar inspector: median profile, six measured stars, rescue/damage limits, tail, secondary peak, flux and final decision.
+- Expose applied limits and verification state through the read-only companion API for OpenAstro. Missing limits stay unavailable, never replaced by assumed defaults.
+- Keep selected/expanded evidence during polling, show unavailable session quality without a misleading zero, and distinguish a cleared guide flag from a final rejection due to independent rules.
+- Preserve the 0.05 eccentricity rescue margin and all decision thresholds from 1.4.0.1; frame 0565 remains rejected.
+
+## [1.4.0.1] - 2026-09-13 (field-test candidate)
+
+- Require a 0.05 eccentricity margin below the configured damage limit for automatic guide-flag rescue. Borderline measured shapes retain the original rejection with an explicit explanation.
+- Add decision-margin tests and update the private replay: six recoveries, seven retained rejects, including the user-reviewed borderline exposure.
+
+## [1.4.0.0] - 2026-09-13 (field-test candidate)
+
+- Verify guide-reject candidates using a bounded central raw field, with Bayer-cell averaging, isolated-star moments, median-profile tail detection and repeated-secondary-peak evidence.
+- Add adjustable eccentricity, tail, secondary-peak and star-sample limits. Rescue moderate false positives before file handling; unavailable/insufficient evidence, extreme guiding and independent signal failures keep their rejection.
+- Preserve stellar PNG proof, measurements, applied limits and original guide flags per frame. Show the proof in the dock, timeline hover, browser and report.
+- Replace peak-driven score collapse with duration-aware stability and a less dominating worst-channel weight. Distinguish last-frame quality, usable-session mean and diagnostic evidence strength.
+- Remove Smart Recovery settings and toolbox export; retain an immediate no-op type for old sequence deserialization.
+- Add an independent 1.4 assessment suite and optional private real-frame replay. Historical regression contracts remain explicitly isolated from the new engine.
+- Retain .NET 10 / N.I.N.A. 3.3.0.1057 requirements, plugin identity, provenance and collision-safe file handling. This candidate still needs a live N.I.N.A. acquisition run.
+
 ## [1.3.1.1] - 2026-09-12
 
 ### Production packaging correction

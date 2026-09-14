@@ -1,102 +1,55 @@
-# Publishing QualitySessionMeter to the N.I.N.A. plugin catalog
+# N.I.N.A. catalog publishing
 
-This is the release procedure for the official production package. The upstream catalog is `isbeorn/nina.plugin.manifests`; its current README/schema are authoritative if requirements change.
+## Current submission
 
-## First catalog release
+- Plugin: QualitySessionMeter 1.4.0.2
+- Minimum N.I.N.A.: 3.3.0.1057 (.NET 10)
+- Permanent GUID: bf861692-b3de-4fdc-8a74-d2b97434f49d
+- Manifest: manifests/Q/QualitySessionMeter/3.3.0.1057/1.4.0.2/manifest.json
+- Upstream request: https://github.com/isbeorn/nina.plugin.manifests/pull/689
+- Release: https://github.com/astropuzzo/QualitySessionMeter/releases/tag/v1.4.0.2
 
-```text
-QualitySessionMeter:       1.3.1.1
-N.I.N.A. minimum version: 3.3.0.1057
-Manifest path:            manifests/Q/QualitySessionMeter/3.3.0.1057/1.3.1.1/manifest.json
-Plugin GUID:              bf861692-b3de-4fdc-8a74-d2b97434f49d
-```
+The pending first submission replaces 1.3.1.1 with 1.4.0.2. Approval and feed
+publication by N.I.N.A. maintainers are still required. Older release archives remain
+available; replacing a pending manifest does not delete or rebuild them.
 
-The GUID is permanent and must never be changed for later releases.
+## Promoting the existing 1.4.0.2 package
 
-## Validation status
+This release promotes the existing `v1.4.0.2` tag rather than rebuilding its DLL.
+The immutable production assembly comes from commit
+`2cd4345ff05afe11265275114e694ff25c7d62dd`, whose build, dispatcher and visual CI passed.
+The catalog ZIP updates only documentation and package naming. The original candidate
+asset remains unchanged. `tools/CreateManifest.ps1` from the official manifest repository
+generates the manifest/archive from that preserved DLL. The checksum is verified
+against the downloaded final archive before the pending upstream PR is updated.
+Do not push a second numeric 1.4.0.2 tag: that would trigger a different binary build.
 
-The 1.3.0.x pre-store line was used for iterative field testing. Before the 1.3.1.1 catalog freeze the maintainer confirmed the current plugin loads and operates correctly in the real N.I.N.A. host after the final UI cleanup. Automated release gates additionally cover production/field-test source isolation, V1/V2/V3 deterministic regression, WPF independent-STA dispatcher safety, Web Dashboard security contracts and online WPF/browser visual regression.
+Validation scope and remaining field coverage are in [1.4-VALIDATION.md](1.4-VALIDATION.md).
+Do not claim an unrecorded live rejection, file rename or complete acquisition night.
 
-Synthetic Lab is a development/field-test facility and is excluded from the official production package.
+## Future releases
 
-## Store artwork
+Keep the GUID. Increase the four-part version and validate the new release.
+The `.github/workflows/nina-release.yml` workflow uses numeric tags without `v` to
+build/preserve production files, run release gates, generate an official manifest,
+validate it with upstream `gather.js`, and publish the exact archive/manifest pair.
+Never rebuild or replace checksummed release assets after manifest generation.
 
-The official manifest uses current release-source assets under:
+The workflow can also push a manifest branch to the maintainer's
+`nina.plugin.manifests` fork and open an upstream PR. It requires the repository
+Actions secret named `PAT`, a GitHub Personal Access Token with permission for those
+operations. That secret is currently absent; manual submission through the maintainer
+account remains available. Do not put token values in source, logs or documentation.
 
-```text
-docs/store/featured.png
-docs/store/nina-panel.png
-docs/store/web-dashboard.png
-```
+A GitHub release alone does not create a Plugin Manager update. The higher compatible
+version must appear in the published N.I.N.A. manifest feed. QSM uses that mechanism,
+with no parallel self-updater.
 
-`nina-panel.png` comes from the actual current QSM WPF monitoring DataTemplate and `web-dashboard.png` from the actual embedded dashboard rendered in Chromium. `featured.png` is based on the same QSM meter geometry used by the plugin icon.
+## Maintainer responsibility
 
-The assembly metadata keys are:
+Material AI assistance was used during development. astropuzzo is the accountable
+human maintainer and retains responsibility for understanding, testing, security,
+privacy, licensing, provenance, debugging and maintenance. Include this disclosure
+in the upstream submission.
 
-- `FeaturedImageURL`
-- `ScreenshotURL`
-- `AltScreenshotURL`
-
-## AI-assisted development disclosure
-
-Material AI assistance was used during QSM development. N.I.N.A. currently permits AI-assisted development but requires disclosure and an accountable human maintainer.
-
-The upstream manifest PR must state that `astropuzzo` is the accountable human maintainer and accepts responsibility for understanding, testing, security, privacy, licensing, provenance, debugging and maintenance of the submitted plugin.
-
-## Official release workflow
-
-`.github/workflows/nina-release.yml` runs only for a four-part tag **without** a leading `v`.
-
-For `1.3.1.1` it:
-
-1. verifies tag/project version equality;
-2. verifies the official source set excludes Synthetic Lab, visual/test harnesses and the removed duplicate QSM Control Center;
-3. verifies required store metadata/artwork and Web Dashboard/WPF safety contracts;
-4. runs the independent-STA WPF dispatcher check;
-5. builds the immutable production DLL;
-6. runs full V1/V2/V3 deterministic regression;
-7. packages the production files;
-8. downloads the current upstream `CreateManifest.ps1`;
-9. creates the archive + manifest from the final DLL;
-10. places the manifest into a checkout of `isbeorn/nina.plugin.manifests` and validates it with `npm install` + `node gather.js`;
-11. publishes the exact ZIP + manifest to the GitHub release;
-12. optionally creates the manifest branch/PR automatically when the maintainer fork and `PAT` secret are available.
-
-The production DLL is copied into `package/` immediately after its production build, before the synthetic checker rebuilds the shared `bin/` output with development features. `VerifyProductionAssembly.ps1` inspects its compiled types, and the preserved DLL checksum is checked again after regression. Packaging uses only this preserved copy. The DLL is never rebuilt after the manifest/checksum pair is generated.
-
-The published 1.3.1.0 archive contained the development DLL due to the previous packaging order and was not submitted to the catalog. Version 1.3.1.1 supersedes it without replacing the old checksummed assets.
-
-## One-time upstream setup
-
-The only account-level setup not stored in this repository is:
-
-1. fork `isbeorn/nina.plugin.manifests` into the `astropuzzo` account, keeping the repository name `nina.plugin.manifests`;
-2. if automatic submission is desired, add a repository secret `PAT` to `astropuzzo/QualitySessionMeter` with permission to push to that fork and create the upstream PR.
-
-If the fork/PAT are absent, the official release still produces a fully validated manifest. It can then be committed manually to the fork and submitted upstream.
-
-## Create the official release
-
-Only after the release-preparation PR has been merged into `main`, create and push:
-
-```text
-1.3.1.1
-```
-
-Do not use `v1.3.1.1`: the `v...` prefix is reserved for pre-store field-test releases.
-
-## Upstream pull request
-
-The generated manifest belongs at:
-
-```text
-manifests/Q/QualitySessionMeter/3.3.0.1057/1.3.1.1/manifest.json
-```
-
-The PR should state that the manifest was generated from the immutable production DLL, validated with the official manifest pipeline, and include the required AI-assistance disclosure.
-
-If upstream review requires a plugin binary/code change, do not modify the already-checksummed 1.3.1.1 asset. Create a higher plugin version and regenerate the manifest/checksum.
-
-## After merge
-
-After `isbeorn/nina.plugin.manifests` merges the PR, N.I.N.A.'s catalog pipeline makes QSM discoverable for compatible N.I.N.A. installations. Future updates follow the same higher-version manifest process. QSM must not implement a parallel self-updater; the N.I.N.A. Plugin Manager is the normal public update channel.
+Official requirements: https://github.com/isbeorn/nina.plugin.manifests

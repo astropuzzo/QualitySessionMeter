@@ -68,12 +68,12 @@
         <nina:SequenceBlockView>
             <nina:SequenceBlockView.SequenceItemContent>
                 <Grid MinWidth="520" ToolTipService.ShowDuration="30000"
-                      ToolTip="QSM Smart Recovery Gate. Optional between-exposure gate: after persistent controlled-frame rejection/error evidence it can wait for the configured cooldown and healthy guide checks before allowing the sequence to proceed. It never aborts an exposure in progress.">
+                      ToolTip="Retired compatibility item. Does not wait or control acquisition.">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <TextBlock FontWeight="SemiBold" Text="{Binding LastAction}"/>
                     <TextBlock Grid.Row="1" Margin="0,5,0,0" Opacity="0.72" TextWrapping="Wrap" Text="{Binding LastDetail}"/>
                     <TextBlock Grid.Row="2" Margin="0,5,0,0" Opacity="0.58" FontSize="11" TextWrapping="Wrap"
-                               Text="Controlled by QSM Control Center → Smart Recovery. One isolated bad frame is not intended to trigger recovery waiting."/>
+                               Text="Retired in QSM 1.4. This saved item completes immediately and can be removed from the sequence."/>
                 </Grid>
             </nina:SequenceBlockView.SequenceItemContent>
         </nina:SequenceBlockView>
@@ -83,7 +83,7 @@
         <mini:MiniSequenceItem>
             <mini:MiniSequenceItem.SequenceItemContent>
                 <TextBlock FontWeight="SemiBold" Text="{Binding LastAction}"
-                           ToolTip="QSM Smart Recovery Gate status. Hover/open the full sequence item for recovery detail."/>
+                           ToolTip="Retired compatibility item: no waiting, continue capturing."/>
             </mini:MiniSequenceItem.SequenceItemContent>
         </mini:MiniSequenceItem>
     </DataTemplate>

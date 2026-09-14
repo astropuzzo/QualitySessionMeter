@@ -5,6 +5,15 @@ using System.Globalization;
 namespace NINA.Plugin.QualitySessionMeter.Models;
 
 public sealed class FrameQualityResult {
+    public List<GuideSample> GuideEvidence { get; set; } = new();
+    public string AssessmentVersion { get; set; } = "1.3";
+    public ImageEvidence ImageEvidence { get; set; } = new();
+    public string DecisionSummary { get; set; } = "";
+    public string ThresholdsUsed { get; set; } = "";
+    public List<string> ReviewReasons { get; set; } = new();
+    public bool GuideFalsePositive { get; set; }
+    public string SecondPassText => GuideFalsePositive ? "GUIDE FALSE POSITIVE" : ImageEvidence.Available ? ImageEvidence.Summary : "NOT VERIFIED";
+    public string FrameIdentity => $"Frame #{FrameIndex} · {FileName}";
     public int FrameIndex { get; set; }
     public DateTime TimestampUtc { get; set; }
     public string OriginalPath { get; set; }
@@ -101,6 +110,8 @@ public sealed class FrameQualityResult {
 
     public string QualityLabel {
         get {
+            if (AssessmentVersion == "1.4" && Status == FrameStatus.Rejected) return ImageEvidence.Compromised ? "STAR DAMAGE" : "LIMIT EXCEEDED";
+            if (AssessmentVersion == "1.4" && Status == FrameStatus.Warning) return "KEPT FOR REVIEW";
             if (Status == FrameStatus.Learning) return "LEARNING";
             if (Status == FrameStatus.Error) return "UNASSESSED";
             return OverallQuality switch {
@@ -193,7 +204,7 @@ public sealed class FrameQualityResult {
 
     public string ConfidenceText => double.IsNaN(ConfidenceScore)
         ? "N/A"
-        : ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + "%";
+        : ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + (AssessmentVersion == "1.4" ? " / 100" : "%");
 
     public string GuideRmsText => FormatArcsec(GuideRmsArcsec);
     public string ExcursionText => double.IsNaN(MaxGuideExcursionArcsec)

@@ -79,6 +79,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
 
         var result = new Dictionary<string, object> {
             ["contractVersion"] = ContractVersion,
+            ["assessmentVersion"] = "1.4",
             ["available"] = true,
             ["readOnly"] = true,
             ["generatedUtc"] = DateTimeOffset.UtcNow.ToString("O"),
@@ -120,11 +121,11 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
                 ["maxBackgroundDecreasePercent"] = settings.MaxBackgroundDecreasePercent,
                 ["predictiveWarningsEnabled"] = settings.PredictiveWarningsEnabled,
                 ["environmentalCorrelationEnabled"] = settings.EnvironmentalCorrelationEnabled,
-                ["smartRecoveryEnabled"] = settings.SmartPauseEnabled
+                ["imageEvidenceEnabled"] = settings.ImageEvidenceEnabled
             },
             ["series"] = new Dictionary<string, object> {
                 ["quality"] = Series("Quality", "#8AB4F8", "score", "0–100; higher is better"),
-                ["confidence"] = Series("Confidence", "#C58AF9", "%", "0–100; higher means a more reliable assessment"),
+                ["confidence"] = Series("Evidence strength", "#C58AF9", "score", "0–100 diagnostic index; not a calibrated probability"),
                 ["guideRms"] = Series("Guide RMS", "#81C995", "arcsec", "absolute RMS; lower is better"),
                 ["starDelta"] = Series("Stars Δ", "#FDD663", "% vs rolling baseline", "negative means fewer stars than the rolling clean-frame reference"),
                 ["backgroundDelta"] = Series("Background Δ", "#F28B82", "% vs rolling baseline", "positive = brighter than baseline; negative = darker")
@@ -168,6 +169,29 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
         : Math.Sqrt(values.Select(x => x * x).Average());
 
     private static IDictionary<string, object> MobileFrame(FrameQualityResult frame) => new Dictionary<string, object> {
+        ["assessmentVersion"] = frame.AssessmentVersion,
+        ["decisionSummary"] = frame.DecisionSummary,
+        ["reviewReasons"] = frame.ReviewReasons,
+        ["guideFalsePositive"] = frame.GuideFalsePositive,
+        ["secondPassText"] = frame.SecondPassText,
+        ["starProofPng"] = frame.ImageEvidence.PreviewPngBase64,
+        ["starProofCaption"] = frame.ImageEvidence.PreviewCaption,
+        ["starEccentricity"] = JsonNumber(frame.ImageEvidence.Eccentricity),
+        ["starMedianFlux"] = JsonNumber(frame.ImageEvidence.MedianFlux),
+        ["starDoublePeak"] = JsonNumber(frame.ImageEvidence.DoublePeakStrength),
+        ["imageEvidenceAvailable"] = frame.ImageEvidence.Available,
+        ["imageEvidenceAttempted"] = frame.ImageEvidence.Attempted,
+        ["imageEvidenceCompromised"] = frame.ImageEvidence.Compromised,
+        ["imageEvidenceHasRescueMargin"] = frame.ImageEvidence.HasRescueMargin,
+        ["starEccentricityLimit"] = frame.ImageEvidence.Limits.MaxEccentricity,
+        ["starRescueEccentricityLimit"] = frame.ImageEvidence.Limits.RescueMaxEccentricity,
+        ["starTailLimitPercent"] = frame.ImageEvidence.Limits.MaxTailPercent,
+        ["starDoublePeakLimitPercent"] = frame.ImageEvidence.Limits.MaxDoublePeakPercent,
+        ["imageAnalysisMilliseconds"] = frame.ImageEvidence.ElapsedMilliseconds,
+        ["imageEvidenceDetail"] = frame.ImageEvidence.Detail,
+        ["imageStarsMeasured"] = frame.ImageEvidence.Stars,
+        ["starAxisRatio"] = JsonNumber(frame.ImageEvidence.AxisRatio),
+        ["starTailStrength"] = JsonNumber(frame.ImageEvidence.TailStrength),
         ["frameIndex"] = frame.FrameIndex,
         ["timestampUtc"] = frame.TimestampUtc == default ? null : frame.TimestampUtc.ToUniversalTime().ToString("O"),
         ["status"] = frame.StatusText,

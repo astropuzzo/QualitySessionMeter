@@ -482,7 +482,7 @@ public sealed class QualitySessionWebServer : IDisposable {
             .Append("Referrer-Policy: no-referrer\r\n")
             .Append("Cross-Origin-Resource-Policy: same-origin\r\n")
             .Append("Permissions-Policy: camera=(), microphone=(), geolocation=()\r\n")
-            .Append("Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'\r\n");
+            .Append("Content-Security-Policy: default-src 'self'; connect-src 'self'; img-src 'self' blob: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'\r\n");
         if (extraHeaders != null) {
             foreach (var pair in extraHeaders) {
                 if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null || pair.Value.Contains('\r') || pair.Value.Contains('\n')) continue;

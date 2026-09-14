@@ -20,6 +20,8 @@ public sealed class FrameSourceInfo {
     public bool FileActionEligible { get; init; }
     public string ControlToken { get; init; } = "";
     public bool ProvenanceFrozen { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ImageSample ImageSample { get; set; }
 
     public string SourceText => Kind switch {
         FrameSourceKind.QsmControlledBlock => "QSM SEQUENCE FRAME",

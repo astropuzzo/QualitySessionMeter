@@ -102,22 +102,45 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueBoolean(nameof(EnvironmentalCorrelationEnabled), value); Raise(); }
     }
 
-    public bool SmartPauseEnabled {
-        get => accessor.GetValueBoolean(nameof(SmartPauseEnabled), false);
-        set { accessor.SetValueBoolean(nameof(SmartPauseEnabled), value); Raise(); }
+#if QSM_DEVELOPMENT
+    internal bool LegacyAssessmentForRegression { get; set; }
+#endif
+    public bool UseExposureAssessment { get {
+#if QSM_DEVELOPMENT
+        return !LegacyAssessmentForRegression;
+#else
+        return true;
+#endif
+    } }
+
+    public bool ImageEvidenceEnabled {
+        get => accessor.GetValueBoolean(nameof(ImageEvidenceEnabled), true);
+        set { accessor.SetValueBoolean(nameof(ImageEvidenceEnabled), value); Raise(); }
     }
-    public int SmartPauseRejectStreak {
-        get => Clamp(accessor.GetValueInt32(nameof(SmartPauseRejectStreak), 3), 2, 10);
-        set { accessor.SetValueInt32(nameof(SmartPauseRejectStreak), Clamp(value, 2, 10)); Raise(); }
+    public int ShapeTargetStars {
+        get => Clamp(accessor.GetValueInt32(nameof(ShapeTargetStars), 100), 20, 200);
+        set { accessor.SetValueInt32(nameof(ShapeTargetStars), Clamp(value, 20, 200)); Raise(); }
     }
-    public int SmartPauseSeconds {
-        get => Clamp(accessor.GetValueInt32(nameof(SmartPauseSeconds), 120), 10, 1800);
-        set { accessor.SetValueInt32(nameof(SmartPauseSeconds), Clamp(value, 10, 1800)); Raise(); }
+    public double ShapeMaxEccentricity {
+        get => SafeShapeValue(nameof(ShapeMaxEccentricity), .60, .30, .90);
+        set { accessor.SetValueDouble(nameof(ShapeMaxEccentricity), double.IsFinite(value) ? Clamp(value, .30, .90) : .60); Raise(); }
     }
-    public int SmartResumeHealthyGuideChecks {
-        get => Clamp(accessor.GetValueInt32(nameof(SmartResumeHealthyGuideChecks), 3), 1, 10);
-        set { accessor.SetValueInt32(nameof(SmartResumeHealthyGuideChecks), Clamp(value, 1, 10)); Raise(); }
+    public double ShapeMaxTailPercent {
+        get => SafeShapeValue(nameof(ShapeMaxTailPercent), 2, .5, 10);
+        set { accessor.SetValueDouble(nameof(ShapeMaxTailPercent), double.IsFinite(value) ? Clamp(value, .5, 10) : 2); Raise(); }
     }
+    public double ShapeMaxDoublePeakPercent {
+        get => SafeShapeValue(nameof(ShapeMaxDoublePeakPercent), 8, 2, 30);
+        set { accessor.SetValueDouble(nameof(ShapeMaxDoublePeakPercent), double.IsFinite(value) ? Clamp(value, 2, 30) : 8); Raise(); }
+    }
+    private double SafeShapeValue(string name, double fallback, double min, double max) {
+        double value = accessor.GetValueDouble(name, fallback);
+        return double.IsFinite(value) ? Clamp(value, min, max) : fallback;
+    }
+    public StarShapeLimits GetStarShapeLimits() => new() {
+        TargetStars = ShapeTargetStars, MaxEccentricity = ShapeMaxEccentricity,
+        MaxTailPercent = ShapeMaxTailPercent, MaxDoublePeakPercent = ShapeMaxDoublePeakPercent
+    };
 
     public bool EnableGuideRms {
         get => accessor.GetValueBoolean(nameof(EnableGuideRms), true);

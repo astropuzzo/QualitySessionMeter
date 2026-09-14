@@ -54,7 +54,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
             new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
 
     private const string TimelineHelp =
-        "QSM timeline. Blue = Quality (0–100), purple = Confidence (0–100), green = Guide RMS in arcseconds. " +
+        "QSM timeline. Blue = Quality (0–100), purple = Evidence (0–100), green = Guide RMS in arcseconds. " +
         "Yellow Stars Δ and salmon Background Δ are percentages RELATIVE TO the rolling clean-frame baseline; the dashed 0% line is that baseline. " +
         "Dashed colored lines show active reject limits. Red vertical lines mark REJECTED frames, amber lines mark WARNING frames, and ! marks analysis errors. " +
         "G = guiding/tracking, S = stars/transparency/cloud, B = background/haze/sky brightness. Hover the graph for exact frame values, baseline values and limits.";
@@ -107,19 +107,21 @@ public sealed class QualityTimelineControl : FrameworkElement {
         base.OnMouseMove(e);
         var p = e.GetPosition(this);
 
-        string text = markerHits.FirstOrDefault(x => x.Area.Contains(p))?.Text;
-        if (text == null && renderedFrames.Length > 0 && p.X >= renderedLeft && p.X <= renderedLeft + renderedPlotWidth && p.Y >= renderedMarkerLane) {
+        FrameQualityResult hovered = null;
+        string text = null;
+        if (renderedFrames.Length > 0 && p.X >= renderedLeft && p.X <= renderedLeft + renderedPlotWidth && p.Y >= renderedMarkerLane) {
             int i = renderedFrames.Length == 1
                 ? 0
                 : (int)Math.Round((p.X - renderedLeft) / Math.Max(1, renderedPlotWidth) * (renderedFrames.Length - 1));
             i = Math.Clamp(i, 0, renderedFrames.Length - 1);
-            text = BuildFrameTooltip(renderedFrames[i], p.Y);
+            hovered = renderedFrames[i];
+            text = BuildFrameTooltip(hovered, p.Y);
         }
         text ??= TimelineHelp;
 
         if (string.Equals(text, activeToolTip, StringComparison.Ordinal)) return;
         activeToolTip = text;
-        ToolTipService.SetToolTip(this, text);
+        ToolTipService.SetToolTip(this, hovered == null ? text : StarEvidencePresentation.CreateTooltip(hovered, text));
     }
 
     protected override void OnMouseLeave(MouseEventArgs e) {
@@ -183,7 +185,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
         double imgBand = markerLane + 2 * (bandH + gap);
 
         DrawLegendItem(dc, 3, topBand + 3, labelWidth - 8, qualityBrush, secondaryText, "Quality", "0–100");
-        DrawLegendItem(dc, 3, topBand + 25, labelWidth - 8, confidenceBrush, secondaryText, "Confidence", "0–100");
+        DrawLegendItem(dc, 3, topBand + 25, labelWidth - 8, confidenceBrush, secondaryText, "Evidence", "0–100");
         DrawLegendItem(dc, 3, rmsBand + 5, labelWidth - 8, guideBrush, secondaryText, "Guide RMS", "arcsec · lower is better");
         DrawLegendItem(dc, 3, imgBand + 3, labelWidth - 8, starsBrush, secondaryText, "Stars Δ", EnableStarCount ? $"% vs baseline · reject < -{MaxStarLossPercent:0.#}%" : "% vs baseline · disabled");
         DrawLegendItem(dc, 3, imgBand + 27, labelWidth - 8, backgroundBrush, secondaryText, "Background Δ", EnableBackground ? $"limits -{MaxBackgroundDecreasePercent:0.#}/+{MaxBackgroundIncreasePercent:0.#}%" : "% vs baseline · disabled");
@@ -254,13 +256,13 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
     private string BuildFrameTooltip(FrameQualityResult frame, double y) {
         string band = "FRAME";
-        if (y >= renderedMarkerLane && y < renderedMarkerLane + renderedBandHeight) band = "QUALITY / CONFIDENCE";
+        if (y >= renderedMarkerLane && y < renderedMarkerLane + renderedBandHeight) band = "QUALITY / EVIDENCE";
         else if (y < renderedMarkerLane + 2 * renderedBandHeight + renderedGap) band = "GUIDE RMS";
         else band = "IMAGE DELTA vs ROLLING BASELINE";
 
         var sb = new StringBuilder();
         sb.Append("Frame #").Append(frame.FrameIndex).Append(" · ").Append(frame.StatusText).Append(" · ").AppendLine(band);
-        sb.Append("Quality ").Append(FormatValue(frame.OverallQuality, "0")).Append(" / 100 · Confidence ").Append(double.IsNaN(frame.ConfidenceScore) ? "N/A" : frame.ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + "%").AppendLine();
+        sb.Append("Quality ").Append(FormatValue(frame.OverallQuality, "0")).Append(" / 100 · Evidence ").Append(double.IsNaN(frame.ConfidenceScore) ? "N/A" : frame.ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + " / 100").AppendLine();
         sb.Append("Guide RMS ").Append(FormatArcsec(frame.GuideRmsArcsec));
         if (EnableGuideRms) sb.Append(" · limit ").Append(MaxGuideRms.ToString("0.00", CultureInfo.InvariantCulture)).Append('"');
         sb.AppendLine();

@@ -42,7 +42,8 @@ The payload is the same plain-object contract used by the in-process `QualitySes
 - QSM mode/settings relevant to display;
 - current frame;
 - latest 160 frames for session charting;
-- Quality / Confidence / exposure-integrated Guide RMS;
+- Quality / evidence strength (0–100 diagnostic index) / exposure-integrated Guide RMS;
+- stellar result, proof PNG, sampled stars, shape metrics and the applied per-frame limits;
 - stars/background rolling baselines and deltas;
 - acquisition context (target, filter, exposure, gain, binning, camera);
 - cause/reason, prediction and environmental hints;
@@ -50,6 +51,14 @@ The payload is the same plain-object contract used by the in-process `QualitySes
 - `guidingLive`: the latest 20 seconds of real N.I.N.A. `GuideEvent` samples, converted to arcseconds using the guider pixel scale, with RA/DEC/total RMS, max excursion and up to 120 timestamped RA/DEC points.
 
 `guidingLive` is not reconstructed from completed exposures: it comes from the same live guider stream QSM uses internally for exposure analysis.
+
+Since 1.4.0.2, frame payloads include `imageEvidenceAttempted`, `imageEvidenceCompromised`,
+`imageEvidenceHasRescueMargin`, `starEccentricityLimit`, `starRescueEccentricityLimit`,
+`starTailLimitPercent`, `starDoublePeakLimitPercent`, and `imageAnalysisMilliseconds`.
+These additive V1 fields describe the recorded analysis, not the current settings.
+Older snapshots may omit them. Missing limits must remain unavailable in clients.
+`guideFalsePositive` only clears guide reasons: the final status can still be rejected
+by an independent signal rule. `LEARNING`/`ERROR` quality is JSON null, not zero.
 
 ## Latest LIGHT preview
 

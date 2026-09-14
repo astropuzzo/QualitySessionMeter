@@ -71,11 +71,20 @@ function makeGuide() {
   };
 }
 
-const frames = makeFrames();
+let frames = makeFrames();
+const proof = JSON.parse(await readFile(path.join(outDir, 'star-evidence.json'), 'utf8'));
+function shapeFields(s) { return { imageEvidenceAvailable:s.Available, imageEvidenceDetail:s.Detail, starProofPng:s.PreviewPngBase64, starProofCaption:s.PreviewCaption, secondPassText:s.Summary }; }
+Object.assign(frames[12], shapeFields(proof), { decisionSummary:'Rejected: guide failure confirmed by measured star shapes.' });
+if (process.argv[3]) {
+  const replay = JSON.parse(await readFile(path.resolve(process.argv[3]), 'utf8'));
+  frames = replay.map(f=>({frameIndex:f.FrameIndex,status:f.StatusText,quality:f.OverallQuality,confidence:f.ConfidenceScore,guideRmsArcsec:f.GuideRmsArcsec,starDeltaPercent:f.StarDeviationPercent,backgroundDeltaPercent:f.BackgroundDeviationPercent,target:f.Target,filter:f.Filter,fileName:f.FileName,finalFileName:f.FileName,probableCause:f.ProbableCause,reason:f.ReasonText,decisionSummary:f.DecisionSummary,...shapeFields(f.ImageEvidence)}));
+}
 const current = frames.at(-1);
+const usable=frames.filter(f=>['ACCEPTED','WARNING'].includes(f.status));
+const rejected=frames.filter(f=>f.status.includes('REJECT')).length;
 const snapshot = {
   mode: { enabled: true, monitorOnly: false },
-  summary: { captured: 36, usable: 26, rejected: 5, acceptanceRate: 83.9, sessionQuality: 94, sessionConfidence: 91 },
+  summary: { captured: frames.length, usable: usable.length, rejected, acceptanceRate: usable.length/(usable.length+rejected)*100, sessionQuality: usable.reduce((s,f)=>s+f.quality,0)/usable.length, sessionConfidence: usable.reduce((s,f)=>s+f.confidence,0)/usable.length },
   currentFrame: current,
   frames,
   guidingLive: makeGuide(),
@@ -101,6 +110,7 @@ const browser = await chromium.launch({ headless: true });
 async function capture(name, viewport) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
   const page = await context.newPage();
+  const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   await page.route('http://qsm.local/**', async route => {
     const u = new URL(route.request().url());
     if (u.pathname === '/' || u.pathname === '/index.html') {
@@ -118,10 +128,23 @@ async function capture(name, viewport) {
     await route.fulfill({ status: 404, body: 'not found' });
   });
   await page.goto('http://qsm.local/', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => document.getElementById('captured')?.textContent === '36', null, { timeout: 10000 });
+  await page.waitForFunction(count => document.getElementById('captured')?.textContent === String(count), frames.length, { timeout: 10000 });
   await page.waitForTimeout(700);
   await page.screenshot({ path: path.join(outDir, `${name}-top.png`), fullPage: false });
   await page.screenshot({ path: path.join(outDir, `${name}-full.png`), fullPage: true });
+  const detail = page.locator('#frames details').first();
+  await detail.locator('summary').click();
+  const starImage = detail.locator('img');
+  await starImage.waitFor({state:'visible'});
+  if (!(await starImage.evaluate(img=>img.complete && img.naturalWidth===135))) throw new Error('Stellar proof failed to decode');
+  await detail.screenshot({path:path.join(outDir,`${name}-star-proof.png`)});
+  await page.locator('#timelineCanvas').scrollIntoViewIfNeeded();
+  const geom=await page.evaluate(()=>lastTimelineGeom);
+  const index=frames.findIndex((f,i)=>i>0&&f.imageEvidenceAvailable);
+  await page.locator('#timelineCanvas').hover({position:{x:geom.left+index/(frames.length-1)*geom.plotW,y:80}});
+  await page.locator('#timelineTip img').waitFor({state:'visible'});
+  if (errors.length) throw new Error(errors.join('\n'));
+  console.log(`PASS ${name}: page, persistent proof and timeline hover`);
   await context.close();
 }
 
