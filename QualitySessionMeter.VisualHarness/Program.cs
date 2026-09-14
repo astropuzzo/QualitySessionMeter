@@ -57,7 +57,8 @@ internal static class Program {
         var evidenceFrame = frames.LastOrDefault(f => f.ImageEvidence.ExtendedAvailable) ?? frames.LastOrDefault(f => f.ImageEvidence.Available);
         if (evidenceFrame != null) {
             RenderElement((FrameworkElement)StarEvidencePresentation.CreateTooltip(evidenceFrame, evidenceFrame.FrameIdentity), 560, evidenceFrame.ImageEvidence.ExtendedAvailable ? 730 : 370, $"wpf-star-evidence-{suffix}.png");
-            File.WriteAllText(Path.Combine(outputDirectory,"star-evidence.json"), JsonSerializer.Serialize(evidenceFrame.ImageEvidence));
+            File.WriteAllText(Path.Combine(outputDirectory,"star-evidence.json"), JsonSerializer.Serialize(evidenceFrame.ImageEvidence,
+                new JsonSerializerOptions { Converters = { new FiniteDoubleJsonConverter() } }));
         }
 
         var optionsVm = new OptionsPreviewVm {
