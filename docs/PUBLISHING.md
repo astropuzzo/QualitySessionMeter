@@ -1,55 +1,31 @@
 # N.I.N.A. catalog publishing
 
-## Current submission
+## Release 1.4.1.1 — 2026-09-19
 
-- Plugin: QualitySessionMeter 1.4.0.2
-- Minimum N.I.N.A.: 3.3.0.1057 (.NET 10)
-- Permanent GUID: bf861692-b3de-4fdc-8a74-d2b97434f49d
-- Manifest: manifests/Q/QualitySessionMeter/3.3.0.1057/1.4.0.2/manifest.json
-- Upstream request: https://github.com/isbeorn/nina.plugin.manifests/pull/689
-- Release: https://github.com/astropuzzo/QualitySessionMeter/releases/tag/v1.4.0.2
+- Minimum N.I.N.A.: 3.3.0.1057 (.NET 10).
+- Permanent GUID: bf861692-b3de-4fdc-8a74-d2b97434f49d.
+- Manifest: manifests/Q/QualitySessionMeter/3.3.0.1057/1.4.1.1/manifest.json.
+- Release: https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.1.1.
+- First catalog entry, 1.4.0.2: accepted September 16 in https://github.com/isbeorn/nina.plugin.manifests/pull/689.
 
-The pending first submission replaces 1.3.1.1 with 1.4.0.2. Approval and feed
-publication by N.I.N.A. maintainers are still required. Older release archives remain
-available; replacing a pending manifest does not delete or rebuild them.
+The 1.4.1.1 update keeps the existing plugin identity and compatibility floor. It requires its own upstream manifest update; acceptance of 1.4.0.2 does not automatically publish later versions. Published 1.4.0.2 archives and manifests must remain unchanged.
 
-## Promoting the existing 1.4.0.2 package
+## Release procedure
 
-This release promotes the existing `v1.4.0.2` tag rather than rebuilding its DLL.
-The immutable production assembly comes from commit
-`2cd4345ff05afe11265275114e694ff25c7d62dd`, whose build, dispatcher and visual CI passed.
-The catalog ZIP updates only documentation and package naming. The original candidate
-asset remains unchanged. `tools/CreateManifest.ps1` from the official manifest repository
-generates the manifest/archive from that preserved DLL. The checksum is verified
-against the downloaded final archive before the pending upstream PR is updated.
-Do not push a second numeric 1.4.0.2 tag: that would trigger a different binary build.
+1. Increase the four-part version, finish the dated CHANGELOG.md entry and pass branch CI. Preserve documented field-validation limits.
+2. Merge the reviewed source and push its matching numeric tag without a leading v. Only the tag-driven nina-release.yml workflow publishes official packages; main-branch builds produce CI artifacts only.
+3. The workflow requires a dated, nonempty changelog entry, publishes that entry as release notes, builds and preserves the production DLL, runs release gates, and generates the archive and manifest using the upstream script. Development harnesses are excluded.
+4. Validate the manifest with upstream gather.js. Download the published archive and verify its checksum, plugin GUID, version, minimum application version and production assembly before submitting the catalog update. Never rebuild or replace checksummed assets.
+5. Submit the exact manifest to isbeorn/nina.plugin.manifests. Keep the prior version. A GitHub release alone does not make an update available in the Plugin Manager: upstream acceptance and feed publication are required.
 
-Validation scope and remaining field coverage are in [1.4-VALIDATION.md](1.4-VALIDATION.md).
-Do not claim an unrecorded live rejection, file rename or complete acquisition night.
+The optional Actions secret PAT permits the workflow to push a manifest branch to the maintainer fork and open its upstream PR. It was absent when checked on September 19; authenticated manual submission remains available. Never place token values in source, logs or documentation. No separate plugin self-updater is used.
 
-## Future releases
+## Validation and rollback
 
-Keep the GUID. Increase the four-part version and validate the new release.
-The `.github/workflows/nina-release.yml` workflow uses numeric tags without `v` to
-build/preserve production files, run release gates, generate an official manifest,
-validate it with upstream `gather.js`, and publish the exact archive/manifest pair.
-Never rebuild or replace checksummed release assets after manifest generation.
-
-The workflow can also push a manifest branch to the maintainer's
-`nina.plugin.manifests` fork and open an upstream PR. It requires the repository
-Actions secret named `PAT`, a GitHub Personal Access Token with permission for those
-operations. That secret is currently absent; manual submission through the maintainer
-account remains available. Do not put token values in source, logs or documentation.
-
-A GitHub release alone does not create a Plugin Manager update. The higher compatible
-version must appear in the published N.I.N.A. manifest feed. QSM uses that mechanism,
-with no parallel self-updater.
+See [1.4.1.1 field validation](1.4.1.1-FIELD-VALIDATION.md) for recorded checks and remaining live-acquisition coverage. Retain the prior release and N.I.N.A. profile; close N.I.N.A. before restoring a prior DLL. Do not silently replace a catalog archive to roll back a version.
 
 ## Maintainer responsibility
 
-Material AI assistance was used during development. astropuzzo is the accountable
-human maintainer and retains responsibility for understanding, testing, security,
-privacy, licensing, provenance, debugging and maintenance. Include this disclosure
-in the upstream submission.
+Material AI assistance was used during development. astropuzzo is the accountable human maintainer and retains responsibility for understanding, testing, security, privacy, licensing, provenance, debugging and maintenance. Include this disclosure and accurate validation scope in the upstream submission.
 
-Official requirements: https://github.com/isbeorn/nina.plugin.manifests
+Official requirements: https://github.com/isbeorn/nina.plugin.manifests.

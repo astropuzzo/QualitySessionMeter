@@ -2,13 +2,29 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
-## [1.4.1.1] - Unreleased field-test candidate
+## [1.4.1.1] - 2026-09-19
 
-- Reject measured stellar signal loss without requiring a preceding star-count flag. Add a configurable combined check for fainter stars, fewer detections and brighter sky.
-- Exclude moderately degraded kept frames from baseline training. Keep matched clean references for up to 120 minutes to avoid learning persistent attenuation as normal.
-- Prevent a count-flag rescue when the sky is brightening; guide rescue remains independent of signal rejection.
-- Recheck the 197 remaining LIGHT files: 49 additional rejects relative to 1.4.1.0. Whole-night chronological replay: 144 usable, 93 rejected, four learning. Independent five-region photometry corroborates signal loss; brighter-sky controls with preserved stellar flux remain usable warnings.
-- Add gradual-cloud and clear-sky recovery regressions; show signal rejection explicitly in native and remote diagnostics. See [field validation](docs/1.4.1.1-FIELD-VALIDATION.md).
+### Added
+
+- Check central stellar shapes on every monitored LIGHT, including frames with normal guiding. Inspect four outer regions and an extended stellar profile on suspect frames to detect elongation and faint secondary images.
+- Compare matched-star signal with earlier clean exposures. Reject signal loss above the configured limit, or a smaller loss accompanied by brighter sky and fewer stars.
+- Show extended stellar profiles, measured regions, signal comparisons and rejection reasons in the N.I.N.A. panel, Web Dashboard, reports and companion API.
+
+### Fixed
+
+- Prevent gradually degraded frames from lowering the clean reference. Keep clean matched-star references for up to 120 minutes, separated by imaging context and pier side.
+- Preserve signal rejection when a guide flag is cleared. Do not clear a star-count rejection solely because matched-star flux passes while the sky is brightening.
+- Retain guide rejections when the image analysis cannot cover the expected displacement or provide enough reliable stars.
+
+### Settings and compatibility
+
+- New **Reject Stellar Signal Loss** option, enabled by default with image analysis. Default limits: 35% direct stellar-signal loss; 20% combined loss with at least 3% brighter background and a qualifying star-count drop. Limits remain configurable.
+- Same plugin identifier and minimum N.I.N.A. version: **3.3.0.1057**, .NET 10. Existing profiles are retained. Rejected-file handling remains reversible; acquisition is never paused for recovery.
+
+### Validation
+
+- Chronological replay of 241 real LIGHTs, independent five-region photometry, prior-night shape regression, automated assessment and dispatcher checks, and desktop/mobile visual checks. See [validation results and limitations](docs/1.4.1.1-FIELD-VALIDATION.md).
+- Official packages exclude development tools. Release notes are taken from this changelog; development builds are available only as CI artifacts.
 
 ## [1.4.1.0] - Superseded field-test candidate
 
