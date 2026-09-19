@@ -163,6 +163,7 @@ public sealed class QualityEngine {
             result.ConfidenceScore = Math.Min(result.ConfidenceScore, result.ImageEvidence.Available ? 85 : 65);
             result.ConfidenceReason = "Evidence strength, not a probability that the photograph is good or bad. " + result.DecisionSummary;
             if (result.RejectReasons.Any(x => x.StartsWith("STAR_SHAPE"))) result.ProbableCause = "MEASURED STAR-SHAPE DAMAGE";
+            else if (result.RejectReasons.Contains("SKY_SIGNAL_LOSS") || result.RejectReasons.Contains("STELLAR_FLUX_LOSS")) result.ProbableCause = "SKY / STELLAR SIGNAL LOSS";
             else if (result.RejectReasons.Any(x => x.Contains("GUIDE"))) result.ProbableCause = "GUIDE LIMIT EXCEEDED";
             else if (result.ReviewReasons.Count > 0) result.ProbableCause = "REVIEW RECOMMENDED";
         }

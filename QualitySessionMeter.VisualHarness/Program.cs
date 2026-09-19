@@ -54,10 +54,11 @@ internal static class Program {
         var events = replayFrames == null ? PreviewData.Events() : new ObservableCollection<SessionEvent>();
         if (replayFrames != null) { settings.MaxGuideRms = 1.6; settings.HardExcursionThreshold = 3; settings.ExcursionMinimumDuration = 5; }
         var current = frames.Last();
-        var evidenceFrame = frames.LastOrDefault(f => f.ImageEvidence.Available);
+        var evidenceFrame = frames.LastOrDefault(f => f.ImageEvidence.ExtendedAvailable) ?? frames.LastOrDefault(f => f.ImageEvidence.Available);
         if (evidenceFrame != null) {
-            RenderElement((FrameworkElement)StarEvidencePresentation.CreateTooltip(evidenceFrame, evidenceFrame.FrameIdentity), 560, 370, $"wpf-star-evidence-{suffix}.png");
-            File.WriteAllText(Path.Combine(outputDirectory,"star-evidence.json"), JsonSerializer.Serialize(evidenceFrame.ImageEvidence));
+            RenderElement((FrameworkElement)StarEvidencePresentation.CreateTooltip(evidenceFrame, evidenceFrame.FrameIdentity), 560, evidenceFrame.ImageEvidence.ExtendedAvailable ? 730 : 370, $"wpf-star-evidence-{suffix}.png");
+            File.WriteAllText(Path.Combine(outputDirectory,"star-evidence.json"), JsonSerializer.Serialize(evidenceFrame.ImageEvidence,
+                new JsonSerializerOptions { Converters = { new FiniteDoubleJsonConverter() } }));
         }
 
         var optionsVm = new OptionsPreviewVm {
@@ -75,7 +76,7 @@ internal static class Program {
 
         var mainVm = new MainPreviewVm(settings, frames, events) {
             CurrentFrame = current,
-            ModeText = replayFrames == null ? "ACTIVE REJECT HANDLING · Advanced Sequencer LIGHTs" : "LOCAL REPLAY · 13 sample images · no file changes",
+            ModeText = replayFrames == null ? "ACTIVE REJECT HANDLING · Advanced Sequencer LIGHTs" : $"LOCAL REPLAY · {frames.Count} LIGHTs",
             SessionFolder = @"C:\Users\astro\AppData\Local\NINA\QualitySessionMeter\Sessions\2026-09-08_22-24-00",
             ReviewMessage = "Select a rejected frame to review it in N.I.N.A.'s Image view."
         };
@@ -431,6 +432,11 @@ internal sealed class PreviewSettings {
     public double ShapeMaxEccentricity { get; set; } = .6;
     public double ShapeMaxTailPercent { get; set; } = 2;
     public double ShapeMaxDoublePeakPercent { get; set; } = 8;
+    public double ShapeMaxRemotePeakPercent { get; set; } = .5;
+    public bool VerifyStarCountWithFlux { get; set; } = true;
+    public bool RejectSignalDegradation { get; set; } = true;
+    public double MaxMeasuredFluxLossPercent { get; set; } = 35;
+    public double MaxCloudSignalLossPercent { get; set; } = 20;
     public bool WebDashboardEnabled { get; set; } = true;
     public int WebDashboardPort { get; set; } = 18974;
     public bool WebDashboardRequirePassword { get; set; }

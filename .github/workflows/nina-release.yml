@@ -36,6 +36,10 @@ jobs:
           $projectVersion = ($project.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
           if ($projectVersion -ne $tag) { throw "Tag $tag does not match project version $projectVersion." }
 
+      - name: Prepare required release changelog
+        shell: pwsh
+        run: ./tools/WriteReleaseNotes.ps1 -Version '${{ github.ref_name }}' -OutputFile release-notes.md
+
       - name: Restore plugin
         run: dotnet restore QualitySessionMeter.csproj
 
@@ -185,7 +189,8 @@ jobs:
           name: QualitySessionMeter ${{ github.ref_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: release-notes.md
+          make_latest: true
           files: |
             QualitySessionMeter.${{ github.ref_name }}.zip
             QualitySessionMeter.${{ github.ref_name }}.manifest.json
@@ -243,7 +248,7 @@ jobs:
         run: |
           gh pr create \
             --title "Add QualitySessionMeter ${{ github.ref_name }}" \
-            --body $'QualitySessionMeter manifest generated from the immutable tagged production DLL and validated with the official gather.js pipeline.\n\nAI assistance disclosure: material AI assistance was used during development. astropuzzo is the accountable human maintainer and has completed real-host validation before this official release. The maintainer accepts responsibility for review, testing, security, privacy, licensing, provenance, debugging and maintenance.' \
+            --body $'QualitySessionMeter manifest generated from the immutable tagged production DLL and validated with the official gather.js pipeline.\n\nAI assistance disclosure: material AI assistance was used during development. astropuzzo is the accountable human maintainer. Validation scope and limitations are documented in the release notes and linked field reports. The maintainer accepts responsibility for review, testing, security, privacy, licensing, provenance, debugging and maintenance.' \
             --head "${{ github.repository_owner }}:QualitySessionMeter/${{ github.ref_name }}" \
             --base main \
             --repo isbeorn/nina.plugin.manifests

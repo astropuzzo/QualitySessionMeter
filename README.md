@@ -1,6 +1,6 @@
 # QualitySessionMeter
 
-**Real-time subframe quality control, session diagnostics and quality-aware acquisition for N.I.N.A.**
+**Subframe quality control and session monitoring for N.I.N.A.**
 
 QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combines exposure-specific guiding analysis with rolling same-context image-signal baselines, presents a diagnostic **Quality score (0–100)** and independently applies explicit hard rejection rules.
 
@@ -8,9 +8,11 @@ QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combin
 
 ## Release status
 
-`1.4.0.2` is the current release, submitted to the N.I.N.A. plugin catalog in [PR #689](https://github.com/isbeorn/nina.plugin.manifests/pull/689). Catalog availability requires upstream approval and publication. [Download](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/v1.4.0.2).
+**1.4.1.1** — [Download and changelog](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.1.1).
 
-New in 1.4: candidate-only raw-star second pass, configurable eccentricity/tail/repeated-peak tolerances, persistent visual proof, clear frame/session score labels, and removal of all Smart Recovery waits. See [validation and limitations](docs/1.4-VALIDATION.md).
+QSM is listed in the N.I.N.A. plugin catalog; its first entry, 1.4.0.2, was accepted on September 16, 2026. New versions appear in the Plugin Manager after the corresponding catalog update is accepted and published.
+
+This update checks stellar shapes on every monitored LIGHT, examines outer regions and extended profiles on suspect frames, and rejects measured signal loss. Degraded frames cannot redefine the clean reference. See [field validation](docs/1.4.1.1-FIELD-VALIDATION.md).
 
 Compatibility floor:
 
@@ -27,8 +29,8 @@ QSM deliberately separates the human-readable score from hard frame rejection:
 
 ```text
 Quality score != reject switch
-Guide rule fails -> optional stellar verification -> final guide verdict
-Signal rule fails -> REJECTED
+Guide or star-count rule fails -> optional stellar verification -> final verdict
+Measured stellar damage, enabled signal-loss or background rule fails -> REJECTED
 Any remaining failed rule -> REJECTED
 ```
 
@@ -40,9 +42,11 @@ The current hard-rule channels are:
 - sustained total guide-error excursion;
 - hard peak total guide-error excursion;
 - relative star-count loss versus the mature same-context clean baseline;
-- background increase/decrease versus the mature same-context clean baseline.
+- background increase/decrease versus the mature same-context clean baseline;
+- measured stellar signal loss against matched prior clean frames;
+- combined signal loss, fewer stars and brighter sky.
 
-QSM 1.4 checks core eccentricity, asymmetric tails and repeated secondary peaks in raw central stars to verify guide rejections. It rescues moderate guide false positives only with sufficient evidence; it retains extreme guide failures and independent signal rejects. Exact bounds are visible in Plugin Options and [SETTINGS.md](docs/SETTINGS.md#stellar-second-pass).
+QSM 1.4.1 measures eccentricity, asymmetric tails and repeated secondary images. Stellar damage can reject a frame without a guiding alarm. Guide and star-count flags are cleared only with sufficient measured evidence; background limits remain independent. Exact bounds are listed in [SETTINGS.md](docs/SETTINGS.md#stellar-second-pass).
 
 Baselines are isolated by:
 

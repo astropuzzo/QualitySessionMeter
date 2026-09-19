@@ -24,6 +24,7 @@
                     <TextBlock Text="{Binding DecisionSummary}" TextWrapping="Wrap" Margin="0,4,0,4"/>
                     <TextBlock Text="{Binding ImageEvidence.Detail}" TextWrapping="Wrap"/>
                     <Image Source="{Binding ImageEvidence.Preview}" Width="405" MaxHeight="162" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                            <Image Source="{Binding ImageEvidence.ExtendedPreview}" Width="220" MaxHeight="220" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                     <TextBlock Text="{Binding ImageEvidence.PreviewCaption}" TextWrapping="Wrap" Margin="0,4,0,0"/>
                 </StackPanel>
             </TextBlock.ToolTip>
@@ -57,8 +58,16 @@
                             <TextBlock Text="{Binding CurrentFrame.DecisionSummary}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,3,0,0" FontStyle="Italic"/>
                             <TextBlock Text="{Binding CurrentFrame.FrameIdentity}" TextWrapping="Wrap" Margin="0,5,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
                             <TextBlock Text="{Binding CurrentFrame.ImageEvidence.Detail}" TextWrapping="Wrap" Margin="0,3,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
-                            <Image Source="{Binding CurrentFrame.ImageEvidence.Preview}" Width="405" MaxHeight="162" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
-                            <TextBlock Text="{Binding CurrentFrame.ImageEvidence.PreviewCaption}" TextWrapping="Wrap" FontSize="11" Opacity="0.75"/>
+                            <WrapPanel Margin="0,6,0,0">
+                                <StackPanel Margin="0,0,14,0">
+                                    <Image Source="{Binding CurrentFrame.ImageEvidence.Preview}" Width="405" MaxHeight="162" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                                    <TextBlock Text="{Binding CurrentFrame.ImageEvidence.PreviewCaption}" TextWrapping="Wrap" MaxWidth="405" FontSize="11" Opacity="0.75"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Image Source="{Binding CurrentFrame.ImageEvidence.ExtendedPreview}" Width="162" MaxHeight="162" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                                    <TextBlock Text="{Binding CurrentFrame.ImageEvidence.ExtendedCaption}" FontSize="11" Opacity="0.75"/>
+                                </StackPanel>
+                            </WrapPanel>
 
                         </StackPanel>
                     </Grid>
@@ -134,13 +143,13 @@
 
                 <Border Background="{DynamicResource SecondaryBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="STELLAR ANALYSIS — recent checks" FontWeight="SemiBold" FontSize="11"/>
-                        <TextBlock Text="Guide false positive = guide flag cleared by measured stars. WARNING is kept. Hover the evidence cell or timeline frame to see the stars." TextWrapping="Wrap" Opacity="0.78" Margin="0,4,0,7"/>
+                        <TextBlock Text="STELLAR ANALYSIS" FontWeight="SemiBold" FontSize="11"/>
+                        <TextBlock Text="Recovered frames are kept. Other failed rules still apply." TextWrapping="Wrap" Opacity="0.78" Margin="0,4,0,7"/>
                         <DataGrid ItemsSource="{Binding SecondPassFrames}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" MaxHeight="180" MinHeight="45">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="45"/>
                                 <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="110"/>
-                                <DataGridTemplateColumn Header="Stellar evidence (hover)" CellTemplate="{StaticResource QsmStarEvidenceCell}" Width="200"/>
+                                <DataGridTemplateColumn Header="Stellar evidence" CellTemplate="{StaticResource QsmStarEvidenceCell}" Width="200"/>
                                 <DataGridTextColumn Header="Why" Binding="{Binding DecisionSummary}" Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>

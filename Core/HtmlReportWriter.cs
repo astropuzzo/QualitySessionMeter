@@ -97,7 +97,10 @@ public static class HtmlReportWriter {
     private static string StarProof(FrameQualityResult frame) {
         var proof = frame.ImageEvidence.PreviewPngBase64;
         if (string.IsNullOrEmpty(proof) || proof.Length > 50000 || !System.Text.RegularExpressions.Regex.IsMatch(proof, @"^[A-Za-z0-9+/=]+$")) return "";
-        return "<details style='white-space:normal;max-width:540px'><summary>" + H(frame.SecondPassText) + " — view stars</summary><img style='width:405px;max-width:100%;image-rendering:pixelated' alt='Measured stellar evidence' src='data:image/png;base64," + proof + "'><p>" + H(frame.ImageEvidence.PreviewCaption) + "</p></details>";
+        var extended = frame.ImageEvidence.ExtendedPreviewPngBase64;
+        var wide = !string.IsNullOrEmpty(extended) && extended.Length < 100000 && System.Text.RegularExpressions.Regex.IsMatch(extended,@"^[A-Za-z0-9+/=]+$")
+            ? "<p>Extended stellar profile</p><img style='width:290px;max-width:100%;image-rendering:pixelated' alt='Extended stellar profile' src='data:image/png;base64,"+extended+"'>" : "";
+        return "<details style='white-space:normal;max-width:540px'><summary>" + H(frame.SecondPassText) + " — view stars</summary><img style='width:405px;max-width:100%;image-rendering:pixelated' alt='Measured stellar evidence' src='data:image/png;base64," + proof + "'><p>" + H(frame.ImageEvidence.PreviewCaption) + "</p>"+wide+"<p>"+H(frame.ImageEvidence.Detail)+"</p></details>";
     }
     private static string BuildTimeline(IReadOnlyList<FrameQualityResult> frames) {
         const int width = 1320, height = 414, left = 46, right = 14, top = 48, band = 105, gap = 16;

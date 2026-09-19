@@ -26,6 +26,7 @@ public sealed class QualitySessionRuntime : IDisposable {
     private readonly ISequenceMediator sequenceMediator;
     private readonly QualitySettings settings;
     private readonly BaselineEngine baseline = new();
+    private readonly StellarAnalysisPipeline stellarAnalysis = new();
     private readonly GuideCollector guideCollector;
     private readonly QualityEngine qualityEngine = new();
     private readonly RejectedFileService rejectedFileService = new();
@@ -255,7 +256,9 @@ public sealed class QualitySessionRuntime : IDisposable {
         if (settings.ImageEvidenceEnabled) {
             try {
                 var raw = e.Image.RawImageData;
-                source.ImageSample = ImageEvidenceAnalyzer.Capture(raw.Data?.FlatArray, raw.Properties.Width, raw.Properties.Height, raw.Properties.IsBayered);
+                double pixelScale = meta.Telescope?.FocalLength > 0 && meta.Camera?.PixelSize > 0
+                    ? 206.264806 * meta.Camera.PixelSize * Math.Max(1,meta.Camera.BinX) / meta.Telescope.FocalLength : double.NaN;
+                source.ImageSample = ImageEvidenceAnalyzer.Capture(raw.Data?.FlatArray, raw.Properties.Width, raw.Properties.Height, raw.Properties.IsBayered,pixelScale);
             } catch (Exception ex) {
                 Logger.Warning($"QSM raw image evidence unavailable: {ex.Message}");
             }
@@ -331,10 +334,12 @@ public sealed class QualitySessionRuntime : IDisposable {
 
             var snapshot = baseline.GetSnapshot(key, settings.MinimumLearningFrames);
             var imageEvidence = new ImageEvidence();
-            if (settings.ImageEvidenceEnabled && ExposureAssessment.IsGuideRejectCandidate(guide, settings)) {
-                var sample = source.ImageSample;
+            var sample = source.ImageSample;
+            string pierSide = meta.Telescope?.SideOfPier.ToString() ?? "Unknown";
+            if (settings.ImageEvidenceEnabled) {
                 var limits = settings.GetStarShapeLimits();
-                try { imageEvidence = await Task.Run(() => ImageEvidenceAnalyzer.Analyze(sample, limits)); }
+                try { imageEvidence = await Task.Run(() => stellarAnalysis.Analyze(key,sample,guide,snapshot,
+                    e.StarDetectionAnalysis?.DetectedStars ?? -1,frameTimestampUtc,pierSide,settings)); }
                 catch (Exception ex) {
                     imageEvidence = ImageEvidenceAnalyzer.Analyze(null, limits);
                     Logger.Warning($"QSM image evidence failed: {ex.Message}");
@@ -385,9 +390,10 @@ public sealed class QualitySessionRuntime : IDisposable {
             result.DewPoint = environment.DewPoint;
             result.EnvironmentalHint = environment.CorrelationHint;
 
-            if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
+            if (ExposureAssessment.CanTrainBaseline(result)) {
                 baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow);
             }
+            if (ExposureAssessment.CanTrainBaseline(result)) stellarAnalysis.AddReference(key,sample,imageEvidence,result.Status,frameTimestampUtc,pierSide,settings.BaselineWindow);
 
             if (result.Status == FrameStatus.Rejected && !settings.MonitorOnly) {
                 try {
@@ -536,7 +542,7 @@ public sealed class QualitySessionRuntime : IDisposable {
                 var result = qualityEngine.Evaluate(input, syntheticSettings);
                 result.MonitorOnly = true;
 
-                if (result.Status is FrameStatus.Learning or FrameStatus.Accepted) {
+                if (ExposureAssessment.CanTrainBaseline(result)) {
                     syntheticBaseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, syntheticSettings.BaselineWindow);
                 }
 
@@ -657,6 +663,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         processingLock.Wait();
         try {
             baseline.Clear();
+            stellarAnalysis.Clear();
             sessionStore.Reset();
             Interlocked.Exchange(ref frameIndex, 0);
             appliedCalibrationContexts.Clear();

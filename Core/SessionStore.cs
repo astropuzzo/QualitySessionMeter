@@ -110,7 +110,7 @@ public sealed class SessionStore {
                 "Confidence,ConfidenceLabel,ConfidenceDataCompleteness,ConfidenceBaselineMaturity,ConfidenceThresholdSeparation,ConfidenceAgreement,ConfidenceReason," +
                 "PredictiveWarning,PredictiveConfidence,PredictiveChannel,PredictiveMessage,PredictiveFramesToThreshold," +
                 "EnvironmentAvailable,CloudCover,Humidity,WindSpeed,WindGust,SkyQuality,AmbientTemperature,DewPoint,EnvironmentalHint," +
-                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly,AssessmentVersion,ReviewReasons,DecisionSummary,ImageEvidenceAvailable,ImageStars,StarAxisRatio,StarTailStrength,ThresholdsUsed,GuideFalsePositive,StarEccentricity,StarDoublePeak,StarMedianFlux,ShapeAnalysisMs");
+                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly,AssessmentVersion,ReviewReasons,DecisionSummary,ImageEvidenceAvailable,ImageStars,StarAxisRatio,StarTailStrength,ThresholdsUsed,GuideFalsePositive,StarEccentricity,StarDoublePeak,StarMedianFlux,ShapeAnalysisMs,StarCountFalsePositive,ExtendedAvailable,VerifiedRegions,RemotePeakStrength,RemotePeakSupport,SearchRadiusArcsec,RelativeStellarFlux,MatchedStars,StellarReferenceFrames,StarFwhmPixels,StarFwhmRatio");
         }
 
         string[] fields = {
@@ -138,7 +138,9 @@ public sealed class SessionStore {
             Num(r.AmbientTemperature), Num(r.DewPoint), Csv(r.EnvironmentalHint),
             r.Status.ToString(), Csv(r.ReasonText), Csv(r.ProbableCause), Csv(r.ErrorMessage), Bool(r.MonitorOnly), Csv(r.AssessmentVersion), Csv(string.Join(", ", r.ReviewReasons)),
             Csv(r.DecisionSummary), Bool(r.ImageEvidence.Available), r.ImageEvidence.Stars.ToString(CultureInfo.InvariantCulture),
-            Num(r.ImageEvidence.AxisRatio), Num(r.ImageEvidence.TailStrength), Csv(r.ThresholdsUsed), Bool(r.GuideFalsePositive), Num(r.ImageEvidence.Eccentricity), Num(r.ImageEvidence.DoublePeakStrength), Num(r.ImageEvidence.MedianFlux), Num(r.ImageEvidence.ElapsedMilliseconds)
+            Num(r.ImageEvidence.AxisRatio), Num(r.ImageEvidence.TailStrength), Csv(r.ThresholdsUsed), Bool(r.GuideFalsePositive), Num(r.ImageEvidence.Eccentricity), Num(r.ImageEvidence.DoublePeakStrength), Num(r.ImageEvidence.MedianFlux), Num(r.ImageEvidence.ElapsedMilliseconds),
+            Bool(r.StarCountFalsePositive),Bool(r.ImageEvidence.ExtendedAvailable),Num(r.ImageEvidence.VerifiedRegions),Num(r.ImageEvidence.RemotePeakStrength),Num(r.ImageEvidence.RemotePeakSupport),
+            Num(r.ImageEvidence.SearchRadiusArcsec),Num(r.ImageEvidence.RelativeFlux),Num(r.ImageEvidence.MatchedStars),Num(r.ImageEvidence.ReferenceFrames),Num(r.ImageEvidence.FwhmPixels),Num(r.ImageEvidence.FwhmRatio)
         };
         await writer.WriteLineAsync(string.Join(",", fields));
     }

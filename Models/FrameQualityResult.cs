@@ -12,7 +12,10 @@ public sealed class FrameQualityResult {
     public string ThresholdsUsed { get; set; } = "";
     public List<string> ReviewReasons { get; set; } = new();
     public bool GuideFalsePositive { get; set; }
-    public string SecondPassText => GuideFalsePositive ? "GUIDE FALSE POSITIVE" : ImageEvidence.Available ? ImageEvidence.Summary : "NOT VERIFIED";
+    public bool StarCountFalsePositive { get; set; }
+    public string SecondPassText => GuideFalsePositive || StarCountFalsePositive
+        ? Status == FrameStatus.Rejected ? "FLAG CLEARED · STILL REJECTED" : "RECOVERED"
+        : ImageEvidence.Available ? ImageEvidence.Summary : "NOT VERIFIED";
     public string FrameIdentity => $"Frame #{FrameIndex} · {FileName}";
     public int FrameIndex { get; set; }
     public DateTime TimestampUtc { get; set; }
