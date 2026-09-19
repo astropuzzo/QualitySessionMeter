@@ -1,0 +1,260 @@
+name: NINA catalog release 1.4.1.1 one-shot
+
+# Temporary one-shot release runner. Builds the already-reviewed squash commit and
+# creates the official numeric release/tag at that exact commit.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_VERSION: 1.4.1.1
+  RELEASE_TARGET: 0b90827c4927937f3f2d8d03dd99088b149b815b
+  PLUGIN_NAME: QualitySessionMeter
+  PLUGIN_DLL_NAME: QualitySessionMeter
+  NINA_MIN_VERSION: 3.3.0.1057
+  MANIFEST_PATH: Q/QualitySessionMeter/3.3.0.1057
+
+jobs:
+  build-validate-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout reviewed release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TARGET }}
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Verify tag format and project release gate
+        shell: pwsh
+        run: |
+          $tag = '${{ env.RELEASE_VERSION }}'
+          if ($tag -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw "Official tag must be x.x.x.x" }
+          [xml]$project = Get-Content QualitySessionMeter.csproj
+          $projectVersion = ($project.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
+          if ($projectVersion -ne $tag) { throw "Tag $tag does not match project version $projectVersion." }
+
+      - name: Prepare required release changelog
+        shell: pwsh
+        run: ./tools/WriteReleaseNotes.ps1 -Version '${{ env.RELEASE_VERSION }}' -OutputFile release-notes.md
+
+      - name: Restore plugin
+        run: dotnet restore QualitySessionMeter.csproj
+
+      - name: Gate production source set
+        shell: pwsh
+        run: |
+          $compile = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=false -getItem:Compile
+          $pages = dotnet msbuild QualitySessionMeter.csproj -p:QsmDevelopmentBuild=false -getItem:Page
+          $text = ($compile -join "`n") + "`n" + ($pages -join "`n")
+          $syntheticPattern = 'SyntheticSessionGenerator\.cs|SyntheticConfidenceOracle\.cs|SyntheticEventOracle\.cs|SyntheticGuidePatternOracle\.cs|SyntheticTrendOracle\.cs|SyntheticLabDockable\.cs|SyntheticResources\.xaml'
+          if ($text -match $syntheticPattern) { throw "Official production source set contains Synthetic Lab/test UI." }
+          if ($text -match 'QualitySessionMeter\.AssessmentCheck|QualitySessionMeter\.DispatcherCheck|QualitySessionMeter\.VisualHarness|QualitySessionMeter\.VisualSlices') { throw "Official production source set contains test harness code." }
+          if (Test-Path UI/QsmControlCenterDockable.cs) { throw "Removed duplicate QSM Control Center dockable returned to the production tree." }
+          # The legacy resource dictionary remains for dispatcher regression checks, without a MEF export.
+          if ((Test-Path UI/ControlCenterResources.xaml.cs) -and ((Get-Content UI/ControlCenterResources.xaml.cs -Raw) -match '\[Export\(')) { throw "Legacy QSM Control Center resources must not be exported into N.I.N.A." }
+
+      - name: Gate dashboard, UI, artwork and manifest contracts
+        shell: pwsh
+        run: |
+          $web = Get-Content Core/WebDashboardPage.cs -Raw
+          $server = Get-Content Core/QualitySessionWebServer.cs -Raw
+          $preview = Get-Content Core/LatestLightPreviewCache.cs -Raw
+          $assembly = Get-Content Properties/AssemblyInfo.cs -Raw
+          $resourcesXaml = Get-Content UI/Resources.xaml -Raw
+          $optionsXaml = Get-Content UI/OptionsHelpResources.xaml -Raw
+          $syntheticXaml = if (Test-Path UI/SyntheticResources.xaml) { Get-Content UI/SyntheticResources.xaml -Raw } else { '' }
+          $resourcesCode = Get-Content UI/Resources.xaml.cs -Raw
+          $optionsCode = Get-Content UI/OptionsHelpResources.xaml.cs -Raw
+          $syntheticCode = if (Test-Path UI/SyntheticResources.xaml.cs) { Get-Content UI/SyntheticResources.xaml.cs -Raw } else { '' }
+          $frameAxis = Get-Content UI/TimelineFrameAxisAdorner.cs -Raw
+
+          foreach ($required in @('function drawTimeline','function drawGuide','function drawFrameAxis','function frameTickIndexes','frameTickIndexes(frames.length,ticks)','lastPreviewGeneration','function updatePreview','meta.generation','Metric definitions','rolling 20 s')) {
+            if ($web -notmatch [regex]::Escape($required)) { throw "Dashboard contract missing: $required" }
+          }
+          if ($web -match 'setInterval\(preview') { throw "Dashboard regressed to blind preview reloads." }
+          foreach ($required in @('Content-Security-Policy','MaxConcurrentClients','MaxFailedLoginsPerWindow','ETag','previewAvailable')) {
+            if ($server -notmatch [regex]::Escape($required)) { throw "Web server release contract missing: $required" }
+          }
+          foreach ($required in @('ImageSaved','CaptureSequence.ImageTypes.LIGHT','JpegBitmapEncoder','Clone','Freeze')) {
+            if ($preview -notmatch [regex]::Escape($required)) { throw "Shared LIGHT preview contract missing: $required" }
+          }
+          foreach ($required in @('MinimumApplicationVersion','LicenseURL','Repository','LongDescription','FeaturedImageURL','ScreenshotURL','AltScreenshotURL')) {
+            if ($assembly -notmatch [regex]::Escape($required)) { throw "Manifest assembly metadata missing: $required" }
+          }
+          foreach ($asset in @('docs/store/featured.png','docs/store/nina-panel.png','docs/store/web-dashboard.png')) {
+            if (-not (Test-Path $asset)) { throw "Required catalog artwork missing: $asset" }
+          }
+
+          foreach ($pair in @(
+            @{ Path='UI/Resources.xaml'; Text=$resourcesXaml },
+            @{ Path='UI/OptionsHelpResources.xaml'; Text=$optionsXaml },
+            @{ Path='UI/SyntheticResources.xaml'; Text=$syntheticXaml }
+          )) {
+            if ($pair.Text -match '<Style\s+x:Key=') { throw "Dispatcher-sensitive shared keyed Style found in $($pair.Path)." }
+          }
+          foreach ($pair in @(
+            @{ Path='UI/Resources.xaml.cs'; Text=$resourcesCode },
+            @{ Path='UI/OptionsHelpResources.xaml.cs'; Text=$optionsCode },
+            @{ Path='UI/SyntheticResources.xaml.cs'; Text=$syntheticCode }
+          )) {
+            if ($pair.Text -match 'AddLoadedHandler\(' -or $pair.Text -match 'EventSetter\(') { throw "Cross-dispatcher Style mutation helper found in $($pair.Path)." }
+          }
+          if ($resourcesCode -match 'BindingOperations\.SetBinding' -or $resourcesCode -match 'SolidColorBrush\.ColorProperty') { throw "Cross-thread unsafe shared SolidColorBrush binding detected." }
+          foreach ($required in @('FreezeBrush("QsmCard")','SetResourceReference','DockableLoaded','TimelineFrameAxisBehavior.Attach')) {
+            if ($resourcesCode -notmatch [regex]::Escape($required)) { throw "WPF dispatcher-safety contract missing: $required" }
+          }
+          foreach ($required in @('OptionsRootLoaded','TextAlignment = TextAlignment.Left','HorizontalContentAlignment = HorizontalAlignment.Left','ButtonForegroundBrush')) {
+            if ($optionsCode -notmatch [regex]::Escape($required)) { throw "Options alignment/theme contract missing: $required" }
+          }
+          if ($syntheticCode -and $syntheticCode -notmatch 'SyntheticRootLoaded') { throw "Synthetic Lab dispatcher-safe root hook missing." }
+          foreach ($required in @('FRAME #','FrameIndex','BuildTickIndexes','TakeLast(160)','IsHitTestVisible = false')) {
+            if ($frameAxis -notmatch [regex]::Escape($required)) { throw "WPF frame-axis contract missing: $required" }
+          }
+
+      - name: Restore WPF dispatcher boundary checker
+        run: dotnet restore QualitySessionMeter.DispatcherCheck/QualitySessionMeter.DispatcherCheck.csproj
+
+      - name: Verify sealed QSM templates across independent STA dispatchers
+        run: dotnet run --project QualitySessionMeter.DispatcherCheck/QualitySessionMeter.DispatcherCheck.csproj -c Release --no-restore
+
+      - name: Verify 1.4 post-exposure assessment
+        run: dotnet run --project QualitySessionMeter.AssessmentCheck/QualitySessionMeter.AssessmentCheck.csproj -c Release
+
+      - name: Build immutable production plugin
+        run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=false -p:Version=${{ env.RELEASE_VERSION }} -p:AssemblyVersion=${{ env.RELEASE_VERSION }} -p:FileVersion=${{ env.RELEASE_VERSION }}
+
+      - name: Preserve production DLL before development regression
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.dll" "package/QualitySessionMeter.dll"
+          ./tools/VerifyProductionAssembly.ps1 -File "package/QualitySessionMeter.dll" -ExpectedVersion '${{ env.RELEASE_VERSION }}'
+          (Get-FileHash "package/QualitySessionMeter.dll" -Algorithm SHA256).Hash | Set-Content production-dll.sha256
+
+      - name: Restore synthetic checker
+        run: dotnet restore QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj
+
+      - name: Run full V1/V2/V3 regression before release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts/synthetic-check | Out-Null
+          dotnet run --project QualitySessionMeter.SyntheticCheck/QualitySessionMeter.SyntheticCheck.csproj -c Release --no-restore -- "$PWD/artifacts/synthetic-check"
+
+      - name: Prepare official package directory
+        shell: pwsh
+        run: |
+          if ((Get-FileHash "package/QualitySessionMeter.dll" -Algorithm SHA256).Hash -ne (Get-Content production-dll.sha256)) { throw "Preserved production DLL changed during regression." }
+          ./tools/VerifyProductionAssembly.ps1 -File "package/QualitySessionMeter.dll" -ExpectedVersion '${{ env.RELEASE_VERSION }}'
+          Copy-Item README.md, CHANGELOG.md, LICENSE, SECURITY.md "package/" -Force
+          if (Test-Path docs) { Copy-Item docs "package/docs" -Recurse -Force }
+
+      - name: Generate N.I.N.A. archive and manifest from final DLL
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://raw.githubusercontent.com/isbeorn/nina.plugin.manifests/main/tools/CreateManifest.ps1" -OutFile CreateManifest.ps1
+          $asset = "QualitySessionMeter.${{ env.RELEASE_VERSION }}.zip"
+          $url = "https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_VERSION }}/$asset"
+          pwsh ./CreateManifest.ps1 -file "package/QualitySessionMeter.dll" -installerUrl $url -createArchive -includeAll
+          Move-Item "QualitySessionMeter.zip" $asset -Force
+          Move-Item "manifest.json" "QualitySessionMeter.${{ env.RELEASE_VERSION }}.manifest.json" -Force
+
+      - name: Validate generated manifest with official repository
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/isbeorn/nina.plugin.manifests.git manifest-validation
+          $dest = "manifest-validation/manifests/${{ env.MANIFEST_PATH }}/${{ env.RELEASE_VERSION }}"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item "QualitySessionMeter.${{ env.RELEASE_VERSION }}.manifest.json" "$dest/manifest.json" -Force
+          Push-Location manifest-validation
+          npm install
+          node gather.js
+          Pop-Location
+
+      - name: Upload manifest artifact for publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-manifest
+          path: QualitySessionMeter.${{ env.RELEASE_VERSION }}.manifest.json
+          if-no-files-found: error
+
+      - name: Create immutable official GitHub release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          target_commitish: ${{ env.RELEASE_TARGET }}
+          name: QualitySessionMeter ${{ env.RELEASE_VERSION }}
+          draft: false
+          prerelease: false
+          body_path: release-notes.md
+          make_latest: true
+          files: |
+            QualitySessionMeter.${{ env.RELEASE_VERSION }}.zip
+            QualitySessionMeter.${{ env.RELEASE_VERSION }}.manifest.json
+
+  publish-manifest:
+    runs-on: ubuntu-latest
+    needs: build-validate-release
+    steps:
+      - name: Check optional automatic publishing prerequisites
+        id: prereq
+        env:
+          PAT: ${{ secrets.PAT }}
+        shell: bash
+        run: |
+          if [ -z "$PAT" ]; then echo "ready=false" >> "$GITHUB_OUTPUT"; echo "PAT missing; submit manifest PR manually."; exit 0; fi
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://api.github.com/repos/${{ github.repository_owner }}/nina.plugin.manifests")
+          if [ "$status" != "200" ]; then echo "ready=false" >> "$GITHUB_OUTPUT"; echo "Manifest fork missing; submit PR manually."; exit 0; fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download generated manifest
+        if: steps.prereq.outputs.ready == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-manifest
+
+      - name: Clone maintainer manifest fork
+        if: steps.prereq.outputs.ready == 'true'
+        env:
+          PAT: ${{ secrets.PAT }}
+        shell: bash
+        run: |
+          git clone "https://x-access-token:${PAT}@github.com/${{ github.repository_owner }}/nina.plugin.manifests.git"
+          cd nina.plugin.manifests
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "QualitySessionMeter/${{ env.RELEASE_VERSION }}"
+
+      - name: Add manifest to fork
+        if: steps.prereq.outputs.ready == 'true'
+        shell: bash
+        run: |
+          dest="nina.plugin.manifests/manifests/${{ env.MANIFEST_PATH }}/${{ env.RELEASE_VERSION }}"
+          mkdir -p "$dest"
+          cp "QualitySessionMeter.${{ env.RELEASE_VERSION }}.manifest.json" "$dest/manifest.json"
+          cd nina.plugin.manifests
+          git add .
+          git commit -m "Add QualitySessionMeter ${{ env.RELEASE_VERSION }}"
+          git push origin "QualitySessionMeter/${{ env.RELEASE_VERSION }}"
+
+      - name: Open upstream N.I.N.A. manifest PR
+        if: steps.prereq.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        shell: bash
+        run: |
+          gh pr create \
+            --title "Add QualitySessionMeter ${{ env.RELEASE_VERSION }}" \
+            --body $'QualitySessionMeter manifest generated from the immutable tagged production DLL and validated with the official gather.js pipeline.\n\nAI assistance disclosure: material AI assistance was used during development. astropuzzo is the accountable human maintainer. Validation scope and limitations are documented in the release notes and linked field reports. The maintainer accepts responsibility for review, testing, security, privacy, licensing, provenance, debugging and maintenance.' \
+            --head "${{ github.repository_owner }}:QualitySessionMeter/${{ env.RELEASE_VERSION }}" \
+            --base main \
+            --repo isbeorn/nina.plugin.manifests
