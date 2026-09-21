@@ -16,7 +16,7 @@ public static class ExposureAssessment {
     public static void Apply(FrameQualityInput input, FrameQualityResult result, QualitySettings settings) {
         var image = (input.ImageEvidence ?? new ImageEvidence()) with {MinimumSessionSignalPercent=settings.MinimumSessionSignalPercent};
         result.ImageEvidence = image;
-        result.AssessmentVersion = "1.4.2.0";
+        result.AssessmentVersion = "1.4.2.1";
         result.GuideEvidence = input.Guide?.Series?.Take(512).ToList() ?? new();
         result.ThresholdsUsed = $"RMS>{settings.MaxGuideRms:R}; peak>={settings.HardExcursionThreshold:R}; sustained>{settings.ExcursionThreshold:R} for {settings.ExcursionMinimumDuration:R}s; stars -{settings.MaxStarLossPercent:R}%; background +{settings.MaxBackgroundIncreasePercent:R}/-{settings.MaxBackgroundDecreasePercent:R}%";
         bool guideRule = result.RejectReasons.Any(x => x.Contains("GUIDE", StringComparison.Ordinal));
@@ -61,7 +61,7 @@ public static class ExposureAssessment {
             if(double.IsFinite(image.SessionFluxUpperBound) && image.SessionFluxUpperBound*100 < settings.MinimumSessionSignalPercent)
                 result.RejectReasons.Add("LOW_SESSION_SIGNAL");
             // Only an unexpected change freezes learning. Smooth motion along the forecast trains it.
-            if (loss >= settings.MaxCloudSignalLossPercent*.75 && (result.StarDeviationPercent <= -10 || skyRise || skyRiseFromTrend))
+            if (loss >= Math.Min(20,settings.MaxCloudSignalLossPercent*.75) && (result.StarDeviationPercent <= -10 || skyRise || skyRiseFromTrend))
                 result.ReviewReasons.Add("TRANSPARENCY_CHANGE");
         }
         if(settings.ImageEvidenceEnabled && !image.Available) result.ReviewReasons.Add("STELLAR_CHECK_UNAVAILABLE");
@@ -114,7 +114,7 @@ public static class ExposureAssessment {
             : "Kept: all active checks passed.";
         result.ThresholdsUsed += $"; secondPass={settings.ImageEvidenceEnabled}; eccentricity>={image.Limits.MaxEccentricity:R} in >={image.Limits.DeformedFraction:P0} stars; tail>={image.Limits.MaxTailPercent:R}%; doublePeak>={image.Limits.MaxDoublePeakPercent:R}%; minStars={image.Limits.MinimumStars}; targetStars={image.Limits.TargetStars}; rescue requires RMS<={settings.MaxGuideRms:R} when enabled, peak<{Math.Max(6, settings.HardExcursionThreshold*2):R} when enabled, sustained<{Math.Max(settings.ExcursionMinimumDuration,input.ExposureSeconds*.1):R}s when enabled";
         result.ThresholdsUsed += $"; rescueEccentricity<{image.Limits.RescueMaxEccentricity:R} (0.05 margin)";
-        result.ThresholdsUsed += $"; signalReject={settings.RejectSignalDegradation}; unexpectedFluxLoss>{settings.MaxMeasuredFluxLossPercent:R}%; combinedUnexpectedLoss>={settings.MaxCloudSignalLossPercent:R}% with starLoss>={Math.Max(10,settings.MaxStarLossPercent/2):R}%; minimumSessionSignal={settings.MinimumSessionSignalPercent:R}%; gradual matched-signal trend follows past clean frames; unexpected loss >=75% of combined limit with count loss>=10% or sky rise>=3% freezes reference learning; referenceAge<=360min for loss; <=120min for count rescue";
+        result.ThresholdsUsed += $"; signalReject={settings.RejectSignalDegradation}; unexpectedFluxLoss>{settings.MaxMeasuredFluxLossPercent:R}%; combinedUnexpectedLoss>={settings.MaxCloudSignalLossPercent:R}% with starLoss>={Math.Max(10,settings.MaxStarLossPercent/2):R}%; minimumSessionSignal={settings.MinimumSessionSignalPercent:R}%; gradual matched-signal trend follows past clean frames; unexpected loss >={Math.Min(20,settings.MaxCloudSignalLossPercent*.75):R}% with count loss>=10% or sky rise>=3% freezes reference learning; referenceAge<=360min for loss; <=120min for count rescue";
         result.ThresholdsUsed += $"; extendedRecovery requires >=4/5 regions, covered guide peak, RMS<=3x limit, sustained<25% exposure, tail<half limit; remotePeak>={image.Limits.MaxRemotePeakPercent:R}% in >=60% stars; measuredFluxEnabled={settings.VerifyStarCountWithFlux}; measuredFluxLoss>{settings.MaxMeasuredFluxLossPercent:R}%; countRescueFluxLoss<={Math.Min(20,settings.MaxMeasuredFluxLossPercent-5):R}%";
     }
 }

@@ -73,22 +73,25 @@ internal static class FieldReplay {
         if(args.Contains("--assert-clouds")) {
             var byId=results.ToDictionary(r=>int.Parse(Path.GetFileNameWithoutExtension(r.OriginalPath).Split('_').Last()));
             void Require(bool condition,string message){if(!condition)throw new Exception(message);Console.WriteLine("CLOUD PASS "+message);}
-            foreach(int id in new[]{903,912,914,948,949,966,969,1000,1002,1003,1010,1012,1027,1035})
-                Require(byId[id].Status==FrameStatus.Rejected,$"{id} attenuated retained-file case now rejected");
+            foreach(int id in new[]{912,1010,1035})
+                Require(byId[id].Status==FrameStatus.Rejected,$"{id} severe attenuated case remains rejected");
+            foreach(int id in new[]{903,914,948,949,966,969,1000,1002,1003,1012,1027})
+                Require(byId[id].Status==FrameStatus.Warning && byId[id].IsUsable && !ExposureAssessment.CanTrainBaseline(byId[id]),$"{id} moderate attenuation remains reviewable without reference training");
             foreach(int id in new[]{900,919,920,959,982,1019,1026,1038,1041})Require(byId[id].IsUsable,$"{id} control retained");
-            foreach(int id in new[]{911,967})Require(byId[id].GuideFalsePositive&&byId[id].Status==FrameStatus.Rejected,$"{id} guide rescue cannot clear measured sky degradation");
+            foreach(int id in new[]{911,967})Require(byId[id].GuideFalsePositive&&byId[id].Status==FrameStatus.Warning&&!ExposureAssessment.CanTrainBaseline(byId[id]),$"{id} guide flag is cleared but moderate attenuation remains reviewable");
             // These gradual trajectories were rejected by the old fixed-reference specification.
             foreach(int id in new[]{933,934,935,936,937,938,1015,1016})Require(byId[id].IsUsable,$"{id} gradual/recovered signal kept under the revised policy");
-            Require(byId[1014].Status==FrameStatus.Warning && !ExposureAssessment.CanTrainBaseline(byId[1014]),"1014 partial recovery stays reviewable without reference training");
+            Require(byId[1014].IsUsable,"1014 partial recovery remains usable");
             Require(byId[976].IsUsable,"976 guide recovery remains usable");
-            foreach(int id in new[]{909,995}) Require(byId[id].Status==FrameStatus.Warning && !ExposureAssessment.CanTrainBaseline(byId[id])
-                && byId[id].ImageEvidence.RelativeFluxUpperBound>.8,$"{id} threshold overlaps measured scatter; retain for review without teaching the baseline");
+            Require(byId[909].IsUsable && byId[909].ImageEvidence.RelativeFluxUpperBound>.8,"909 remains usable above the warning boundary");
+            Require(byId[995].Status==FrameStatus.Warning && !ExposureAssessment.CanTrainBaseline(byId[995])
+                && byId[995].ImageEvidence.RelativeFluxUpperBound>.8,"995 remains reviewable without teaching the baseline");
         }
         if(args.Contains("--assert-september20")) {
             var byId=results.ToDictionary(r=>int.Parse(Path.GetFileNameWithoutExtension(r.OriginalPath).Split('_').Last()));
             void Require(bool condition,string message){if(!condition)throw new Exception(message);Console.WriteLine("HOO PASS "+message);}
-            foreach(int id in new[]{156,169,170,171}) Require(byId[id].Status==FrameStatus.Rejected && byId[id].ImageEvidence.PhotometryAvailable,$"{id}: independently attenuated frame rejected with measured signal");
-            foreach(int id in new[]{166,167,168,172,183}) Require(byId[id].Status==FrameStatus.Rejected,$"{id}: original signal rejection retained");
+            foreach(int id in new[]{156,169,170,171,172,183}) Require(byId[id].Status==FrameStatus.Warning && byId[id].IsUsable && !ExposureAssessment.CanTrainBaseline(byId[id]),$"{id}: moderate attenuation kept for review without reference training");
+            foreach(int id in new[]{166,167,168}) Require(byId[id].Status==FrameStatus.Rejected,$"{id}: severe signal rejection retained");
             foreach(int id in new[]{136,137,140,144,148,152,155,157,160,162,165,173,174,175,176,177,178,179,180,181,182}) Require(byId[id].IsUsable,$"{id}: usable control retained");
             Require(byId[154].Status==FrameStatus.Rejected && !byId[154].ImageEvidence.Compromised && byId[154].DecisionSummary.Contains("not established"),"154: incomplete outer-field verification is not claimed as confirmed damage");
             Require(byId[158].Status==FrameStatus.Rejected && byId[158].DecisionSummary.Contains("borderline"),"158: borderline guide rejection stays explicit");

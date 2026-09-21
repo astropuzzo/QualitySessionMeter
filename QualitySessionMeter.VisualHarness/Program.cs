@@ -437,9 +437,9 @@ internal sealed class PreviewSettings {
     public double ShapeMaxRemotePeakPercent { get; set; } = .5;
     public bool VerifyStarCountWithFlux { get; set; } = true;
     public bool RejectSignalDegradation { get; set; } = true;
-    public double MaxMeasuredFluxLossPercent { get; set; } = 35;
-    public double MaxCloudSignalLossPercent { get; set; } = 20;
-    public double MinimumSessionSignalPercent { get; set; } = 40;
+    public double MaxMeasuredFluxLossPercent { get; set; } = 50;
+    public double MaxCloudSignalLossPercent { get; set; } = 35;
+    public double MinimumSessionSignalPercent { get; set; } = 35;
     public bool WebDashboardEnabled { get; set; } = true;
     public int WebDashboardPort { get; set; } = 18974;
     public bool WebDashboardRequirePassword { get; set; }

@@ -10,6 +10,7 @@ namespace NINA.Plugin.QualitySessionMeter.Settings;
 public sealed class QualitySettings : INotifyPropertyChanged {
     private const int DashboardPasswordIterations = 120000;
     private const int DashboardPasswordHashBytes = 32;
+    private const string SignalDefaultsVersionKey = "SignalThresholdDefaultsVersion";
     private readonly IPluginOptionsAccessor accessor;
 
     public QualitySettings(IPluginOptionsAccessor accessor) {
@@ -20,6 +21,21 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         // Advanced Sequencer scope without keeping it in the public model.
         if (accessor.GetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights) == 0) {
             accessor.SetValueInt32(nameof(MonitoringScope), (int)NINA.Plugin.QualitySessionMeter.Models.MonitoringScope.AdvancedSequencerLights);
+        }
+
+        // 1.4.2.1 relaxes the factory signal limits after field validation. Migrate only
+        // the complete former default triplet, so an intentionally customized profile
+        // is left untouched. The marker makes the migration a one-time operation.
+        if (accessor.GetValueInt32(SignalDefaultsVersionKey, 0) < 1) {
+            double combined = accessor.GetValueDouble(nameof(MaxCloudSignalLossPercent), 20);
+            double direct = accessor.GetValueDouble(nameof(MaxMeasuredFluxLossPercent), 35);
+            double session = accessor.GetValueDouble(nameof(MinimumSessionSignalPercent), 40);
+            if (Math.Abs(combined - 20) < .000001 && Math.Abs(direct - 35) < .000001 && Math.Abs(session - 40) < .000001) {
+                accessor.SetValueDouble(nameof(MaxCloudSignalLossPercent), 35);
+                accessor.SetValueDouble(nameof(MaxMeasuredFluxLossPercent), 50);
+                accessor.SetValueDouble(nameof(MinimumSessionSignalPercent), 35);
+            }
+            accessor.SetValueInt32(SignalDefaultsVersionKey, 1);
         }
     }
 
@@ -135,12 +151,12 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueBoolean(nameof(RejectSignalDegradation), value); Raise(); }
     }
     public double MaxCloudSignalLossPercent {
-        get => SafeShapeValue(nameof(MaxCloudSignalLossPercent),20,10,50);
-        set { accessor.SetValueDouble(nameof(MaxCloudSignalLossPercent),double.IsFinite(value)?Clamp(value,10,50):20);Raise(); }
+        get => SafeShapeValue(nameof(MaxCloudSignalLossPercent),35,10,50);
+        set { accessor.SetValueDouble(nameof(MaxCloudSignalLossPercent),double.IsFinite(value)?Clamp(value,10,50):35);Raise(); }
     }
     public double MinimumSessionSignalPercent {
-        get => SafeShapeValue(nameof(MinimumSessionSignalPercent),40,5,80);
-        set { accessor.SetValueDouble(nameof(MinimumSessionSignalPercent),double.IsFinite(value)?Clamp(value,5,80):40);Raise(); }
+        get => SafeShapeValue(nameof(MinimumSessionSignalPercent),35,5,80);
+        set { accessor.SetValueDouble(nameof(MinimumSessionSignalPercent),double.IsFinite(value)?Clamp(value,5,80):35);Raise(); }
     }
     public bool VerifyStarCountWithFlux {
         get => accessor.GetValueBoolean(nameof(VerifyStarCountWithFlux), true);
@@ -151,8 +167,8 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueDouble(nameof(ShapeMaxRemotePeakPercent), double.IsFinite(value) ? Clamp(value,.2,5) : .5); Raise(); }
     }
     public double MaxMeasuredFluxLossPercent {
-        get => SafeShapeValue(nameof(MaxMeasuredFluxLossPercent),35,5,80);
-        set { accessor.SetValueDouble(nameof(MaxMeasuredFluxLossPercent),double.IsFinite(value)?Clamp(value,5,80):35);Raise(); }
+        get => SafeShapeValue(nameof(MaxMeasuredFluxLossPercent),50,5,80);
+        set { accessor.SetValueDouble(nameof(MaxMeasuredFluxLossPercent),double.IsFinite(value)?Clamp(value,5,80):50);Raise(); }
     }
     public double ShapeMaxEccentricity {
         get => SafeShapeValue(nameof(ShapeMaxEccentricity), .60, .30, .90);
