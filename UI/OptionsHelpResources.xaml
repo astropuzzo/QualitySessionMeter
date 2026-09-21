@@ -267,7 +267,7 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Sudden Signal and Star Loss" VerticalAlignment="Center" TextWrapping="Wrap"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MaxCloudSignalLossPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="% · with background +3% and star loss of at least half its limit (minimum 10%)" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                    <TextBlock Grid.Column="2" Text="% below recent expected signal · with star loss of at least half its limit (minimum 10%)" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
                 <Grid Margin="16,5,0,5">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -285,7 +285,7 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Minimum Session Signal" VerticalAlignment="Center" TextWrapping="Wrap"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MinimumSessionSignalPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="% of initial matched signal · 5–80 · default 40" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                    <TextBlock Grid.Column="2" Text="% of initial matched signal · 5–80 · default 35" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
                 <TextBlock Margin="40,6,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Gradual signal and sky changes update the reference. Sudden losses are checked against the recent trend; rejected frames do not update it."/>
                 <TextBlock Text="Session &amp; File Handling" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>

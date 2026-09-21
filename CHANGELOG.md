@@ -2,6 +2,13 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.2.1] - 2026-09-21
+
+- Raise the default combined sudden signal-and-star loss limit from 20% to 35%, and the direct sudden signal-loss limit from 35% to 50%.
+- Lower the minimum session signal from 40% to 35%. Moderate 20–35% sudden losses remain usable warnings and cannot lower the clean reference.
+- Migrate the complete 1.4.2.0 default triplet once. Profiles with customized signal limits keep their values.
+- Correct the Options text: combined signal loss does not require a brighter background.
+
 ## [1.4.2.0] - 2026-09-21
 
 - Keep matched-star photometry available when shape classification is inconclusive. Ignore unresolved single-pixel detections when counting failed shape measurements.
@@ -12,7 +19,6 @@ All notable QualitySessionMeter changes are summarized here. Detailed pre-store 
 - State why guide recovery was not established, including verified regions and borderline eccentricity.
 - Add session report locations: default local folder, a chosen folder, or beside the LIGHT folder. Keep the active session in one location; use the new location from the next session. Show the actual folder and any fallback or write failure in Options.
 - Show photometry separately from unavailable shape evidence in the public and OpenAstro inspectors.
-- Validate against the September 20 HOO session and the earlier QUAD/shape regressions. See [field results](docs/1.4.2-FIELD-VALIDATION.md).
 
 ## [1.4.1.1] - 2026-09-19
 

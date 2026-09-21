@@ -79,7 +79,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
 
         var result = new Dictionary<string, object> {
             ["contractVersion"] = ContractVersion,
-            ["assessmentVersion"] = "1.4.2.0",
+            ["assessmentVersion"] = "1.4.2.1",
             ["available"] = true,
             ["readOnly"] = true,
             ["generatedUtc"] = DateTimeOffset.UtcNow.ToString("O"),
