@@ -14,12 +14,19 @@ public static class ExposureAssessment {
         || (settings.EnableSustainedExcursion && guide.MaxExcursionArcsec > settings.ExcursionThreshold && guide.MaxSustainedExcursionSeconds >= settings.ExcursionMinimumDuration));
 
     public static void Apply(FrameQualityInput input, FrameQualityResult result, QualitySettings settings) {
-        var image = input.ImageEvidence ?? new ImageEvidence();
+        var image = (input.ImageEvidence ?? new ImageEvidence()) with {MinimumSessionSignalPercent=settings.MinimumSessionSignalPercent};
         result.ImageEvidence = image;
-        result.AssessmentVersion = "1.4.1.1";
+        result.AssessmentVersion = "1.4.2.0";
         result.GuideEvidence = input.Guide?.Series?.Take(512).ToList() ?? new();
         result.ThresholdsUsed = $"RMS>{settings.MaxGuideRms:R}; peak>={settings.HardExcursionThreshold:R}; sustained>{settings.ExcursionThreshold:R} for {settings.ExcursionMinimumDuration:R}s; stars -{settings.MaxStarLossPercent:R}%; background +{settings.MaxBackgroundIncreasePercent:R}/-{settings.MaxBackgroundDecreasePercent:R}%";
         bool guideRule = result.RejectReasons.Any(x => x.Contains("GUIDE", StringComparison.Ordinal));
+        bool skyRise = double.IsFinite(result.BackgroundDeviationPercent) && result.BackgroundDeviationPercent >= 3;
+        // The rolling median lags behind a steadily darkening sky. A measured rise above a reliable
+        // local trend can corroborate cloud loss, but never rejects on its own.
+        bool skyRiseFromTrend = result.BackgroundTrendUsable && result.BackgroundTrendR2 >= .85
+            && result.BackgroundTrendPercentPerFrame < 0 && double.IsFinite(result.BackgroundTrendResidualPercent)
+            && result.BackgroundTrendResidualPercent >= 3;
+        double guardedFlux = double.IsFinite(image.RelativeFluxUpperBound) ? Math.Max(image.RelativeFlux,image.RelativeFluxUpperBound) : image.RelativeFlux;
         bool extreme = (settings.EnableHardExcursion && result.MaxGuideExcursionArcsec >= Math.Max(6, settings.HardExcursionThreshold * 2))
             || (settings.EnableSustainedExcursion && result.SustainedGuideExcursionSeconds >= Math.Max(settings.ExcursionMinimumDuration, input.ExposureSeconds * 0.10))
             || (settings.EnableGuideRms && result.GuideRmsArcsec > settings.MaxGuideRms);
@@ -35,29 +42,32 @@ public static class ExposureAssessment {
         }
         if (confirmedShape) result.RejectReasons.Add("STAR_SHAPE_CONFIRMED");
         if (settings.ImageEvidenceEnabled && settings.EnableStarCount && settings.VerifyStarCountWithFlux && image.PhotometryAvailable) {
-            if (result.RejectReasons.Contains("STAR_COUNT_DROP") && image.RelativeFlux < 1-settings.MaxMeasuredFluxLossPercent/100) result.RejectReasons.Add("STELLAR_FLUX_LOSS");
+            if (result.RejectReasons.Contains("STAR_COUNT_DROP") && guardedFlux < 1-settings.MaxMeasuredFluxLossPercent/100) result.RejectReasons.Add("STELLAR_FLUX_LOSS");
             else if (result.RejectReasons.Contains("STAR_COUNT_DROP") && image.HasRescueMargin && image.ExtendedAvailable && image.VerifiedRegions>=4 && image.CompromisedRegions==0
-                && (!settings.RejectSignalDegradation || !double.IsFinite(result.BackgroundDeviationPercent) || result.BackgroundDeviationPercent < 3)
+                && (!double.IsFinite(image.ReferenceAgeMinutes) || image.ReferenceAgeMinutes <= 120)
+                && (!settings.RejectSignalDegradation || (!skyRise && !skyRiseFromTrend))
                 && image.RelativeFlux >= 1-Math.Min(20,settings.MaxMeasuredFluxLossPercent-5)/100) {
                 result.RejectReasons.Remove("STAR_COUNT_DROP");result.ReviewReasons.Add("STAR_COUNT_DROP");result.StarCountFalsePositive=true;
             }
         }
         if (settings.ImageEvidenceEnabled && settings.RejectSignalDegradation && image.PhotometryAvailable) {
             double loss = Math.Max(0, (1-image.RelativeFlux)*100);
+            double guardedLoss = Math.Max(0, (1-guardedFlux)*100);
             bool fewerStars = double.IsFinite(result.StarDeviationPercent) && result.StarDeviationPercent <= -Math.Max(10,settings.MaxStarLossPercent/2);
-            bool brighterSky = double.IsFinite(result.BackgroundDeviationPercent) && result.BackgroundDeviationPercent >= 3;
-            if (loss > settings.MaxMeasuredFluxLossPercent) {
+            if (guardedLoss > settings.MaxMeasuredFluxLossPercent) {
                 if (!result.RejectReasons.Contains("STELLAR_FLUX_LOSS")) result.RejectReasons.Add("STELLAR_FLUX_LOSS");
             }
-            else if (loss >= settings.MaxCloudSignalLossPercent && fewerStars && brighterSky) result.RejectReasons.Add("SKY_SIGNAL_LOSS");
-            // A modest measured loss is kept for review but must not teach the next baseline.
-            if ((loss >= 10
-                && ((double.IsFinite(result.StarDeviationPercent) && result.StarDeviationPercent <= -10)
-                    || (double.IsFinite(result.BackgroundDeviationPercent) && result.BackgroundDeviationPercent >= 2)))
-                || (brighterSky && result.StarDeviationPercent <= -10))
+            else if (guardedLoss >= settings.MaxCloudSignalLossPercent && fewerStars) result.RejectReasons.Add("SKY_SIGNAL_LOSS");
+            if(double.IsFinite(image.SessionFluxUpperBound) && image.SessionFluxUpperBound*100 < settings.MinimumSessionSignalPercent)
+                result.RejectReasons.Add("LOW_SESSION_SIGNAL");
+            // Only an unexpected change freezes learning. Smooth motion along the forecast trains it.
+            if (loss >= settings.MaxCloudSignalLossPercent*.75 && (result.StarDeviationPercent <= -10 || skyRise || skyRiseFromTrend))
                 result.ReviewReasons.Add("TRANSPARENCY_CHANGE");
         }
         if(settings.ImageEvidenceEnabled && !image.Available) result.ReviewReasons.Add("STELLAR_CHECK_UNAVAILABLE");
+        if(settings.ImageEvidenceEnabled && settings.RejectSignalDegradation && !image.PhotometryAvailable
+            && (result.StarDeviationPercent <= -10 || skyRise || skyRiseFromTrend))
+            result.ReviewReasons.Add("SIGNAL_REFERENCE_UNAVAILABLE");
         if(settings.ImageEvidenceEnabled && image.Available && !image.Compromised && !image.HasRescueMargin)result.ReviewReasons.Add("BORDERLINE_STAR_SHAPE");
 
         // Duration is relative to the shutter interval. A lone peak must not zero image quality.
@@ -82,24 +92,29 @@ public static class ExposureAssessment {
 
         result.DecisionSummary = result.Status == FrameStatus.Rejected
             ? confirmedShape ? image.RemotePeakConfirmed ? "Rejected: repeated distant stellar image." : "Rejected: star-shape limit exceeded."
-                : result.RejectReasons.Contains("SKY_SIGNAL_LOSS") ? "Rejected: brighter sky with fewer and fainter stars."
-                : result.RejectReasons.Contains("STELLAR_FLUX_LOSS") ? "Rejected: measured stellar signal loss."
-                : guideRule && !result.GuideFalsePositive && extreme ? "Rejected: guide limit exceeded; extended stellar recovery not confirmed."
+                : result.RejectReasons.Contains("LOW_SESSION_SIGNAL") ? "Rejected: stellar signal below the session minimum."
+                : result.RejectReasons.Contains("SKY_SIGNAL_LOSS") ? "Rejected: sudden loss of stellar signal and star detections."
+                : result.RejectReasons.Contains("STELLAR_FLUX_LOSS") ? "Rejected: sudden stellar signal loss beyond the limit."
                 : guideRule && !result.GuideFalsePositive && settings.ImageEvidenceEnabled && image.Available && !image.HasRescueMargin ? $"Rejected: borderline stellar shape. Eccentricity {image.Eccentricity:0.00} must be below {image.Limits.RescueMaxEccentricity:0.00} for automatic rescue; original guide rejection retained."
+                : guideRule && !result.GuideFalsePositive && image.ExtendedAttempted ? $"Guide rejection retained: {image.VerifiedRegions}/5 regions verified; {image.CompromisedRegions} outside shape limits. Stellar recovery not established."
+                : guideRule && !result.GuideFalsePositive && extreme ? "Guide rejection retained: safety limit exceeded; stellar recovery not established."
                 : guideRule && !result.GuideFalsePositive ? settings.ImageEvidenceEnabled ? "Rejected: stellar check inconclusive; original guide limit retained." : "Rejected: guide limit exceeded; stellar analysis is disabled."
                 : result.GuideFalsePositive ? "Guide false positive cleared, but an independent star-count or background rule still rejects this frame."
                 : "Rejected: star-count or background limit exceeded."
             : result.GuideFalsePositive ? "Kept for review: stellar verification cleared the guide flag."
             : result.StarCountFalsePositive ? "Kept for review: matched stellar signal is within recovery limits."
             : result.Status == FrameStatus.Learning ? "Learning: building the reference for this target and imaging setup."
-            : result.ReviewReasons.Contains("TRANSPARENCY_CHANGE") ? "Kept for review: changing sky or stellar signal; reference unchanged."
+            : result.ReviewReasons.Contains("TRANSPARENCY_CHANGE") ? "Kept for review: unexpected signal change; reference unchanged."
             : result.ReviewReasons.Contains("STELLAR_CHECK_UNAVAILABLE") ? "Kept for review: stellar check unavailable."
+            : result.ReviewReasons.Contains("SIGNAL_REFERENCE_UNAVAILABLE") ? "Kept for review: insufficient matched signal references."
             : result.ReviewReasons.Contains("BORDERLINE_STAR_SHAPE") ? "Kept for review: borderline stellar shape."
             : result.Status == FrameStatus.Warning ? "Kept for review: reduced image quality."
+            : settings.ImageEvidenceEnabled && settings.RejectSignalDegradation && !image.PhotometryAvailable ? "Kept: available checks passed; signal references are learning."
+            : image.SignalTrendUsed ? "Kept: stellar signal follows the gradual session trend."
             : "Kept: all active checks passed.";
         result.ThresholdsUsed += $"; secondPass={settings.ImageEvidenceEnabled}; eccentricity>={image.Limits.MaxEccentricity:R} in >={image.Limits.DeformedFraction:P0} stars; tail>={image.Limits.MaxTailPercent:R}%; doublePeak>={image.Limits.MaxDoublePeakPercent:R}%; minStars={image.Limits.MinimumStars}; targetStars={image.Limits.TargetStars}; rescue requires RMS<={settings.MaxGuideRms:R} when enabled, peak<{Math.Max(6, settings.HardExcursionThreshold*2):R} when enabled, sustained<{Math.Max(settings.ExcursionMinimumDuration,input.ExposureSeconds*.1):R}s when enabled";
         result.ThresholdsUsed += $"; rescueEccentricity<{image.Limits.RescueMaxEccentricity:R} (0.05 margin)";
-        result.ThresholdsUsed += $"; signalReject={settings.RejectSignalDegradation}; directFluxLoss>{settings.MaxMeasuredFluxLossPercent:R}%; combinedFluxLoss>={settings.MaxCloudSignalLossPercent:R}% with starLoss>={Math.Max(10,settings.MaxStarLossPercent/2):R}% and backgroundRise>=3%; reference protection at >=10% flux loss plus stars -10% or background +2%, or stars -10% with background +3%; count rescue requires background rise<3% when signal rejection enabled; referenceAge<=120min";
+        result.ThresholdsUsed += $"; signalReject={settings.RejectSignalDegradation}; unexpectedFluxLoss>{settings.MaxMeasuredFluxLossPercent:R}%; combinedUnexpectedLoss>={settings.MaxCloudSignalLossPercent:R}% with starLoss>={Math.Max(10,settings.MaxStarLossPercent/2):R}%; minimumSessionSignal={settings.MinimumSessionSignalPercent:R}%; gradual matched-signal trend follows past clean frames; unexpected loss >=75% of combined limit with count loss>=10% or sky rise>=3% freezes reference learning; referenceAge<=360min for loss; <=120min for count rescue";
         result.ThresholdsUsed += $"; extendedRecovery requires >=4/5 regions, covered guide peak, RMS<=3x limit, sustained<25% exposure, tail<half limit; remotePeak>={image.Limits.MaxRemotePeakPercent:R}% in >=60% stars; measuredFluxEnabled={settings.VerifyStarCountWithFlux}; measuredFluxLoss>{settings.MaxMeasuredFluxLossPercent:R}%; countRescueFluxLoss<={Math.Min(20,settings.MaxMeasuredFluxLossPercent-5):R}%";
     }
 }

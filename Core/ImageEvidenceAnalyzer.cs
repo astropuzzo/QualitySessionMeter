@@ -57,11 +57,11 @@ public static class ImageEvidenceAnalyzer {
         }
         var centers = new List<(int X, int Y)>();
         var ratios = new List<double>(); var patches = new List<double[]>(); var cells = new HashSet<int>();
-        var fluxes = new List<double>(); var catalog = new List<StarObservation>(); int attempted = 0;
+        var fluxes = new List<double>(); var catalog = new List<StarObservation>(); int attempted = 0, examined = 0;
         foreach (var star in candidates.OrderByDescending(x => x.Peak)) {
             if (clock.ElapsedMilliseconds > 1500) return Unavailable(ratios.Count, "analysis time budget exceeded.");
             if (centers.Any(p => Math.Abs(p.X - star.X) < 20 && Math.Abs(p.Y - star.Y) < 20)) continue;
-            if (++attempted > Math.Clamp(limits.TargetStars, 20, 200) * 4) break;
+            if (++examined > Math.Clamp(limits.TargetStars, 20, 200) * 4) break;
             int x = star.X, y = star.Y;
             var border = new List<double>();
             for (int t = -12; t <= 12; t++) {
@@ -88,7 +88,11 @@ public static class ImageEvidenceAnalyzer {
             double minor = (xx + yy - delta) / 2, major = (xx + yy + delta) / 2;
             double peak = star.Peak - local;
             var fit = FitCore(a,w,x,y,local,peak,noise);
-            if (minor < 0.2 || major > 9 || (minor < .35 && !fit.Valid)) continue;
+            // Unresolved single-pixel detections are not failed stellar shape measurements.
+            // Count only resolved candidates in the reliability fraction, keeping broad/poor fits as failures.
+            if (minor < 0.2) continue;
+            attempted++;
+            if (major > 9 || (minor < .35 && !fit.Valid)) continue;
             // A finite aperture rounds elongated cores. A well-constrained fit can expose this bias;
             // moments remain a conservative fallback when tails violate the Gaussian model.
             double ratioValue = Math.Sqrt(major/minor);
@@ -106,7 +110,9 @@ public static class ImageEvidenceAnalyzer {
             if (ratios.Count >= Math.Clamp(limits.TargetStars, 20, 200)) break;
         }
         if (ratios.Count < Math.Clamp(limits.MinimumStars, 20, 200) || cells.Count < 3 || ratios.Count < attempted * .60)
-            return Unavailable(ratios.Count, "too few reliable, isolated stars distributed across the central field.");
+            return Unavailable(ratios.Count, $"{ratios.Count} reliable stars from {attempted} resolved candidates in {cells.Count} field cells.") with {
+                Catalog = catalog.ToArray(), FwhmPixels = catalog.Count > 0 ? Median(catalog.Select(s=>s.Fwhm)) : double.NaN
+            };
         var stack = Enumerable.Range(0, 625).Select(i => Median(patches.Select(p => p[i]))).ToArray();
         double tail = 0;
         // Opposite-side subtraction suppresses symmetric halos; the median stack suppresses companions/noise.

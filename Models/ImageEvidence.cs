@@ -20,8 +20,15 @@ public sealed record ImageEvidence {
     public string Detail { get; init; } = "Stellar analysis not run.";
     public double FwhmPixels { get; init; } = double.NaN;
     public double RelativeFlux { get; init; } = double.NaN;
+    public double RelativeFluxUpperBound { get; init; } = double.NaN;
+    public double MinimumSessionSignalPercent { get; init; } = double.NaN;
+    public double SessionRelativeFlux { get; init; } = double.NaN;
+    public double SessionFluxUpperBound { get; init; } = double.NaN;
+    public bool SignalTrendUsed { get; init; }
+    public double SignalTrendPercentPerHour { get; init; } = double.NaN;
     public int MatchedStars { get; init; }
     public int ReferenceFrames { get; init; }
+    public double ReferenceAgeMinutes { get; init; } = double.NaN;
     public double FwhmRatio { get; init; } = double.NaN;
     public int VerifiedRegions { get; init; }
     public int CompromisedRegions { get; init; }

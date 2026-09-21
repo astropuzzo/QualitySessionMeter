@@ -63,7 +63,7 @@ Check(Assess(round,21,3.9,12).Status == FrameStatus.Accepted, "disabled guide ru
 settings.EnableGuideRms = true; settings.EnableHardExcursion = true; settings.EnableSustainedExcursion = true;
 settings.ImageEvidenceEnabled = false;
 Check(Assess(round,3.03).Status == FrameStatus.Rejected, "disabled second pass retains original guide rejection");
-Check(Assess(round,3.03).AssessmentVersion == "1.4.1.1", "second-pass switch does not revert to legacy scoring");
+Check(Assess(round,3.03).AssessmentVersion == "1.4.2.0", "second-pass switch does not revert to legacy scoring");
 settings.ImageEvidenceEnabled = true;
 Check(!ExposureAssessment.IsGuideRejectCandidate(new GuideExposureMetrics {HasData=true,RmsArcsec=.8,MaxExcursionArcsec=1},settings), "healthy exposure does not request stellar analysis");
 Check(ExposureAssessment.IsGuideRejectCandidate(new GuideExposureMetrics {HasData=true,RmsArcsec=.8,MaxExcursionArcsec=3.1},settings), "guide reject requests second pass");
@@ -118,10 +118,10 @@ Check(!Assess(matched,1,stars:500).StarCountFalsePositive,"disabled flux verific
 settings.VerifyStarCountWithFlux=true;
 Check(Assess(matched with {RelativeFlux=.5},1).RejectReasons.Contains("STELLAR_FLUX_LOSS"),"measured signal loss rejects without requiring a prior star-count flag");
 Check(Assess(matched with {RelativeFlux=.76},1,stars:750,background:1080).RejectReasons.Contains("SKY_SIGNAL_LOSS"),"moderate signal loss plus brighter sky and fewer stars rejects");
-Check(Assess(matched with {RelativeFlux=.76},1,stars:750,background:1000).Status==FrameStatus.Warning,"count and signal reduction without brighter sky stays reviewable below direct loss limit");
+Check(Assess(matched with {RelativeFlux=.76},1,stars:750,background:1000).RejectReasons.Contains("SKY_SIGNAL_LOSS"),"abrupt count and signal reduction also rejects without brighter sky");
 Check(Assess(matched with {RelativeFlux=.96},1,stars:750,background:1080).Status!=FrameStatus.Rejected,"brighter sky and fewer detections without measured attenuation do not imply cloud rejection");
 Check(Assess(matched with {RelativeFlux=.76,ReferenceFrames=1},1,stars:750,background:1080).Status!=FrameStatus.Rejected,"insufficient photometric references cannot trigger combined rejection");
-var partialCloud=Assess(matched with {RelativeFlux=.87},1,stars:850,background:1030);
+var partialCloud=Assess(matched with {RelativeFlux=.83},1,stars:800,background:1030);
 Check(partialCloud.IsUsable && !ExposureAssessment.CanTrainBaseline(partialCloud),"partially attenuated kept frames do not contaminate the baseline");
 settings.RejectSignalDegradation=false;
 Check(Assess(matched with {RelativeFlux=.5},1).Status!=FrameStatus.Rejected,"disabled signal rejection does not add a new reject");
@@ -132,7 +132,7 @@ settings.ImageEvidenceEnabled=true;
 
 Check(Assess(matched with {RelativeFlux=.75},1,stars:750,background:1040).RejectReasons.Contains("SKY_SIGNAL_LOSS"),"measured attenuation with a modest but corroborating sky rise rejects");
 Check(!Assess(matched with {RelativeFlux=.75},1,stars:1000,background:1040).RejectReasons.Contains("SKY_SIGNAL_LOSS"),"sky plus flux without count corroboration stays below combined rejection");
-Check(!ExposureAssessment.CanTrainBaseline(Assess(matched with {RelativeFlux=1},1,stars:800,background:1100)),"fewer stars and brighter sky cannot train the reference even when matched flux is stable");
+Check(ExposureAssessment.CanTrainBaseline(Assess(matched with {RelativeFlux=1},1,stars:800,background:1100)),"stable measured signal can train through moderate count and background changes");
 Check(!Assess(matched,1,stars:500,background:1100).StarCountFalsePositive,"brightening sky prevents count rescue from clean stellar shape alone");
 
 var starCatalog=Enumerable.Range(0,45).Select(i=>new StarObservation(30+(i*73)%400,30+(i*113)%400,50000+i*1000,5000+i*100,3)).ToArray();
@@ -147,7 +147,13 @@ var comparison=referenceEngine.Compare(referenceKey,referenceSample,shifted,refe
 Check(comparison.PhotometryAvailable && comparison.ReferenceFrames==2 && Math.Abs(comparison.RelativeFlux-.72)<.001,"photometry matches shifted stars against prior accepted frames only");
 Check(!referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddMinutes(1),"East").PhotometryAvailable,"future reference frames are never used");
 Check(!referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddMinutes(4),"West").PhotometryAvailable,"meridian sides do not share stellar references");
-Check(!referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddHours(3),"East").PhotometryAvailable,"expired reference frames cannot keep certifying flux");
+var heldReference=referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddHours(3),"East");
+Check(heldReference.PhotometryAvailable && heldReference.RelativeFlux<.75 && heldReference.ReferenceAgeMinutes>=180,"long cloud intervals retain matched clean signal references");
+Check(!referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddHours(7),"East").PhotometryAvailable,"references beyond six hours are unavailable");
+var noShape=referenceEngine.Compare(referenceKey,referenceSample,shifted with {Available=false},referenceTime.AddMinutes(5),"East");
+Check(!noShape.Available && noShape.PhotometryAvailable,"reliable photometry survives unavailable shape classification");
+Check(Assess(noShape with {RelativeFlux=.5,RelativeFluxUpperBound=.51},1).RejectReasons.Contains("STELLAR_FLUX_LOSS"),"signal loss can reject without claiming verified shapes");
+Check(!Assess(matched with {ReferenceAgeMinutes=181},1,stars:500).StarCountFalsePositive,"old references cannot authorize a count-flag rescue");
 referenceEngine.Clear();Check(!referenceEngine.Compare(referenceKey,referenceSample,shifted,referenceTime.AddMinutes(4),"East").PhotometryAvailable,"session reset clears stellar references");
 
 var trackingBaseline=new BaselineEngine();var trackingReferences=new StellarReferenceEngine();
@@ -155,8 +161,8 @@ FrameQualityResult Track(ImageEvidence evidence,int stars,double bg,int minute) 
     var time=referenceTime.AddMinutes(minute);
     evidence=trackingReferences.Compare(referenceKey,referenceSample,evidence,time,"East");
     var frame=new QualityEngine().Evaluate(new FrameQualityInput {ExposureSeconds=120,StarCount=stars,BackgroundMedian=bg,ImageEvidence=evidence,
-        Baseline=trackingBaseline.GetSnapshot(referenceKey,4),Guide=new GuideExposureMetrics{HasData=true,Samples=50,RmsArcsec=.5,MaxExcursionArcsec=1}},settings);
-    if(ExposureAssessment.CanTrainBaseline(frame)) {trackingBaseline.AddAccepted(referenceKey,stars,bg,8);trackingReferences.Add(referenceKey,referenceSample,evidence,frame.Status,time,"East",8);}
+        Baseline=trackingBaseline.GetSnapshot(referenceKey,4,time),Guide=new GuideExposureMetrics{HasData=true,Samples=50,RmsArcsec=.5,MaxExcursionArcsec=1}},settings);
+    if(ExposureAssessment.CanTrainBaseline(frame)) {trackingBaseline.AddAccepted(referenceKey,stars,bg,8,time);trackingReferences.Add(referenceKey,referenceSample,evidence,frame.Status,time,"East",8);}
     return frame;
 }
 for(int i=0;i<5;i++)Track(catalogEvidence,1000,1000,i*2);
@@ -165,12 +171,57 @@ for(int i=1;i<=18;i++) {
     double flux=1-i*.025;
     fading=Track(catalogEvidence with {Catalog=starCatalog.Select(s=>s with {Flux=s.Flux*flux,Peak=s.Peak*flux}).ToArray()},(int)(1000*flux),1000+i*6,10+i*3);
 }
-Check(fading.Status==FrameStatus.Rejected && fading.ImageEvidence.RelativeFlux<.65 && fading.StarBaseline>900,"gradual attenuation cannot redefine the clean baseline over an hour");
+Check(fading.IsUsable && fading.ImageEvidence.RelativeFlux>.9 && fading.ImageEvidence.SessionRelativeFlux<.6,"gradual fading follows the recent trend and stays usable above the session floor");
 Check(Track(catalogEvidence,1000,1000,70).Status==FrameStatus.Accepted,"clear conditions recover without a sticky cloud rejection");
+// Smooth altitude changes must not become clouds; a step away from that trajectory must.
+ImageEvidence Signal(double flux) => catalogEvidence with {Catalog=starCatalog.Select(s=>s with {Flux=s.Flux*flux,Peak=s.Peak*flux}).ToArray()};
+trackingBaseline.Clear();trackingReferences.Clear();
+for(int i=0;i<24;i++) {
+    double flux=Math.Exp(-.035*i);
+    var gradual=Track(Signal(flux),(int)(1000*flux),1000*Math.Exp(.025*i),i*10);
+    Check(gradual.Status!=FrameStatus.Rejected,$"gradual signal/count fall and sky rise remain kept at exposure {i}");
+}
+var abrupt=Track(Signal(Math.Exp(-.035*24)*.7),300,1700,240);
+Check(abrupt.RejectReasons.Contains("SKY_SIGNAL_LOSS") || abrupt.RejectReasons.Contains("STELLAR_FLUX_LOSS"),"abrupt loss after a long gradual trend is rejected");
+var held=Track(Signal(Math.Exp(-.035*25)*.7),290,1680,250);
+Check(held.Status==FrameStatus.Rejected,"a second cloudy exposure cannot reset the rejected reference");
+Check(Track(Signal(Math.Exp(-.035*26)),410,1900,260).IsUsable,"return to the gradual signal trajectory recovers");
+Check(Assess(matched with {RelativeFlux=1,SessionFluxUpperBound=.39},1).RejectReasons.Contains("LOW_SESSION_SIGNAL"),"gradual fading still has a configurable minimum usable signal");
+Check(!Assess(matched with {RelativeFlux=1,SessionFluxUpperBound=.41},1).RejectReasons.Contains("LOW_SESSION_SIGNAL"),"session floor respects measurement allowance");
+Check(!Assess(matched with {RelativeFlux=1,SessionFluxUpperBound=double.NaN},1).RejectReasons.Contains("LOW_SESSION_SIGNAL"),"missing session reference cannot manufacture a low-signal verdict");
+trackingBaseline.Clear();trackingReferences.Clear();
+foreach(int minute in new[]{0,9,21,30,43,51,63,74,86,95,108,121}) {
+    double flux=Math.Exp(.003*minute);
+    Check(Track(Signal(flux),(int)(700*flux),1300*Math.Exp(-.003*minute),minute).Status!=FrameStatus.Rejected,"gradual increase with irregular cadence and darkening sky stays kept");
+}
+Check(Assess(matched with {RelativeFlux=.74},1,stars:730,background:850).RejectReasons.Contains("SKY_SIGNAL_LOSS"),"sudden stellar/count loss rejects even when the sky gets darker");
+trackingBaseline.Clear();trackingReferences.Clear();
+for(int i=0;i<8;i++)Track(Signal(1),1000,1000,i*2);
+for(int i=1;i<=5;i++) {
+    double flux=Math.Pow(.92,i);
+    var ramp=Track(Signal(flux),(int)(1000*flux),1000+i*15,14+i*2);
+    if(i>=3)Check(ramp.Status==FrameStatus.Rejected,"rapid multi-frame attenuation cannot become a gradual reference");
+}
+Check(Track(Signal(.68),680,1080,30).Status==FrameStatus.Rejected,"a low cloud plateau remains excluded after the initial drop");
+Check(Track(Signal(1),1000,1000,32).IsUsable,"clear return ends the cloud interval");
 settings.MaxCloudSignalLossPercent=30;
 Check(!Assess(matched with {RelativeFlux=.76},1,stars:750,background:1080).RejectReasons.Contains("SKY_SIGNAL_LOSS"),"combined signal loss follows the configured threshold");
 settings.MaxCloudSignalLossPercent=20;
-Check(Assess(matched with {RelativeFlux=.76},1,stars:750,background:1080).ProbableCause=="SKY / STELLAR SIGNAL LOSS","signal rejection is displayed as signal loss, not a generic review");
+Check(Assess(matched with {RelativeFlux=.76},1,stars:750,background:1080).ProbableCause=="SUDDEN STELLAR SIGNAL LOSS","signal rejection is displayed as signal loss, not a generic review");
+
+FrameQualityResult TrendFrame(double flux, double r2) => new QualityEngine().Evaluate(new FrameQualityInput {
+    ExposureSeconds=600,StarCount=730,BackgroundMedian=1005,ImageEvidence=matched with {RelativeFlux=flux},
+    Baseline=new BaselineSnapshot {StarsReady=true,BackgroundReady=true,StarMedian=1000,BackgroundMedian=1000,
+        BackgroundTrendUsable=true,BackgroundTrendR2=r2,BackgroundTrendExpectedNext=970,BackgroundTrendPercentPerFrame=-.5},
+    Guide=new GuideExposureMetrics {HasData=true,Samples=100,RmsArcsec=.5,MaxExcursionArcsec=1}
+},settings);
+Check(TrendFrame(.74,.95).RejectReasons.Contains("SKY_SIGNAL_LOSS"),"signal and count loss can corroborate a rise above a reliable darkening-sky trend");
+Check(TrendFrame(.74,.8).RejectReasons.Contains("SKY_SIGNAL_LOSS"),"abrupt signal and count loss does not require a background trend");
+Check(TrendFrame(1,.95).Status!=FrameStatus.Rejected,"background trend alone never rejects stable stellar signal");
+var uncertainSignal=Assess(matched with {RelativeFlux=.79,RelativeFluxUpperBound=.82},1,stars:750,background:1080);
+Check(uncertainSignal.Status==FrameStatus.Warning && !ExposureAssessment.CanTrainBaseline(uncertainSignal),"uncertain threshold crossing is reviewed and cannot train the reference");
+Check(Assess(matched with {RelativeFlux=.60,RelativeFluxUpperBound=.63},1).RejectReasons.Contains("STELLAR_FLUX_LOSS"),"clear signal loss remains rejected after measurement allowance");
+await SessionStorageCheck.Run(Check);
 
 var wideClean=Field(1.4,1.4) with {ArcsecPerSample=1,OuterFields=Enumerable.Range(0,4).Select(_=>Field(1.4,1.4)).ToArray()};
 var cleanProof=ExtendedStarAnalyzer.Verify(wideClean,ImageEvidenceAnalyzer.Analyze(wideClean),40);

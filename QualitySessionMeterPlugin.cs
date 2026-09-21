@@ -21,9 +21,13 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
     private readonly LatestLightPreviewCache previewCache;
     private readonly QualitySessionHttpBridge httpBridge;
     private readonly QualitySessionWebServer webServer;
+    private readonly QualitySessionRuntime runtime;
 
     public IPluginOptionsAccessor PluginSettings { get; }
     public QualitySettings Settings { get; }
+    public string SessionReportFolder => runtime?.Store.SessionFolder ?? "";
+    public string SessionReportStatus => !string.IsNullOrEmpty(runtime?.SessionStorageError) ? runtime.SessionStorageError
+        : string.IsNullOrEmpty(SessionReportFolder) ? "No session saved yet." : "Session reports saved.";
 
     // The Options UI displays this value in a read-only TextBox so the URL remains selectable.
     // WPF TextBox.Text binds TwoWay by default, therefore a public no-op setter is intentionally
@@ -52,13 +56,15 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
         PluginSettings = new PluginOptionsAccessor(profileService, PluginConstants.Identifier);
         Settings = new QualitySettings(PluginSettings);
 
-        var runtime = QualitySessionRuntimeRegistry.GetOrCreate(
+        runtime = QualitySessionRuntimeRegistry.GetOrCreate(
             profileService,
             imageSaveMediator,
             guiderMediator,
             sequenceMediator,
             Settings);
         runtime.AttachWeatherMediator(weatherDataMediator);
+        runtime.FrameProcessed += SessionFrameProcessed;
+        runtime.SessionReset += SessionReset;
 
         // Read-only in-process companion contract for N.I.N.A. plugins.
         mobileBridge = new QualitySessionMobileBridge(messageBroker);
@@ -90,6 +96,13 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
         }
     }
 
+    private void SessionFrameProcessed(object sender, Models.FrameQualityResult frame) => SessionReset(sender, EventArgs.Empty);
+
+    private void SessionReset(object sender, EventArgs e) {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SessionReportFolder)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SessionReportStatus)));
+    }
+
     private void ProfileChanged(object sender, EventArgs e) {
         Settings.NotifyProfileChanged();
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
@@ -98,6 +111,8 @@ public sealed class QualitySessionMeterPlugin : PluginBase, INotifyPropertyChang
     public override Task Teardown() {
         profileService.ProfileChanged -= ProfileChanged;
         Settings.PropertyChanged -= SettingsChanged;
+        runtime.FrameProcessed -= SessionFrameProcessed;
+        runtime.SessionReset -= SessionReset;
         webServer?.Dispose();
         httpBridge?.Dispose();
         previewCache?.Dispose();

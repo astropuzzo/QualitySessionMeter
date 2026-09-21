@@ -18,12 +18,16 @@ public sealed class SessionStore {
     private readonly EventGroupingEngine eventGrouping = new();
     private readonly SemaphoreSlim ioLock = new(1, 1);
     private readonly string baseDirectoryOverride;
+    private readonly Func<FrameQualityResult, string> directoryResolver;
     private string sessionFolder;
     private DateTime sessionCreatedUtc;
 
-    public SessionStore(string baseDirectoryOverride = null) {
+    public SessionStore(string baseDirectoryOverride = null, Func<FrameQualityResult, string> directoryResolver = null) {
         this.baseDirectoryOverride = baseDirectoryOverride;
+        this.directoryResolver = directoryResolver;
     }
+
+    public string StorageWarning { get; private set; } = "";
 
     public string SessionFolder {
         get { lock (sync) return sessionFolder ?? ""; }
@@ -40,17 +44,18 @@ public sealed class SessionStore {
             results.Clear();
             sessionFolder = null;
             sessionCreatedUtc = default;
+            StorageWarning = "";
         }
         eventGrouping.Reset();
     }
 
     public async Task AppendAsync(FrameQualityResult result) {
-        EnsureSession();
         lock (sync) results.Add(result);
         eventGrouping.Add(result);
 
         await ioLock.WaitAsync();
         try {
+            EnsureSession(result);
             await AppendCsvAsync(result);
             await WriteSummaryAsync();
             await WriteEventsCsvAsync();
@@ -74,15 +79,22 @@ public sealed class SessionStore {
         }
     }
 
-    private void EnsureSession() {
+    private void EnsureSession(FrameQualityResult result) {
         lock (sync) {
             if (!string.IsNullOrWhiteSpace(sessionFolder)) return;
 
-            var baseDir = string.IsNullOrWhiteSpace(baseDirectoryOverride)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA", "QualitySessionMeter", "Sessions")
-                : baseDirectoryOverride;
-
-            Directory.CreateDirectory(baseDir);
+            var baseDir = baseDirectoryOverride;
+            try {
+                if (string.IsNullOrWhiteSpace(baseDir)) baseDir = directoryResolver?.Invoke(result) ?? SessionPathResolver.DefaultDirectory;
+                Directory.CreateDirectory(baseDir);
+                // Test actual write access; an existing read-only directory can pass CreateDirectory.
+                string probe = Path.Combine(baseDir, ".qsm-write-" + Guid.NewGuid().ToString("N"));
+                using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
+            } catch (Exception ex) when (directoryResolver != null && ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) {
+                StorageWarning = "Selected session folder unavailable. Reports are saved in the default local folder. " + ex.Message;
+                baseDir = SessionPathResolver.DefaultDirectory;
+                Directory.CreateDirectory(baseDir);
+            }
             sessionCreatedUtc = DateTime.UtcNow;
             string stem = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss_fff", CultureInfo.InvariantCulture);
             string candidate = Path.Combine(baseDir, stem);
@@ -110,7 +122,7 @@ public sealed class SessionStore {
                 "Confidence,ConfidenceLabel,ConfidenceDataCompleteness,ConfidenceBaselineMaturity,ConfidenceThresholdSeparation,ConfidenceAgreement,ConfidenceReason," +
                 "PredictiveWarning,PredictiveConfidence,PredictiveChannel,PredictiveMessage,PredictiveFramesToThreshold," +
                 "EnvironmentAvailable,CloudCover,Humidity,WindSpeed,WindGust,SkyQuality,AmbientTemperature,DewPoint,EnvironmentalHint," +
-                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly,AssessmentVersion,ReviewReasons,DecisionSummary,ImageEvidenceAvailable,ImageStars,StarAxisRatio,StarTailStrength,ThresholdsUsed,GuideFalsePositive,StarEccentricity,StarDoublePeak,StarMedianFlux,ShapeAnalysisMs,StarCountFalsePositive,ExtendedAvailable,VerifiedRegions,RemotePeakStrength,RemotePeakSupport,SearchRadiusArcsec,RelativeStellarFlux,MatchedStars,StellarReferenceFrames,StarFwhmPixels,StarFwhmRatio");
+                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly,AssessmentVersion,ReviewReasons,DecisionSummary,ImageEvidenceAvailable,ImageStars,StarAxisRatio,StarTailStrength,ThresholdsUsed,GuideFalsePositive,StarEccentricity,StarDoublePeak,StarMedianFlux,ShapeAnalysisMs,StarCountFalsePositive,ExtendedAvailable,VerifiedRegions,RemotePeakStrength,RemotePeakSupport,SearchRadiusArcsec,RelativeStellarFlux,MatchedStars,StellarReferenceFrames,StarFwhmPixels,StarFwhmRatio,StellarReferenceAgeMinutes,SessionRelativeStellarFlux,StellarSignalTrendUsed,StellarSignalTrendPercentPerHour,MinimumSessionSignalPercent");
         }
 
         string[] fields = {
@@ -140,7 +152,7 @@ public sealed class SessionStore {
             Csv(r.DecisionSummary), Bool(r.ImageEvidence.Available), r.ImageEvidence.Stars.ToString(CultureInfo.InvariantCulture),
             Num(r.ImageEvidence.AxisRatio), Num(r.ImageEvidence.TailStrength), Csv(r.ThresholdsUsed), Bool(r.GuideFalsePositive), Num(r.ImageEvidence.Eccentricity), Num(r.ImageEvidence.DoublePeakStrength), Num(r.ImageEvidence.MedianFlux), Num(r.ImageEvidence.ElapsedMilliseconds),
             Bool(r.StarCountFalsePositive),Bool(r.ImageEvidence.ExtendedAvailable),Num(r.ImageEvidence.VerifiedRegions),Num(r.ImageEvidence.RemotePeakStrength),Num(r.ImageEvidence.RemotePeakSupport),
-            Num(r.ImageEvidence.SearchRadiusArcsec),Num(r.ImageEvidence.RelativeFlux),Num(r.ImageEvidence.MatchedStars),Num(r.ImageEvidence.ReferenceFrames),Num(r.ImageEvidence.FwhmPixels),Num(r.ImageEvidence.FwhmRatio)
+            Num(r.ImageEvidence.SearchRadiusArcsec),Num(r.ImageEvidence.RelativeFlux),Num(r.ImageEvidence.MatchedStars),Num(r.ImageEvidence.ReferenceFrames),Num(r.ImageEvidence.FwhmPixels),Num(r.ImageEvidence.FwhmRatio),Num(r.ImageEvidence.ReferenceAgeMinutes),Num(r.ImageEvidence.SessionRelativeFlux),Bool(r.ImageEvidence.SignalTrendUsed),Num(r.ImageEvidence.SignalTrendPercentPerHour),Num(r.ImageEvidence.MinimumSessionSignalPercent)
         };
         await writer.WriteLineAsync(string.Join(",", fields));
     }
