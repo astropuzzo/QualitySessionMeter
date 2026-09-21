@@ -45,6 +45,10 @@ public sealed class QualityEngine {
         };
 
         var reasons = new List<string>();
+        if(settings.UseExposureAssessment) {
+            if(result.StarTrendUsable && result.StarTrendExpected>0) result.StarBaseline=result.StarTrendExpected;
+            if(result.BackgroundTrendUsable && result.BackgroundTrendExpected>0) result.BackgroundBaseline=result.BackgroundTrendExpected;
+        }
         var dataErrors = new List<string>();
 
         bool guideRequired = settings.EnableGuideRms || settings.EnableSustainedExcursion || settings.EnableHardExcursion;
@@ -82,7 +86,7 @@ public sealed class QualityEngine {
 
         bool starsReady = !settings.EnableStarCount || input.Baseline?.StarsReady == true;
         if (settings.EnableStarCount && starsReady && starDataAvailable && input.Baseline.StarMedian > 0) {
-            result.StarDeviationPercent = ((input.StarCount - input.Baseline.StarMedian) / input.Baseline.StarMedian) * 100.0;
+            result.StarDeviationPercent = ((input.StarCount - result.StarBaseline) / result.StarBaseline) * 100.0;
             var loss = Math.Max(0, -result.StarDeviationPercent);
             result.TransparencyQuality = ScoreUpper(loss, settings.MaxStarLossPercent);
             if (loss > settings.MaxStarLossPercent) reasons.Add("STAR_COUNT_DROP");
@@ -95,7 +99,7 @@ public sealed class QualityEngine {
         bool backgroundReady = !settings.EnableBackground || input.Baseline?.BackgroundReady == true;
         if (settings.EnableBackground && backgroundReady && backgroundDataAvailable && input.Baseline.BackgroundMedian > 0) {
             result.BackgroundDeviationPercent =
-                ((input.BackgroundMedian - input.Baseline.BackgroundMedian) / input.Baseline.BackgroundMedian) * 100.0;
+                ((input.BackgroundMedian - result.BackgroundBaseline) / result.BackgroundBaseline) * 100.0;
 
             double threshold = result.BackgroundDeviationPercent >= 0
                 ? settings.MaxBackgroundIncreasePercent
@@ -163,7 +167,8 @@ public sealed class QualityEngine {
             result.ConfidenceScore = Math.Min(result.ConfidenceScore, result.ImageEvidence.Available ? 85 : 65);
             result.ConfidenceReason = "Evidence strength, not a probability that the photograph is good or bad. " + result.DecisionSummary;
             if (result.RejectReasons.Any(x => x.StartsWith("STAR_SHAPE"))) result.ProbableCause = "MEASURED STAR-SHAPE DAMAGE";
-            else if (result.RejectReasons.Contains("SKY_SIGNAL_LOSS") || result.RejectReasons.Contains("STELLAR_FLUX_LOSS")) result.ProbableCause = "SKY / STELLAR SIGNAL LOSS";
+            else if (result.RejectReasons.Contains("LOW_SESSION_SIGNAL")) result.ProbableCause = "LOW STELLAR SIGNAL";
+            else if (result.RejectReasons.Contains("SKY_SIGNAL_LOSS") || result.RejectReasons.Contains("STELLAR_FLUX_LOSS")) result.ProbableCause = "SUDDEN STELLAR SIGNAL LOSS";
             else if (result.RejectReasons.Any(x => x.Contains("GUIDE"))) result.ProbableCause = "GUIDE LIMIT EXCEEDED";
             else if (result.ReviewReasons.Count > 0) result.ProbableCause = "REVIEW RECOMMENDED";
         }

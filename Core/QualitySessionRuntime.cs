@@ -33,7 +33,8 @@ public sealed class QualitySessionRuntime : IDisposable {
     private readonly CalibrationSuggestionEngine calibrationEngine = new();
     private readonly PredictiveDegradationEngine predictiveEngine = new();
     private readonly EnvironmentalCorrelationService environmentalService = new();
-    private readonly SessionStore sessionStore = new();
+    private readonly SessionStore sessionStore;
+    public string SessionStorageError { get; private set; } = "";
     private readonly SemaphoreSlim processingLock = new(1, 1);
     private readonly object controlSync = new();
     private readonly HashSet<string> controlTokens = new(StringComparer.Ordinal);
@@ -67,6 +68,7 @@ public sealed class QualitySessionRuntime : IDisposable {
     public event EventHandler SyntheticStateChanged;
 #endif
     public event EventHandler CalibrationSuggestionChanged;
+    public event EventHandler SessionReset;
 
     public QualitySettings Settings => settings;
     public SessionStore Store => sessionStore;
@@ -112,6 +114,8 @@ public sealed class QualitySessionRuntime : IDisposable {
         this.imageSaveMediator = imageSaveMediator;
         this.sequenceMediator = sequenceMediator;
         this.settings = settings;
+        sessionStore = new SessionStore(directoryResolver: frame => SessionPathResolver.Resolve(
+            settings.SessionStorageModeIndex, settings.SessionOutputDirectory, frame.OriginalPath));
         guideCollector = new GuideCollector(guiderMediator);
 
         imageSaveMediator.BeforeFinalizeImageSaved += BeforeFinalizeImageSaved;
@@ -332,7 +336,7 @@ public sealed class QualitySessionRuntime : IDisposable {
                 meta.Camera?.BinY ?? 1,
                 meta.Camera?.Name);
 
-            var snapshot = baseline.GetSnapshot(key, settings.MinimumLearningFrames);
+            var snapshot = baseline.GetSnapshot(key, settings.MinimumLearningFrames, frameTimestampUtc);
             var imageEvidence = new ImageEvidence();
             var sample = source.ImageSample;
             string pierSide = meta.Telescope?.SideOfPier.ToString() ?? "Unknown";
@@ -391,7 +395,7 @@ public sealed class QualitySessionRuntime : IDisposable {
             result.EnvironmentalHint = environment.CorrelationHint;
 
             if (ExposureAssessment.CanTrainBaseline(result)) {
-                baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow);
+                baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow, frameTimestampUtc);
             }
             if (ExposureAssessment.CanTrainBaseline(result)) stellarAnalysis.AddReference(key,sample,imageEvidence,result.Status,frameTimestampUtc,pierSide,settings.BaselineWindow);
 
@@ -404,7 +408,14 @@ public sealed class QualitySessionRuntime : IDisposable {
                 }
             }
 
-            await sessionStore.AppendAsync(result);
+            try {
+                await sessionStore.AppendAsync(result);
+                SessionStorageError = sessionStore.StorageWarning;
+            } catch (Exception ex) {
+                SessionStorageError = "Session report could not be saved: " + ex.Message;
+                Logger.Warning($"QualitySessionMeter {SessionStorageError}");
+                // Report I/O must not replace a completed image assessment with an analysis error.
+            }
             UpdateCalibrationSuggestion();
             FrameProcessed?.Invoke(this, result);
         } catch (Exception ex) {
@@ -665,6 +676,7 @@ public sealed class QualitySessionRuntime : IDisposable {
             baseline.Clear();
             stellarAnalysis.Clear();
             sessionStore.Reset();
+            SessionStorageError = "";
             Interlocked.Exchange(ref frameIndex, 0);
             appliedCalibrationContexts.Clear();
             ignoredCalibrationContexts.Clear();
@@ -678,6 +690,7 @@ public sealed class QualitySessionRuntime : IDisposable {
             processingLock.Release();
         }
         CalibrationSuggestionChanged?.Invoke(this, EventArgs.Empty);
+        SessionReset?.Invoke(this, EventArgs.Empty);
     }
 
     private static DateTime NormalizeUtc(DateTime value) {

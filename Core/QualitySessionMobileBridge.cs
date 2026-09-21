@@ -79,7 +79,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
 
         var result = new Dictionary<string, object> {
             ["contractVersion"] = ContractVersion,
-            ["assessmentVersion"] = "1.4.1.1",
+            ["assessmentVersion"] = "1.4.2.0",
             ["available"] = true,
             ["readOnly"] = true,
             ["generatedUtc"] = DateTimeOffset.UtcNow.ToString("O"),
@@ -125,6 +125,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
                 ["verifyStarCountWithFlux"] = settings.VerifyStarCountWithFlux,
                 ["rejectSignalDegradation"] = settings.RejectSignalDegradation,
                 ["maxCloudSignalLossPercent"] = settings.MaxCloudSignalLossPercent,
+                ["minimumSessionSignalPercent"] = settings.MinimumSessionSignalPercent,
                 ["maxMeasuredFluxLossPercent"] = settings.MaxMeasuredFluxLossPercent
             },
             ["series"] = new Dictionary<string, object> {
@@ -186,8 +187,15 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
         ["starRemotePeakSupport"] = JsonNumber(frame.ImageEvidence.RemotePeakSupport),
         ["starSearchRadiusArcsec"] = JsonNumber(frame.ImageEvidence.SearchRadiusArcsec),
         ["relativeStellarFlux"] = JsonNumber(frame.ImageEvidence.RelativeFlux),
+        ["relativeStellarFluxUpperBound"] = JsonNumber(frame.ImageEvidence.RelativeFluxUpperBound),
+        ["minimumSessionSignalPercent"] = JsonNumber(frame.ImageEvidence.MinimumSessionSignalPercent),
+        ["sessionRelativeStellarFlux"] = JsonNumber(frame.ImageEvidence.SessionRelativeFlux),
+        ["stellarSignalTrendUsed"] = frame.ImageEvidence.SignalTrendUsed,
+        ["stellarSignalTrendPercentPerHour"] = JsonNumber(frame.ImageEvidence.SignalTrendPercentPerHour),
         ["matchedStars"] = frame.ImageEvidence.MatchedStars,
         ["stellarReferenceFrames"] = frame.ImageEvidence.ReferenceFrames,
+        ["stellarPhotometryAvailable"] = frame.ImageEvidence.PhotometryAvailable,
+        ["stellarReferenceAgeMinutes"] = JsonNumber(frame.ImageEvidence.ReferenceAgeMinutes),
         ["starFwhmPixels"] = JsonNumber(frame.ImageEvidence.FwhmPixels),
         ["starFwhmRatio"] = JsonNumber(frame.ImageEvidence.FwhmRatio),
         ["secondPassText"] = frame.SecondPassText,

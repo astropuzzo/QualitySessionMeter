@@ -2,6 +2,18 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.2.0] - 2026-09-21
+
+- Keep matched-star photometry available when shape classification is inconclusive. Ignore unresolved single-pixel detections when counting failed shape measurements.
+- Follow coherent, timestamped stellar-signal trends and recent star/background levels. Normal gradual changes no longer become accumulated losses against the start of the night.
+- Reject sudden matched-signal loss with fewer stars without requiring a brighter sky. Freeze reference learning during suspicious changes, including rapid multi-frame attenuation.
+- Add **Minimum Session Signal**, default 40% of the initial matched reference and configurable from 5–80%. Signal limits include a measured-scatter allowance.
+- Keep clean references up to six hours through rejected intervals, with bounded trend extrapolation. References older than two hours cannot authorize a star-count recovery.
+- State why guide recovery was not established, including verified regions and borderline eccentricity.
+- Add session report locations: default local folder, a chosen folder, or beside the LIGHT folder. Keep the active session in one location; use the new location from the next session. Show the actual folder and any fallback or write failure in Options.
+- Show photometry separately from unavailable shape evidence in the public and OpenAstro inspectors.
+- Validate against the September 20 HOO session and the earlier QUAD/shape regressions. See [field results](docs/1.4.2-FIELD-VALIDATION.md).
+
 ## [1.4.1.1] - 2026-09-19
 
 ### Added

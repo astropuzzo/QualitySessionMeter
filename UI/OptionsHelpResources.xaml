@@ -57,6 +57,26 @@
                     <TextBlock Grid.Column="2" Text="frames" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
+                <TextBlock Text="Session Reports" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Save Location" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Column="1" SelectedIndex="{Binding Settings.SessionStorageModeIndex}" Width="300" HorizontalAlignment="Left">
+                        <ComboBoxItem Content="Default local folder"/>
+                        <ComboBoxItem Content="Custom folder"/>
+                        <ComboBoxItem Content="Beside the LIGHT folder"/>
+                    </ComboBox>
+                </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="430"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Custom Folder" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.SessionOutputDirectory, UpdateSourceTrigger=LostFocus}" Margin="0,0,10,0"/>
+                    <Button Grid.Column="2" Content="Browse…" Click="ChooseSessionFolder" HorizontalAlignment="Left" Padding="12,4"/>
+                </Grid>
+                <TextBlock Text="Creates QSM / session-date in the selected location. Changes apply to the next session." Margin="16,2,0,5" FontSize="11" Opacity="0.74"/>
+                <TextBlock Text="{Binding SessionReportStatus}" Margin="16,2,0,3" Width="910" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding SessionReportFolder}" Margin="16,0,0,8" Width="910" FontSize="11" TextWrapping="Wrap" Opacity="0.74"/>
+
                 <TextBlock Text="Guiding" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,3"/>
                 <TextBlock Margin="16,0,0,7" Width="910" FontSize="11" Opacity="0.74" TextWrapping="Wrap"
                            Text="QSM evaluates guide samples captured during the exposure. RMS measures overall guide error; excursion rules catch persistent or severe departures."/>
@@ -245,7 +265,7 @@
                 </Grid>
                 <Grid Margin="16,5,0,5">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Signal Loss with Brighter Sky" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBlock Text="Sudden Signal and Star Loss" VerticalAlignment="Center" TextWrapping="Wrap"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MaxCloudSignalLossPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="% · with background +3% and star loss of at least half its limit (minimum 10%)" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
@@ -257,10 +277,17 @@
                 </Grid>
                 <Grid Margin="16,5,0,5">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Maximum Stellar Signal Loss" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBlock Text="Maximum Sudden Signal Loss" VerticalAlignment="Center" TextWrapping="Wrap"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MaxMeasuredFluxLossPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="% · 5–80 · matched stellar signal" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
+                <Grid Margin="16,5,0,5">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Minimum Session Signal" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <TextBox Grid.Column="1" Text="{Binding Settings.MinimumSessionSignalPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="2" Text="% of initial matched signal · 5–80 · default 40" TextWrapping="Wrap" VerticalAlignment="Center" Opacity="0.72"/>
+                </Grid>
+                <TextBlock Margin="40,6,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Gradual signal and sky changes update the reference. Sudden losses are checked against the recent trend; rejected frames do not update it."/>
                 <TextBlock Text="Session &amp; File Handling" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
 
                 <Grid Margin="16,5,0,5" ToolTip="Filesystem action attempted only for an eligible REJECTED frame when Monitor Only is OFF. QSM never deletes an image and all rename/move actions are collision-safe.">

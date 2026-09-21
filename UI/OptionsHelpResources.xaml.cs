@@ -94,6 +94,16 @@ public partial class OptionsHelpResources : ResourceDictionary {
         }
     }
 
+    private void ChooseSessionFolder(object sender, RoutedEventArgs e) {
+        if (sender is not Button button || button.DataContext is not QualitySessionMeterPlugin plugin) return;
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Session reports folder", Multiselect = false };
+        if (System.IO.Directory.Exists(plugin.Settings.SessionOutputDirectory)) dialog.InitialDirectory = plugin.Settings.SessionOutputDirectory;
+        if (dialog.ShowDialog() == true) {
+            plugin.Settings.SessionOutputDirectory = dialog.FolderName;
+            plugin.Settings.SessionStorageModeIndex = 1;
+        }
+    }
+
     private void CopyDashboardAddress(object sender, RoutedEventArgs e) {
         if (sender is not Button button || button.DataContext is not QualitySessionMeterPlugin plugin) return;
         var address = plugin.WebDashboardAddress;

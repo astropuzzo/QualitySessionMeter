@@ -399,6 +399,8 @@ internal static class Program {
 }
 
 internal sealed class PreviewSettings {
+    public int SessionStorageModeIndex { get; set; } = 2;
+    public string SessionOutputDirectory { get; set; } = @"E:\Images\Night";
     public bool Enabled { get; set; } = true;
     public int MonitoringScopeIndex { get; set; } = 1;
     public bool MonitorOnly { get; set; }
@@ -437,6 +439,7 @@ internal sealed class PreviewSettings {
     public bool RejectSignalDegradation { get; set; } = true;
     public double MaxMeasuredFluxLossPercent { get; set; } = 35;
     public double MaxCloudSignalLossPercent { get; set; } = 20;
+    public double MinimumSessionSignalPercent { get; set; } = 40;
     public bool WebDashboardEnabled { get; set; } = true;
     public int WebDashboardPort { get; set; } = 18974;
     public bool WebDashboardRequirePassword { get; set; }
@@ -444,6 +447,8 @@ internal sealed class PreviewSettings {
 }
 
 internal sealed class OptionsPreviewVm {
+    public string SessionReportStatus { get; set; } = "Session reports saved.";
+    public string SessionReportFolder { get; set; } = @"E:\Images\Night\QSM\2026-09-21_20-00-00";
     public PreviewSettings Settings { get; set; }
     public string WebDashboardAddress { get; set; }
     public string WebDashboardStatus { get; set; }

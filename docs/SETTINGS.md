@@ -207,9 +207,14 @@ They exist to prevent automatic learning from silently creating excessively perm
 | Minimum reliable stars (fixed) | 20 | Minimum count; distribution and valid-measurement fraction must also pass. |
 | Target stars | 100 | Upper target for the central sample. |
 | Verify Star-count Flags | On | Match stellar identities to previous clean references before clearing or confirming a count-loss flag. |
-| Maximum measured signal loss | 35% | Rejects when matched flux falls below 65% of the clean reference with Reject Stellar Signal Loss enabled; also confirms an existing count flag when count verification is enabled. |
+| Maximum Sudden Signal Loss | 35% | Rejects loss beyond this limit relative to the recent expected signal; also confirms an existing count flag when count verification is enabled. |
+| Minimum Session Signal | 40% | Minimum relative to the first three eligible matched references in the same context and pier side. Configurable from 5–80%; this is not an absolute SNR limit. |
 
-**Reject Stellar Signal Loss** (default On) enables direct measured signal rejection and the combined sky check. **Signal Loss with Brighter Sky** defaults to 20%: it requires that much measured attenuation, background at least 3% higher and star-count loss of at least `max(10%, half the configured star-count loss limit)`. These are simultaneous conditions; sky brightness or round star shapes alone do not determine this verdict. The direct loss limit defaults to 35%. Both rules require stellar analysis and at least 20 matched stars against two prior clean references. Missing corroborating measurements cannot trigger the combined rule.
+**Reject Stellar Signal Loss** (default On) enables direct measured loss, combined sudden loss and the session minimum. **Sudden Signal and Star Loss** defaults to 20% below the recent expected level, with star-count loss of at least `max(10%, half the configured star-count loss limit)`. The sky may brighten, darken or stay unchanged. The direct loss limit defaults to 35%. Both rules require at least 20 matched stars against two prior clean references. A robust scatter allowance must still cross the threshold before rejection.
+
+With timestamps, the star/background reference uses the median of the three most recent eligible samples, or a coherent fitted trend. Matched photometry follows a log-linear trend in past clean frames when sufficiently consistent; otherwise it uses their rolling median. Fits require R² at least 0.85, log scatter at most 0.025, and bounded rates. Extrapolation through a rejected gap stops after two usual frame intervals (at least five minutes for photometry). Unexpected loss at 75% of the combined limit plus at least 10% fewer stars or 3% higher background keeps the reference unchanged, even when the frame is only a warning. This prevents rapid multi-frame losses from training a cloudy baseline while allowing gradual trajectories to continue.
+
+References are separated by imaging context and pier side and retained for at most six hours. Count recovery still requires references no older than two hours and successful shape evidence. Photometry can remain available when shape classification is inconclusive. Missing shape evidence cannot clear a guide rejection. Gradual cloud attenuation and altitude-related changes can resemble one another; these rules measure relative image quality, not a calibrated weather probability.
 
 The central sample is bounded to 1024 × 1024 pixels. Four outer samples are bounded to 384 × 384 each. Bayer data uses aligned 2 × 2 cell averages; measurement decisions use linear pixels. A valid core fit supplements the moment estimate where aperture truncation would underestimate elongation.
 
@@ -313,3 +318,9 @@ The dashboard itself uses plain HTTP. Password authentication therefore does not
 ## OpenAstro companion API
 
 The OpenAstro integration is separate from the normal Web Dashboard. It keeps its dedicated tokenized, read-only `/api/v1/...` contract so existing OpenAstro installations remain compatible.
+
+## Session reports (1.4.2)
+
+**Save Location** defaults to the existing local NINA/QualitySessionMeter/Sessions directory. **Custom folder** creates QSM/session-date below the selected folder. **Beside the LIGHT folder** uses the parent of a LIGHT or LIGHTS directory in the first saved image's path; without such a directory it uses the image directory. Choose the custom location when a naming layout differs.
+
+The destination is fixed for the active QSM session. Changes apply after Reset Session or the next N.I.N.A. run. Options shows the actual path. If the selected folder is unavailable when the session starts, reports fall back to the default local folder with a visible warning. A later write failure is shown without changing an image verdict. Existing reports are not moved.

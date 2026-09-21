@@ -60,6 +60,15 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueBoolean(nameof(MonitorOnly), value); Raise(); }
     }
 
+    public int SessionStorageModeIndex {
+        get => Clamp(accessor.GetValueInt32(nameof(SessionStorageModeIndex), 0), 0, 2);
+        set { accessor.SetValueInt32(nameof(SessionStorageModeIndex), Clamp(value, 0, 2)); Raise(); }
+    }
+    public string SessionOutputDirectory {
+        get => accessor.GetValueString(nameof(SessionOutputDirectory), "");
+        set { accessor.SetValueString(nameof(SessionOutputDirectory), value?.Trim() ?? ""); Raise(); }
+    }
+
     public AdaptiveThresholdMode AdaptiveThresholdMode {
         get => (AdaptiveThresholdMode)Clamp(accessor.GetValueInt32(nameof(AdaptiveThresholdMode), (int)NINA.Plugin.QualitySessionMeter.Models.AdaptiveThresholdMode.SuggestOnly), 0, 2);
         set { accessor.SetValueInt32(nameof(AdaptiveThresholdMode), Clamp((int)value, 0, 2)); Raise(); Raise(nameof(AdaptiveThresholdModeIndex)); }
@@ -128,6 +137,10 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     public double MaxCloudSignalLossPercent {
         get => SafeShapeValue(nameof(MaxCloudSignalLossPercent),20,10,50);
         set { accessor.SetValueDouble(nameof(MaxCloudSignalLossPercent),double.IsFinite(value)?Clamp(value,10,50):20);Raise(); }
+    }
+    public double MinimumSessionSignalPercent {
+        get => SafeShapeValue(nameof(MinimumSessionSignalPercent),40,5,80);
+        set { accessor.SetValueDouble(nameof(MinimumSessionSignalPercent),double.IsFinite(value)?Clamp(value,5,80):40);Raise(); }
     }
     public bool VerifyStarCountWithFlux {
         get => accessor.GetValueBoolean(nameof(VerifyStarCountWithFlux), true);
