@@ -85,7 +85,7 @@ Expected for a meaningful gust:
 - increased maximum excursion and/or sustained excursion;
 - potentially increased exposure RMS;
 - explicit guide-related reject reason if threshold crossed;
-- probable cause such as `WIND / GUIDING DISTURBANCE` when image statistics remain near baseline.
+- diagnosis `Guiding` when image statistics remain near the reference.
 
 Do not intentionally touch or strike the telescope/mount for this test.
 

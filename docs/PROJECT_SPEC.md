@@ -209,16 +209,16 @@ ERROR
 
 ## 3.6 Probable cause
 
-V1 includes basic cause classification such as:
+QSM names the failed measurement channel rather than a physical cause:
 
 ```text
-WIND / GUIDING DISTURBANCE
-CLOUD / TRANSPARENCY LOSS
-CLOUD / BRIGHT SKY EVENT
-BACKGROUND ANOMALY
+Guiding
+Star shape
+Transparency
+Brighter / darker sky background
 ```
 
-Cause is advisory. Explicit hard reasons remain the authoritative explanation.
+The diagnosis is advisory. The failed rules remain the authoritative explanation. See METRICS.md for the rule names.
 
 ## 3.7 V1 user interface
 

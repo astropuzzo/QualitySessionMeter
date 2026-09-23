@@ -43,9 +43,9 @@ Safety switch for file handling.
 
 Recommended during first real-sky testing.
 
-### Baseline Window
+### Reference Window
 
-Maximum number of recent clean samples retained for each independent imaging context:
+Maximum number of recent accepted frames kept in the star/background reference of each independent imaging context:
 
 ```text
 target + filter + exposure + gain + binning + camera
@@ -53,11 +53,11 @@ target + filter + exposure + gain + binning + camera
 
 A larger window is more stable but follows genuine long-term changes more slowly.
 
-### Minimum Learning Frames
+### Frames to Validate Reference
 
-Number of clean same-context frames required before relative star/background baselines are considered mature.
+Number of frames needed to validate the star/background reference of a new target and setup (default 4).
 
-Until enough samples exist, the context remains **LEARNING**.
+Until then frames are **PROVISIONAL**. When enough of them agree, they are accepted, outliers are rejected, and only the agreeing frames form the reference. See [METRICS.md](METRICS.md#reference-validation).
 
 ## Guiding
 

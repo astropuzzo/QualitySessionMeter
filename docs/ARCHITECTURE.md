@@ -146,7 +146,7 @@ Default minimum learning population:
 Baseline update eligibility is intentionally strict:
 
 ```text
-LEARNING clean frame -> eligible
+LEARNING clean frame -> provisional; eligible once the reference is validated
 ACCEPTED frame       -> eligible
 WARNING              -> not eligible
 REJECTED             -> not eligible
@@ -351,16 +351,17 @@ For Valid Frame Target mode:
 
 ```text
 CapturedCount++ for every completed exposure
-AcceptedCount++ only for ACCEPTED frames
-RejectedCount++ only for REJECTED frames
+ValidCount++ for ACCEPTED and WARNING frames
+RejectedCount++ for REJECTED frames
+LEARNING frames are held and moved to valid or rejected when ReferenceReview settles them
 
-sequence complete when AcceptedCount >= RequestedValidFrames
+sequence complete when ValidCount >= RequestedValidFrames
 ```
 
 Do not implement V3 by decrementing or mutating N.I.N.A.'s normal captured counter after the fact. The intended architecture is an explicit quality-aware sequence item/controller with separate physical and valid counters.
 
 ## Build validation
 
-GitHub Actions builds the project on Windows using .NET 8.
+GitHub Actions builds the project on Windows using .NET 10.
 
 A change that affects runtime code, XAML, project files, or package references is not considered integrated until the Windows CI build succeeds.

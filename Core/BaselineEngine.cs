@@ -67,6 +67,12 @@ public sealed class BaselineEngine {
         }
     }
 
+    /// <summary>Rebuilds one context from validated frames only, oldest first.</summary>
+    public void Replace(BaselineKey key, IEnumerable<(int Stars, double Background, DateTime Time)> frames, int window) {
+        lock (sync) buckets.Remove(key);
+        foreach (var frame in frames) AddAccepted(key, frame.Stars, frame.Background, window, frame.Time);
+    }
+
     public void Clear() {
         lock (sync) buckets.Clear();
     }

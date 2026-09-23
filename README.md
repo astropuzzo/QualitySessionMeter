@@ -8,7 +8,7 @@ QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combin
 
 ## Release status
 
-**1.4.2.1** — [Download and changelog](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.2.1).
+**1.4.2.2** — [Download and changelog](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.2.2).
 
 QSM is listed in the N.I.N.A. plugin catalog; its first entry, 1.4.0.2, was accepted on September 16, 2026. New versions appear in the Plugin Manager after the corresponding catalog update is accepted and published.
 
@@ -34,7 +34,7 @@ Measured stellar damage, enabled signal-loss or background rule fails -> REJECTE
 Any remaining failed rule -> REJECTED
 ```
 
-Frame states are `LEARNING`, `ACCEPTED`, `WARNING`, `REJECTED` and `ERROR`.
+Frames are **ACCEPTED**, **ACCEPTED (REVIEW)**, **REJECTED**, **PROVISIONAL** or **NOT ASSESSED** (exported as `ACCEPTED`, `WARNING`, `REJECTED`, `LEARNING`, `ERROR`). Provisional frames are the first frames of a target and setup: they are accepted or rejected once enough of them agree on a reference, and a degraded start is re-checked when clearly better conditions follow. See [METRICS.md](docs/METRICS.md#reference-validation).
 
 The current hard-rule channels are:
 
@@ -86,7 +86,7 @@ The former controlled-block-only monitoring mode has been removed.
 
 ## Advanced Sequencer
 
-**QSM Valid Frame Target** tracks usable correlated frames toward a requested target.
+**QSM Valid Frame Target** repeats its container until the requested number of accepted frames (ACCEPTED or ACCEPTED (REVIEW)) is reached. Provisional frames count when their reference is validated.
 
 Smart Recovery was removed in 1.4. QSM does not pause acquisition to wait for better conditions. Old saved recovery items deserialize as immediate no-ops, preserving sequence compatibility.
 
@@ -149,8 +149,8 @@ Typical artifacts include `frames.csv`, `events.csv`, `session.json`, `quality.s
 These are conservative starting points, not universal astrophotography constants:
 
 ```text
-Baseline window:            8 clean frames
-Minimum learning frames:    4
+Reference window:           8 accepted frames
+Frames to validate reference: 4
 Guide RMS maximum:          1.50"
 Excursion threshold:        2.00"
 Excursion minimum duration: 2.0 s

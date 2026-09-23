@@ -29,6 +29,7 @@ public sealed class QualitySessionRuntime : IDisposable {
     private readonly StellarAnalysisPipeline stellarAnalysis = new();
     private readonly GuideCollector guideCollector;
     private readonly QualityEngine qualityEngine = new();
+    private readonly ReferenceReview referenceReview;
     private readonly RejectedFileService rejectedFileService = new();
     private readonly CalibrationSuggestionEngine calibrationEngine = new();
     private readonly PredictiveDegradationEngine predictiveEngine = new();
@@ -64,6 +65,7 @@ public sealed class QualitySessionRuntime : IDisposable {
 
     public event EventHandler<FrameQualityResult> FrameProcessed;
     public event EventHandler<FrameQualityResult> FrameReviewChanged;
+    public event EventHandler<IReadOnlyList<FrameReclassification>> FramesReclassified;
 #if QSM_DEVELOPMENT
     public event EventHandler SyntheticStateChanged;
 #endif
@@ -117,6 +119,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         sessionStore = new SessionStore(directoryResolver: frame => SessionPathResolver.Resolve(
             settings.SessionStorageModeIndex, settings.SessionOutputDirectory, frame.OriginalPath));
         guideCollector = new GuideCollector(guiderMediator);
+        referenceReview = new ReferenceReview(baseline, qualityEngine);
 
         imageSaveMediator.BeforeFinalizeImageSaved += BeforeFinalizeImageSaved;
         imageSaveMediator.ImageSaved += ImageSaved;
@@ -128,7 +131,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         if (!settings.Enabled || IsSyntheticMode) return "";
         var token = Guid.NewGuid().ToString("N");
         lock (controlSync) controlTokens.Add(token);
-        Logger.Info($"QualitySessionMeter V3: armed controlled sequencer block {token[..8]}.");
+        Logger.Info($"QualitySessionMeter: armed Valid Frame Target block {token[..8]}.");
         return token;
     }
 
@@ -161,7 +164,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         if (suggestion?.Available != true) return;
         ApplySuggestion(suggestion);
         appliedCalibrationContexts.Add(suggestion.Context ?? "");
-        Logger.Info($"QualitySessionMeter V3 calibration applied for {suggestion.Context}: RMS {settings.MaxGuideRms:0.00}, excursion {settings.ExcursionThreshold:0.00}, hard {settings.HardExcursionThreshold:0.00}, star loss {settings.MaxStarLossPercent:0.0}%, bg +{settings.MaxBackgroundIncreasePercent:0.0}/-{settings.MaxBackgroundDecreasePercent:0.0}%.");
+        Logger.Info($"QualitySessionMeter calibration applied for {suggestion.Context}: RMS {settings.MaxGuideRms:0.00}, excursion {settings.ExcursionThreshold:0.00}, hard {settings.HardExcursionThreshold:0.00}, star loss {settings.MaxStarLossPercent:0.0}%, bg +{settings.MaxBackgroundIncreasePercent:0.0}/-{settings.MaxBackgroundDecreasePercent:0.0}%.");
         CalibrationSuggestionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -394,12 +397,17 @@ public sealed class QualitySessionRuntime : IDisposable {
             result.DewPoint = environment.DewPoint;
             result.EnvironmentalHint = environment.CorrelationHint;
 
-            if (ExposureAssessment.CanTrainBaseline(result)) {
+            bool couldTrain = ExposureAssessment.CanTrainBaseline(result);
+            if (couldTrain) {
                 baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow, frameTimestampUtc);
+                stellarAnalysis.AddReference(key,sample,imageEvidence,result.Status,frameTimestampUtc,pierSide,settings.BaselineWindow);
             }
-            if (ExposureAssessment.CanTrainBaseline(result)) stellarAnalysis.AddReference(key,sample,imageEvidence,result.Status,frameTimestampUtc,pierSide,settings.BaselineWindow);
+            referenceReview.Record(key, input, result, couldTrain);
 
-            if (result.Status == FrameStatus.Rejected && !settings.MonitorOnly) {
+            if (result.Status == FrameStatus.Rejected && !settings.MonitorOnly && !result.FileActionEligible) {
+                // Manual/external LIGHTs are assessed but never renamed or moved; this is policy, not a failure.
+                Logger.Debug($"QualitySessionMeter kept rejected {source.SourceText} frame in place: file actions apply only to sequencer frames.");
+            } else if (result.Status == FrameStatus.Rejected && !settings.MonitorOnly) {
                 try {
                     result.FinalPath = await rejectedFileService.ApplyAsync(result.OriginalPath, settings, result.FileActionEligible);
                 } catch (Exception ex) {
@@ -418,6 +426,12 @@ public sealed class QualitySessionRuntime : IDisposable {
             }
             UpdateCalibrationSuggestion();
             FrameProcessed?.Invoke(this, result);
+
+            try {
+                await ReviewReferenceAsync(key, result);
+            } catch (Exception ex) {
+                Logger.Warning($"QualitySessionMeter reference review failed: {ex.Message}");
+            }
         } catch (Exception ex) {
             Logger.Error(ex);
             var result = new FrameQualityResult {
@@ -434,7 +448,7 @@ public sealed class QualitySessionRuntime : IDisposable {
                 Status = FrameStatus.Error,
                 OverallQuality = 0,
                 ErrorMessage = ex.Message,
-                ProbableCause = "ANALYSIS ERROR",
+                ProbableCause = "Analysis failed",
                 MonitorOnly = settings.MonitorOnly
             };
             try { await sessionStore.AppendAsync(result); } catch { }
@@ -443,6 +457,37 @@ public sealed class QualitySessionRuntime : IDisposable {
             source.ImageSample = null;
             processingLock.Release();
         }
+    }
+
+    private async Task ReviewReferenceAsync(BaselineKey key, FrameQualityResult latest) {
+        var changes = referenceReview.Review(key, latest, sessionStore.Results, settings);
+        if (changes.Count > 0) await ApplyReclassificationsAsync(changes);
+    }
+
+    private async Task ApplyReclassificationsAsync(List<FrameReclassification> changes) {
+        foreach (var change in changes) {
+            var previous = change.Previous;
+            var next = change.Result;
+            try {
+                if (next.Status == FrameStatus.Rejected && previous.Status != FrameStatus.Rejected
+                    && !settings.MonitorOnly && next.FileActionEligible) {
+                    next.FinalPath = await rejectedFileService.ApplyAsync(previous.FinalPath ?? previous.OriginalPath, settings, true);
+                } else if (next.Status != FrameStatus.Rejected && previous.IsBadFileApplied) {
+                    next.FinalPath = await rejectedFileService.RestoreAsync(previous);
+                }
+            } catch (Exception ex) {
+                next.ErrorMessage = $"File action after reference revision failed: {ex.Message}";
+                Logger.Warning($"QualitySessionMeter {next.ErrorMessage}");
+            }
+        }
+
+        try {
+            await sessionStore.ReplaceAsync(changes.Select(x => x.Result).ToArray());
+        } catch (Exception ex) {
+            SessionStorageError = "Session report could not be updated: " + ex.Message;
+            Logger.Warning($"QualitySessionMeter {SessionStorageError}");
+        }
+        FramesReclassified?.Invoke(this, changes);
     }
 
     private void UpdateCalibrationSuggestion() {
@@ -464,7 +509,7 @@ public sealed class QualitySessionRuntime : IDisposable {
             !appliedCalibrationContexts.Contains(suggestion.Context)) {
             ApplySuggestion(suggestion);
             appliedCalibrationContexts.Add(suggestion.Context);
-            Logger.Info($"QualitySessionMeter V3 automatically applied bounded calibration for {suggestion.Context}.");
+            Logger.Info($"QualitySessionMeter automatically applied bounded calibration for {suggestion.Context}.");
         }
     }
 
@@ -675,6 +720,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         try {
             baseline.Clear();
             stellarAnalysis.Clear();
+            referenceReview.Clear();
             sessionStore.Reset();
             SessionStorageError = "";
             Interlocked.Exchange(ref frameIndex, 0);

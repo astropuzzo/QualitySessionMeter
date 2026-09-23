@@ -51,7 +51,7 @@ public sealed record ImageEvidence {
     public bool HasExtendedRescueEvidence => HasRescueMargin && ExtendedAvailable && GuideSearchCovered && VerifiedRegions >= 4 && CompromisedRegions == 0
         && WorstRegionEccentricity < Limits.MaxEccentricity && TailStrength < Limits.MaxTailPercent / 200
         && DoublePeakStrength < Limits.MaxDoublePeakPercent / 200;
-    public string Summary => !Available ? "NOT VERIFIED" : Compromised ? "SHAPE LIMIT EXCEEDED" : HasRescueMargin ? "SHAPES WITHIN RESCUE LIMITS" : "BORDERLINE STELLAR SHAPE";
+    public string Summary => !Available ? "Not measured" : Compromised ? "Distorted stars" : HasRescueMargin ? "Round stars" : "Borderline star shapes";
     public string ExtendedCaption => ExtendedAvailable ? "Extended profile · enhanced contrast" : "";
     public string PreviewCaption => !Available ? "" : "Median profile (left) · 6 sample stars (right) · enhanced contrast";
     [JsonIgnore]

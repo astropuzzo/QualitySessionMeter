@@ -11,7 +11,8 @@ public enum SessionEventType {
     GuidingDisturbance,
     MixedConditions,
     AnalysisDataLoss,
-    Unknown
+    Unknown,
+    StarShape
 }
 
 public sealed class SessionEvent {
@@ -35,17 +36,19 @@ public sealed class SessionEvent {
     public string TimeRangeText => StartUtc == default
         ? "—"
         : $"{StartUtc.ToLocalTime():HH:mm}–{EndUtc.ToLocalTime():HH:mm}";
+    // Enum names are kept for CSV compatibility; the text names the measured channel only.
     public string TypeText => Type switch {
-        SessionEventType.CloudTransparency => "CLOUD / TRANSPARENCY",
-        SessionEventType.BrightCloudBackground => "BRIGHT CLOUD / BACKGROUND",
-        SessionEventType.BackgroundHaze => "BACKGROUND / HAZE",
-        SessionEventType.GuidingDisturbance => "GUIDING DISTURBANCE",
-        SessionEventType.MixedConditions => "MIXED CONDITIONS",
-        SessionEventType.AnalysisDataLoss => "ANALYSIS DATA LOSS",
-        _ => "UNKNOWN"
+        SessionEventType.CloudTransparency => "Transparency loss",
+        SessionEventType.BrightCloudBackground => "Transparency loss, brighter sky",
+        SessionEventType.BackgroundHaze => "Sky background change",
+        SessionEventType.GuidingDisturbance => "Guiding",
+        SessionEventType.StarShape => "Star shape",
+        SessionEventType.MixedConditions => "Multiple channels",
+        SessionEventType.AnalysisDataLoss => "Analysis data unavailable",
+        _ => "Unclassified"
     };
-    public string ConfidenceText => MeanConfidence.ToString("0", CultureInfo.InvariantCulture) + "%";
+    public string ConfidenceText => MeanConfidence.ToString("0", CultureInfo.InvariantCulture);
     public string SeverityText => ErrorFrames > 0 || RejectedFrames >= 3
-        ? "CRITICAL"
-        : RejectedFrames > 0 ? "HIGH" : "MODERATE";
+        ? "HIGH"
+        : RejectedFrames > 0 ? "MEDIUM" : "LOW";
 }

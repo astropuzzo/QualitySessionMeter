@@ -18,4 +18,10 @@ public sealed class FrameQualityInput {
     public BaselineSnapshot Baseline { get; init; }
     public GuideExposureMetrics Guide { get; init; }
     public ImageEvidence ImageEvidence { get; init; }
+
+    public FrameQualityInput WithBaseline(BaselineSnapshot baseline) => new() {
+        FrameIndex = FrameIndex, TimestampUtc = TimestampUtc, OriginalPath = OriginalPath, Target = Target, Filter = Filter,
+        ExposureSeconds = ExposureSeconds, Gain = Gain, BinX = BinX, BinY = BinY, Camera = Camera, StarCount = StarCount,
+        BackgroundMedian = BackgroundMedian, Baseline = baseline, Guide = Guide, ImageEvidence = ImageEvidence
+    };
 }

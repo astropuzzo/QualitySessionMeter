@@ -92,14 +92,16 @@ public sealed class EventGroupingEngine {
     public static SessionEventType Classify(FrameQualityResult frame) {
         if (frame.Status == FrameStatus.Error) return SessionEventType.AnalysisDataLoss;
 
-        bool guide = frame.RejectReasons.Any(x => x.Contains("GUIDE", StringComparison.Ordinal));
-        bool stars = frame.RejectReasons.Contains("STAR_COUNT_DROP", StringComparer.Ordinal);
-        bool bright = frame.RejectReasons.Contains("BACKGROUND_HIGH", StringComparer.Ordinal);
-        bool dark = frame.RejectReasons.Contains("BACKGROUND_LOW", StringComparer.Ordinal);
+        var codes = frame.Status == FrameStatus.Rejected ? frame.RejectReasons : frame.ReviewReasons;
+        var channels = QualityVocabulary.Channels(codes);
+        bool guide = channels.Contains(QualityChannel.Guiding);
+        bool shape = channels.Contains(QualityChannel.StarShape);
+        bool stars = channels.Contains(QualityChannel.Transparency);
+        bool bright = codes.Contains("BACKGROUND_HIGH", StringComparer.Ordinal);
+        bool dark = codes.Contains("BACKGROUND_LOW", StringComparer.Ordinal);
 
-        // WARNING frames have no hard reject reason. Reuse the V1 cause/metric shape to assign the
-        // most likely diagnostic family without pretending this is a physical-cause certainty.
-        if (!guide && !stars && !bright && !dark && frame.Status == FrameStatus.Warning) {
+        // A WARNING without a named finding came from a low score: attribute it to the weakest channel.
+        if (!guide && !shape && !stars && !bright && !dark && frame.Status == FrameStatus.Warning) {
             if (frame.GuidingQuality.HasValue && frame.GuidingQuality.Value < 65) guide = true;
             if (frame.StabilityQuality.HasValue && frame.StabilityQuality.Value < 65) guide = true;
             if (frame.TransparencyQuality.HasValue && frame.TransparencyQuality.Value < 65) stars = true;
@@ -109,17 +111,22 @@ public sealed class EventGroupingEngine {
             }
         }
 
-        if (guide && (stars || bright || dark)) return SessionEventType.MixedConditions;
+        bool sky = stars || bright || dark;
+        if ((guide || shape) && sky) return SessionEventType.MixedConditions;
+        if (shape && !guide) return SessionEventType.StarShape;
+        if (guide) return SessionEventType.GuidingDisturbance;
         if (stars && bright) return SessionEventType.BrightCloudBackground;
         if (stars) return SessionEventType.CloudTransparency;
         if (bright || dark) return SessionEventType.BackgroundHaze;
-        if (guide) return SessionEventType.GuidingDisturbance;
         return SessionEventType.Unknown;
     }
 
     private static bool AreCompatible(SessionEventType a, SessionEventType b) {
         if (a == b) return true;
         if (a == SessionEventType.MixedConditions || b == SessionEventType.MixedConditions) return true;
+        bool mountA = a is SessionEventType.GuidingDisturbance or SessionEventType.StarShape;
+        bool mountB = b is SessionEventType.GuidingDisturbance or SessionEventType.StarShape;
+        if (mountA && mountB) return true;
 
         bool imageA = a is SessionEventType.CloudTransparency or SessionEventType.BrightCloudBackground or SessionEventType.BackgroundHaze;
         bool imageB = b is SessionEventType.CloudTransparency or SessionEventType.BrightCloudBackground or SessionEventType.BackgroundHaze;
@@ -173,7 +180,7 @@ public sealed class EventGroupingEngine {
                 .OrderByDescending(g => g.Count())
                 .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.Key)
-                .FirstOrDefault() ?? Type.ToString();
+                .FirstOrDefault() ?? "";
 
             return new SessionEvent {
                 EventIndex = Index,
@@ -189,7 +196,7 @@ public sealed class EventGroupingEngine {
                 ErrorFrames = Error,
                 MeanConfidence = mean,
                 PeakConfidence = peak,
-                PrimaryCause = primaryCause,
+                PrimaryCause = string.IsNullOrWhiteSpace(primaryCause) ? new SessionEvent { Type = Type }.TypeText : primaryCause,
                 IsOpen = isOpen
             };
         }

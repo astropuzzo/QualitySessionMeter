@@ -201,7 +201,7 @@ static void ValidateArtifacts(SyntheticSessionDefinition scenario, SessionStore 
 
     if (File.Exists(html)) {
         var body = File.ReadAllText(html);
-        foreach (var marker in new[] { "Session events", "Best accepted frames", "Worst accepted frames", "Confidence", "Guide pattern" }) {
+        foreach (var marker in new[] { "Session events", "Highest-quality accepted frames", "Lowest-quality accepted frames", "Evidence", "Guide pattern", "Failed rules and review findings" }) {
             if (!body.Contains(marker, StringComparison.OrdinalIgnoreCase)) failures.Add($"{scenario.DisplayName}: report.html missing section/marker '{marker}'");
         }
     }
@@ -212,28 +212,33 @@ static void RunV3ValidTargetOracle(List<string> failures) {
     int index = 0;
     FrameQualityResult F(FrameStatus status) => new() { FrameIndex = ++index, Status = status };
 
-    for (int i = 0; i < 4; i++) s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Learning), true);
-    for (int i = 0; i < 5; i++) s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Accepted), true);
-    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Rejected), true);
-    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Rejected), true);
-    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Warning), true);
-    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Rejected), true);
-    for (int i = 0; i < 4; i++) s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Accepted), true);
+    for (int i = 0; i < 4; i++) s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Learning));
+    for (int i = 0; i < 5; i++) s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Accepted));
+    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Rejected));
+    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Rejected));
+    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Warning));
+    s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Rejected));
+    for (int i = 0; i < 4; i++) s = ValidFrameProgressTracker.Account(s, F(FrameStatus.Accepted));
 
     if (s.Valid != 10 || s.Captured != 17 || s.Rejected != 3 || s.Learning != 4 || s.Warning != 1) {
-        failures.Add($"V3 valid-target oracle expected 10 valid / 17 captured / 3 rejected / 4 learning / 1 warning, got {s.Valid}/{s.Captured}/{s.Rejected}/{s.Learning}/{s.Warning}.");
+        failures.Add($"Valid-target oracle expected 10 valid (ACCEPTED + WARNING) / 17 captured / 3 rejected / 4 provisional / 1 warning, got {s.Valid}/{s.Captured}/{s.Rejected}/{s.Learning}/{s.Warning}.");
     }
 
     var duplicate = new FrameQualityResult { FrameIndex = s.LastFrameIndex, Status = FrameStatus.Accepted };
-    var duplicateResult = ValidFrameProgressTracker.Account(s, duplicate, true);
-    if (!duplicateResult.Equals(s)) failures.Add("V3 valid-target oracle double-counted a duplicate frame index.");
+    if (!ValidFrameProgressTracker.Account(s, duplicate).Equals(s)) failures.Add("Valid-target oracle double-counted a duplicate frame index.");
 
-    var noWarning = new ValidFrameProgressTracker.Snapshot();
-    noWarning = ValidFrameProgressTracker.Account(noWarning, new FrameQualityResult { FrameIndex = 1, Status = FrameStatus.Warning }, false);
-    if (noWarning.Valid != 0 || noWarning.Warning != 1 || noWarning.Captured != 1) failures.Add("V3 valid-target oracle failed CountWarningsAsValid=false behavior.");
+    // Reference validation settles the four provisional frames: three agree, one was taken through cloud.
+    var settled = s;
+    for (int i = 0; i < 3; i++) settled = ValidFrameProgressTracker.Reclassify(settled, FrameStatus.Learning, FrameStatus.Accepted);
+    settled = ValidFrameProgressTracker.Reclassify(settled, FrameStatus.Learning, FrameStatus.Rejected);
+    if (settled.Valid != 13 || settled.Learning != 0 || settled.Rejected != 4 || settled.Captured != 17) {
+        failures.Add($"Valid-target oracle expected 13 valid / 0 provisional / 4 rejected after reference validation, got {settled.Valid}/{settled.Learning}/{settled.Rejected}.");
+    }
+    var revoked = ValidFrameProgressTracker.Reclassify(settled, FrameStatus.Accepted, FrameStatus.Rejected);
+    if (revoked.Valid != 12 || revoked.Rejected != 5) failures.Add("Valid-target oracle failed to revoke a frame rejected by a rebuilt reference.");
 
-    var error = ValidFrameProgressTracker.Account(noWarning, new FrameQualityResult { FrameIndex = 2, Status = FrameStatus.Error }, false);
-    if (error.Valid != 0 || error.Error != 1 || error.Captured != 2) failures.Add("V3 valid-target oracle incorrectly counted ERROR as valid.");
+    var error = ValidFrameProgressTracker.Account(new ValidFrameProgressTracker.Snapshot(), new FrameQualityResult { FrameIndex = 1, Status = FrameStatus.Error });
+    if (error.Valid != 0 || error.Error != 1 || error.Captured != 1) failures.Add("Valid-target oracle incorrectly counted ERROR as valid.");
 }
 
 static void RunV3SourcePolicyOracle(List<string> failures) {
@@ -259,13 +264,13 @@ static void RunV3SourcePolicyOracle(List<string> failures) {
 static void RunV3ConditionPersistenceOracle(List<string> failures) {
     const string persistedJson = "{\"TargetValidFrames\":10,\"CountWarningsAsValid\":false,\"ClassificationTimeoutSeconds\":25,\"ValidFrames\":7,\"CapturedFrames\":12,\"RejectedFrames\":3,\"WarningFrames\":1,\"LearningFrames\":1,\"ErrorFrames\":0,\"LastAccountedFrameIndex\":42,\"LastStatus\":\"ACCEPTED\",\"LastCause\":\"STABLE\",\"RuntimeFault\":false,\"RuntimeFaultText\":\"\"}";
     var restored = JsonConvert.DeserializeObject<QsmValidFrameTargetCondition>(persistedJson);
-    if (restored == null || restored.TargetValidFrames != 10 || restored.ValidFrames != 7 || restored.CapturedFrames != 12 || restored.RejectedFrames != 3 || restored.LastAccountedFrameIndex != 42 || restored.CountWarningsAsValid) {
+    if (restored == null || restored.TargetValidFrames != 10 || restored.ValidFrames != 7 || restored.CapturedFrames != 12 || restored.RejectedFrames != 3 || restored.LastAccountedFrameIndex != 42) {
         failures.Add("V3 Valid Frame Target persistence oracle failed to restore progress/configuration from JSON.");
         return;
     }
 
     var clone = restored.Clone() as QsmValidFrameTargetCondition;
-    if (clone == null || clone.TargetValidFrames != 10 || clone.ClassificationTimeoutSeconds != 25 || clone.CountWarningsAsValid || clone.ValidFrames != 0 || clone.CapturedFrames != 0) {
+    if (clone == null || clone.TargetValidFrames != 10 || clone.ClassificationTimeoutSeconds != 25 || clone.ValidFrames != 0 || clone.CapturedFrames != 0) {
         failures.Add("V3 Valid Frame Target clone oracle expected configuration to copy while runtime progress resets like N.I.N.A. built-in conditions.");
     }
 }

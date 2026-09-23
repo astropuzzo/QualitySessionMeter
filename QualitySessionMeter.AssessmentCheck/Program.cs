@@ -45,7 +45,7 @@ ImageEvidence ShapeAt(double eccentricity, double limit=.60) => new() {
     ElongatedFraction=0, TailStrength=0, DoublePeakStrength=0, Limits=new StarShapeLimits {MaxEccentricity=limit}
 };
 var borderline = Assess(ShapeAt(.58),3.03);
-Check(borderline.Status==FrameStatus.Rejected && !borderline.GuideFalsePositive && !borderline.ImageEvidence.Compromised && borderline.DecisionSummary.Contains("borderline"), "borderline stars retain guide rejection without claiming confirmed shape damage");
+Check(borderline.Status==FrameStatus.Rejected && !borderline.GuideFalsePositive && !borderline.ImageEvidence.Compromised && borderline.DecisionSummary.Contains("too close to the limit"), "borderline stars retain guide rejection without claiming confirmed shape damage");
 Check(Assess(ShapeAt(.54),3.03).GuideFalsePositive, "clear margin still rescues round-enough stars");
 Check(Assess(ShapeAt(.56),3.03).Status==FrameStatus.Rejected, "near-limit shape is not rescued merely for passing the damage limit");
 Check(Assess(ShapeAt(.58,.65),3.03).GuideFalsePositive, "rescue margin follows the configured eccentricity tolerance");
@@ -63,7 +63,7 @@ Check(Assess(round,21,3.9,12).Status == FrameStatus.Accepted, "disabled guide ru
 settings.EnableGuideRms = true; settings.EnableHardExcursion = true; settings.EnableSustainedExcursion = true;
 settings.ImageEvidenceEnabled = false;
 Check(Assess(round,3.03).Status == FrameStatus.Rejected, "disabled second pass retains original guide rejection");
-Check(Assess(round,3.03).AssessmentVersion == "1.4.2.1", "second-pass switch does not revert to legacy scoring");
+Check(Assess(round,3.03).AssessmentVersion == ExposureAssessment.Version, "second-pass switch does not revert to legacy scoring");
 settings.ImageEvidenceEnabled = true;
 Check(!ExposureAssessment.IsGuideRejectCandidate(new GuideExposureMetrics {HasData=true,RmsArcsec=.8,MaxExcursionArcsec=1},settings), "healthy exposure does not request stellar analysis");
 Check(ExposureAssessment.IsGuideRejectCandidate(new GuideExposureMetrics {HasData=true,RmsArcsec=.8,MaxExcursionArcsec=3.1},settings), "guide reject requests second pass");
@@ -228,7 +228,7 @@ Check(Track(Signal(1),1000,1000,32).IsUsable,"clear return ends the cloud interv
 settings.MaxCloudSignalLossPercent=30;
 Check(!Assess(matched with {RelativeFlux=.76},1,stars:750,background:1080).RejectReasons.Contains("SKY_SIGNAL_LOSS"),"combined signal loss follows the configured threshold");
 settings.MaxCloudSignalLossPercent=20;
-Check(Assess(matched with {RelativeFlux=.76},1,stars:750,background:1080).ProbableCause=="SUDDEN STELLAR SIGNAL LOSS","signal rejection is displayed as signal loss, not a generic review");
+Check(Assess(matched with {RelativeFlux=.76},1,stars:750,background:1080) is var skyLoss && skyLoss.ProbableCause=="Transparency" && skyLoss.ReasonText.Contains("Signal and star loss"),"signal rejection is displayed as a transparency failure with its rule, not a generic review");
 settings.MaxCloudSignalLossPercent=35;
 
 FrameQualityResult TrendFrame(double flux, double r2) => new QualityEngine().Evaluate(new FrameQualityInput {
@@ -243,6 +243,7 @@ Check(TrendFrame(1,.95).Status!=FrameStatus.Rejected,"background trend alone nev
 var uncertainSignal=Assess(matched with {RelativeFlux=.79,RelativeFluxUpperBound=.82},1,stars:750,background:1080);
 Check(uncertainSignal.Status==FrameStatus.Warning && !ExposureAssessment.CanTrainBaseline(uncertainSignal),"uncertain threshold crossing is reviewed and cannot train the reference");
 Check(Assess(matched with {RelativeFlux=.45,RelativeFluxUpperBound=.48},1).RejectReasons.Contains("STELLAR_FLUX_LOSS"),"clear signal loss remains rejected after measurement allowance");
+ReferenceReviewCheck.Run(Check);
 await SessionStorageCheck.Run(Check);
 
 var wideClean=Field(1.4,1.4) with {ArcsecPerSample=1,OuterFields=Enumerable.Range(0,4).Select(_=>Field(1.4,1.4)).ToArray()};

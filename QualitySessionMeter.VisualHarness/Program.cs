@@ -76,7 +76,7 @@ internal static class Program {
 
         var mainVm = new MainPreviewVm(settings, frames, events) {
             CurrentFrame = current,
-            ModeText = replayFrames == null ? "ACTIVE REJECT HANDLING · Advanced Sequencer LIGHTs" : $"LOCAL REPLAY · {frames.Count} LIGHTs",
+            ModeText = replayFrames == null ? "FILE ACTIONS ON · ADVANCED SEQUENCER LIGHTS" : $"LOCAL REPLAY · {frames.Count} LIGHTs",
             SessionFolder = @"C:\Users\astro\AppData\Local\NINA\QualitySessionMeter\Sessions\2026-09-08_22-24-00",
             ReviewMessage = "Select a rejected frame to review it in N.I.N.A.'s Image view."
         };
@@ -562,24 +562,24 @@ internal static class PreviewData {
             var guide = 0.43 + random.NextDouble() * 0.20;
             var starsDelta = (random.NextDouble() - 0.5) * 8.0;
             var bgDelta = (random.NextDouble() - 0.5) * 6.0;
-            var cause = "NORMAL";
+            var cause = "";
             var pattern = GuidePatternKind.Stable;
 
             if (i is 10 or 12 or 13) {
                 guide = i == 13 ? 2.55 : 1.72 + random.NextDouble() * 0.35;
-                cause = "WIND / GUIDING DISTURBANCE";
+                cause = i == 13 ? "HARD_GUIDE_EXCURSION" : "GUIDE_RMS";
                 pattern = GuidePatternKind.WindLike;
             }
             if (i is 17 or 21 or 22) {
                 starsDelta = i == 17 ? -27 : -42 - random.NextDouble() * 8;
-                cause = "CLOUD / TRANSPARENCY LOSS";
+                cause = "STAR_COUNT_DROP";
             }
             if (i is 25 or 29) {
                 bgDelta = i == 25 ? 24 : 42;
-                cause = "BACKGROUND / HAZE EVENT";
+                cause = "BACKGROUND_HIGH";
             }
             if (i == 30) {
-                cause = "ANALYSIS DATA UNAVAILABLE";
+                cause = "GUIDE_DATA_UNAVAILABLE";
                 guide = double.NaN;
                 starsDelta = double.NaN;
                 bgDelta = double.NaN;
@@ -601,9 +601,15 @@ internal static class PreviewData {
             var final = status == FrameStatus.Rejected ? $@"C:\Astro\M31\2026-09-08\BAD_frame_{i:000}_M31_L_180s.fits" : original;
 
             var frame = new FrameQualityResult {
-                AssessmentVersion = "1.4",
+                AssessmentVersion = ExposureAssessment.Version,
                 ImageEvidence = i is 12 or 13 ? evidence : new ImageEvidence(),
-                DecisionSummary = status == FrameStatus.Rejected ? "Rejected: configured limit exceeded." : "Kept: no enabled rejection rule failed.",
+                DecisionSummary = status switch {
+                    FrameStatus.Rejected => $"Rejected: {QualityVocabulary.LabelsInSentence(new[] { cause })}.",
+                    FrameStatus.Warning => $"Accepted for review: {QualityVocabulary.LabelsInSentence(new[] { cause })} close to the limit.",
+                    FrameStatus.Learning => "Provisional: waiting for enough frames to validate the star-count and background reference.",
+                    FrameStatus.Error => "Not assessed: no guiding data. The file is kept.",
+                    _ => "Accepted: all active checks passed."
+                },
                 FrameIndex = i,
                 TimestampUtc = new DateTime(2026, 9, 8, 20, 30, 0, DateTimeKind.Utc).AddMinutes(i * 3),
                 OriginalPath = original,
@@ -624,7 +630,7 @@ internal static class PreviewData {
                 GuideSamples = status == FrameStatus.Error ? 0 : 122,
                 GuideRmsArcsec = guide,
                 MaxGuideExcursionArcsec = double.IsFinite(guide) ? guide * 2.2 : double.NaN,
-                SustainedGuideExcursionSeconds = status == FrameStatus.Rejected && cause.StartsWith("WIND") ? 2.8 : 0,
+                SustainedGuideExcursionSeconds = status == FrameStatus.Rejected && cause.Contains("GUIDE") ? 2.8 : 0,
                 GuidePattern = pattern,
                 GuidePatternConfidence = status == FrameStatus.Error ? double.NaN : 90,
                 GuidePatternDetail = pattern == GuidePatternKind.WindLike ? "Bursty signed guide error with multiple excursions." : "Stable guide-error distribution.",
@@ -632,9 +638,8 @@ internal static class PreviewData {
                 BackgroundTrendKind = i > 23 && i < 30 ? TrendInterpretationKind.GradualChange : TrendInterpretationKind.Stable,
                 OverallQuality = quality,
                 ConfidenceScore = Math.Min(confidence,65),
-                ConfidenceReason = status == FrameStatus.Learning ? $"Adaptive baseline is still learning ({i}/4 minimum samples)." : "Measured channels complete and consistent with the active context.",
+                ConfidenceReason = status == FrameStatus.Learning ? $"Reference not validated yet ({i}/4 frames)." : "Measured channels complete and consistent with the active context.",
                 Status = status,
-                ProbableCause = cause,
                 MonitorOnly = false,
                 PredictiveWarning = i == 28,
                 PredictiveConfidence = i == 28 ? 83 : double.NaN,
@@ -643,8 +648,10 @@ internal static class PreviewData {
                 EnvironmentAvailable = true,
                 EnvironmentalHint = "Humidity 63% · wind 2.1 m/s"
             };
-            if (status == FrameStatus.Rejected) frame.RejectReasons.Add(cause.StartsWith("WIND") ? "Exposure guiding exceeded configured limit" : cause.StartsWith("CLOUD") ? "Star loss exceeded configured limit" : "Background deviation exceeded configured limit");
-            if (status == FrameStatus.Error) frame.ErrorMessage = "Required analysis data was unavailable.";
+            if (status == FrameStatus.Rejected) frame.RejectReasons.Add(cause);
+            if (status == FrameStatus.Warning) frame.ReviewReasons.Add(cause == "STAR_COUNT_DROP" ? "TRANSPARENCY_CHANGE" : cause == "GUIDE_RMS" ? "BORDERLINE_STAR_SHAPE" : "TRANSPARENCY_CHANGE");
+            if (status == FrameStatus.Error) frame.ErrorMessage = "GUIDE_DATA_UNAVAILABLE";
+            frame.ProbableCause = QualityVocabulary.Diagnosis(frame);
             frames.Add(frame);
         }
         return frames;
@@ -661,9 +668,9 @@ internal static class PreviewData {
             AffectedFrames = 4,
             RejectedFrames = 2,
             WarningFrames = 1,
-            MeanConfidence = 91,
-            PeakConfidence = 96,
-            PrimaryCause = "WIND / GUIDING DISTURBANCE"
+            MeanConfidence = 72,
+            PeakConfidence = 81,
+            PrimaryCause = "Guiding"
         },
         new SessionEvent {
             EventIndex = 2,
@@ -675,9 +682,9 @@ internal static class PreviewData {
             AffectedFrames = 6,
             RejectedFrames = 2,
             WarningFrames = 1,
-            MeanConfidence = 89,
-            PeakConfidence = 97,
-            PrimaryCause = "CLOUD / TRANSPARENCY LOSS"
+            MeanConfidence = 70,
+            PeakConfidence = 83,
+            PrimaryCause = "Transparency"
         },
         new SessionEvent {
             EventIndex = 3,
@@ -689,9 +696,9 @@ internal static class PreviewData {
             AffectedFrames = 5,
             RejectedFrames = 1,
             WarningFrames = 1,
-            MeanConfidence = 88,
-            PeakConfidence = 94,
-            PrimaryCause = "BACKGROUND / HAZE EVENT"
+            MeanConfidence = 68,
+            PeakConfidence = 79,
+            PrimaryCause = "Brighter sky background"
         }
     });
 }
