@@ -18,6 +18,7 @@ All notable QualitySessionMeter changes are summarized here. Detailed pre-store 
 - Map the 1.4 rules (star shape, stellar signal loss, minimum session signal) to timeline markers and session events. They previously appeared as "?" and "UNKNOWN". Markers are now G guiding, S star shape, T transparency and B sky background.
 - Rewrite decision summaries as short statements with the measured value where useful. Show evidence strength as "/ 100" everywhere, background in ADU, and hide empty "N/A" detail lines.
 - Show the monitoring scope in words, report the accepted count next to the acceptance rate, and show the real assessment version in the report header.
+- Replace the plugin and Valid Frame Target icons with closed, filled shapes: a three-band quality gauge around a star, and a ring with a check. The old outline icons rendered as filled blobs in N.I.N.A. Update the catalog artwork to match.
 - Rename *Baseline Window* to **Reference Window** and *Minimum Learning Frames* to **Frames to Validate Reference** in Options. Stored settings are unchanged.
 
 ### Fixes

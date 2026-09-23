@@ -4,10 +4,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:NINA.Plugin.QualitySessionMeter.UI">
 
-    <GeometryGroup x:Key="QSM_MeterSVG">
-        <EllipseGeometry Center="32,32" RadiusX="29" RadiusY="29"/>
-        <PathGeometry Figures="M 10,38 C 16,19 28,13 32,13 C 42,13 51,22 55,35"/>
-        <PathGeometry Figures="M 32,32 L 47,22"/>
+    <!-- Same closed figures as PluginIcon: N.I.N.A. fills icon geometry. -->
+    <GeometryGroup x:Key="QSM_MeterSVG" FillRule="Nonzero">
+        <PathGeometry Figures="M 8.24,49.63 A 29,29 0 0 1 10.79,13.22 L 15.54,17.66 A 22.5,22.5 0 0 0 13.57,45.91 Z"/>
+        <PathGeometry Figures="M 12.97,11.11 A 29,29 0 0 1 51.03,11.11 L 46.76,16.02 A 22.5,22.5 0 0 0 17.24,16.02 Z"/>
+        <PathGeometry Figures="M 53.21,13.22 A 29,29 0 0 1 55.76,49.63 L 50.43,45.91 A 22.5,22.5 0 0 0 48.46,17.66 Z"/>
+        <PathGeometry Figures="M 32.0,18.0 Q 34.2,30.8 47.0,33.0 Q 34.2,35.2 32.0,48.0 Q 29.8,35.2 17.0,33.0 Q 29.8,30.8 32.0,18.0 Z"/>
     </GeometryGroup>
 
     <SolidColorBrush x:Key="QsmCard" Color="#171A20"/>

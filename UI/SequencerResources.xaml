@@ -6,10 +6,10 @@
     xmlns:nina="clr-namespace:NINA.View.Sequencer;assembly=NINA.Sequencer"
     xmlns:mini="clr-namespace:NINA.View.Sequencer.MiniSequencer;assembly=NINA.Sequencer">
 
-    <GeometryGroup x:Key="QSM_ValidTargetSVG">
-        <EllipseGeometry Center="32,32" RadiusX="27" RadiusY="27"/>
-        <PathGeometry Figures="M 16,33 L 27,44 L 49,20"/>
-        <PathGeometry Figures="M 13,51 L 51,51"/>
+    <!-- Ring and check as closed figures: N.I.N.A. fills icon geometry. -->
+    <GeometryGroup x:Key="QSM_ValidTargetSVG" FillRule="Nonzero">
+        <PathGeometry Figures="M 32,3 A 29,29 0 1 1 31.99,3 Z M 32,9.5 A 22.5,22.5 0 1 0 32.01,9.5 Z"/>
+        <PathGeometry Figures="M 17,33 L 21.5,28.5 L 28,35 L 42.5,20.5 L 47,25 L 28,44 Z"/>
     </GeometryGroup>
 
     <GeometryGroup x:Key="QSM_RecoverySVG">
