@@ -12,6 +12,7 @@ using NINA.Sequencer.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.ViewModel;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
@@ -95,7 +96,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public int Rejected => Frames.Count(x => x.Status == FrameStatus.Rejected);
     public int Learning => Frames.Count(x => x.Status == FrameStatus.Learning);
     public int Errors => Frames.Count(x => x.Status == FrameStatus.Error);
-    public int Usable => Accepted + Warning;
+    public int Usable => Frames.Count(x => x.IsUsable);
     public int EventCount => Events.Count;
     public double AcceptanceRate => Usable + Rejected == 0 ? 0 : Usable * 100.0 / (Usable + Rejected);
     public double SessionQuality => Frames.Where(x => x.IsUsable).Select(x => x.OverallQuality).DefaultIfEmpty(0).Average();
@@ -116,12 +117,16 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
             if (runtime.IsSyntheticMode) return "SYNTHETIC LAB — NO CAMERA / NO REAL FILES";
 #endif
             return !Settings.Enabled
-                ? "QSM OFF — NO ANALYSIS / NO FILE ACTIONS"
+                ? "QSM OFF · NO ANALYSIS, NO FILE ACTIONS"
                 : Settings.MonitorOnly
-                    ? $"MONITOR ONLY · {Settings.MonitoringScope}"
-                    : $"ACTIVE REJECT HANDLING · {Settings.MonitoringScope}";
+                    ? $"MONITOR ONLY · {ScopeText}"
+                    : $"FILE ACTIONS ON · {ScopeText}";
         }
     }
+
+    private string ScopeText => Settings.MonitoringScope == MonitoringScope.AllLights
+        ? "ALL SAVED LIGHTS"
+        : "ADVANCED SEQUENCER LIGHTS";
 
     public ICommand ResetSessionCommand { get; }
     public ICommand OpenSessionFolderCommand { get; }
@@ -161,6 +166,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
 
         runtime.FrameProcessed += RuntimeFrameProcessed;
         runtime.FrameReviewChanged += RuntimeFrameReviewChanged;
+        runtime.FramesReclassified += RuntimeFramesReclassified;
         runtime.CalibrationSuggestionChanged += RuntimeCalibrationSuggestionChanged;
 #if QSM_DEVELOPMENT
         runtime.SyntheticStateChanged += RuntimeSyntheticStateChanged;
@@ -219,7 +225,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
             var data = await imageDataFactory.CreateFromFile(path, 16, false, CancellationToken.None);
             var rendered = await imagingMediator.PrepareImage(data, new PrepareImageParameters(true, false), CancellationToken.None);
             if (rendered?.Image != null) imagingMediator.SetImage(rendered.Image);
-            ReviewMessage = $"Loaded {Path.GetFileName(path)} · auto verdict {frame.StatusText} · {frame.ProbableCause}";
+            ReviewMessage = $"Loaded {Path.GetFileName(path)} · {frame.StatusLabel} · {frame.ReasonText}";
         } catch (Exception ex) {
             ReviewMessage = $"Could not load {frame.FileName}: {ex.Message}";
         }
@@ -233,17 +239,17 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
             return;
         }
         if (!frame.IsBadFileApplied) {
-            ReviewMessage = $"{frame.FileName} has no BAD_/Rejected file action to undo.";
+            ReviewMessage = $"{frame.FileName} was not renamed or moved; nothing to undo.";
             return;
         }
 
         try {
             var restored = await runtime.RestoreRejectedFileAsync(frame);
-            ReviewMessage = $"BAD file action undone: {Path.GetFileName(restored)}. The automatic QSM verdict remains REJECTED for audit/history.";
+            ReviewMessage = $"File restored as {Path.GetFileName(restored)}. The recorded verdict stays REJECTED.";
             RefreshDerivedViews();
             RaisePropertyChanged(nameof(CanRestoreSelectedRejected));
         } catch (Exception ex) {
-            ReviewMessage = $"Could not undo BAD for {frame.FileName}: {ex.Message}";
+            ReviewMessage = $"Could not restore {frame.FileName}: {ex.Message}";
         }
     }
 
@@ -263,6 +269,12 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke((Action)Apply);
         else Apply();
+    }
+
+    private void RuntimeFramesReclassified(object sender, IReadOnlyList<FrameReclassification> changes) {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke((Action)ReloadLiveFrames);
+        else ReloadLiveFrames();
     }
 
     private void RuntimeCalibrationSuggestionChanged(object sender, EventArgs e) {
@@ -424,6 +436,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
     public void Dispose() {
         runtime.FrameProcessed -= RuntimeFrameProcessed;
         runtime.FrameReviewChanged -= RuntimeFrameReviewChanged;
+        runtime.FramesReclassified -= RuntimeFramesReclassified;
         runtime.CalibrationSuggestionChanged -= RuntimeCalibrationSuggestionChanged;
 #if QSM_DEVELOPMENT
         runtime.SyntheticStateChanged -= RuntimeSyntheticStateChanged;

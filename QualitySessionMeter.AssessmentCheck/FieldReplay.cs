@@ -93,8 +93,8 @@ internal static class FieldReplay {
             foreach(int id in new[]{156,169,170,171,172,183}) Require(byId[id].Status==FrameStatus.Warning && byId[id].IsUsable && !ExposureAssessment.CanTrainBaseline(byId[id]),$"{id}: moderate attenuation kept for review without reference training");
             foreach(int id in new[]{166,167,168}) Require(byId[id].Status==FrameStatus.Rejected,$"{id}: severe signal rejection retained");
             foreach(int id in new[]{136,137,140,144,148,152,155,157,160,162,165,173,174,175,176,177,178,179,180,181,182}) Require(byId[id].IsUsable,$"{id}: usable control retained");
-            Require(byId[154].Status==FrameStatus.Rejected && !byId[154].ImageEvidence.Compromised && byId[154].DecisionSummary.Contains("not established"),"154: incomplete outer-field verification is not claimed as confirmed damage");
-            Require(byId[158].Status==FrameStatus.Rejected && byId[158].DecisionSummary.Contains("borderline"),"158: borderline guide rejection stays explicit");
+            Require(byId[154].Status==FrameStatus.Rejected && !byId[154].ImageEvidence.Compromised && byId[154].DecisionSummary.Contains("could not clear it"),"154: incomplete outer-field verification is not claimed as confirmed damage");
+            Require(byId[158].Status==FrameStatus.Rejected && byId[158].DecisionSummary.Contains("too close to the limit"),"158: borderline guide rejection stays explicit");
             Require(!byId[143].ImageEvidence.Available && byId[143].ImageEvidence.PhotometryAvailable,"143: independent photometry survives missing shape classification");
         }
         Console.WriteLine($"Frames {results.Count}; "+string.Join("; ",results.GroupBy(r=>r.Status).Select(g=>$"{g.Key} {g.Count()}"))+$"; replay {clock.Elapsed.TotalSeconds:0.0}s");

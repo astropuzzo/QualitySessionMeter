@@ -24,7 +24,6 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
     private const int DefaultClassificationTimeoutSeconds = 20;
 
     private int targetValidFrames = 10;
-    private bool countWarningsAsValid = true;
     private int classificationTimeoutSeconds = DefaultClassificationTimeoutSeconds;
     private int validFrames;
     private int capturedFrames;
@@ -40,6 +39,11 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
     private int blockStartFrameIndex;
     private bool blockResultConsumed;
     private string controlToken = "";
+    // Verdicts this condition has counted, so a later reference decision can move a provisional
+    // frame to valid or rejected. Guarded by accountingSync (reclassification arrives off-thread).
+    private readonly object accountingSync = new();
+    private readonly Dictionary<int, FrameStatus> countedStatus = new();
+    private QualitySessionRuntime subscribedRuntime;
 
     [ImportingConstructor]
     public QsmValidFrameTargetCondition() {
@@ -49,12 +53,6 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
     public int TargetValidFrames {
         get => targetValidFrames;
         set { targetValidFrames = Math.Max(1, value); RaisePropertyChanged(); RaisePropertyChanged(nameof(ProgressText)); }
-    }
-
-    [JsonProperty]
-    public bool CountWarningsAsValid {
-        get => countWarningsAsValid;
-        set { countWarningsAsValid = value; RaisePropertyChanged(); }
     }
 
     [JsonProperty]
@@ -87,7 +85,7 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
     public string RuntimeFaultText { get => runtimeFaultText; private set { runtimeFaultText = value ?? ""; RaisePropertyChanged(); } }
 
     public string ProgressText => $"{ValidFrames} / {TargetValidFrames} valid";
-    public string BreakdownText => $"{CapturedFrames} captured · {RejectedFrames} rejected · {WarningFrames} warning · {LearningFrames} learning · {ErrorFrames} error";
+    public string BreakdownText => $"{CapturedFrames} captured · {ValidFrames} accepted ({WarningFrames} for review) · {RejectedFrames} rejected · {LearningFrames} provisional · {ErrorFrames} not assessed";
     public bool IsComplete => ValidFrames >= TargetValidFrames;
     public IList<string> Issues { get; private set; } = new List<string>();
 
@@ -128,7 +126,7 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
                 RuntimeFaultText = $"No QSM classification arrived within {ClassificationTimeoutSeconds}s. Quality-controlled loop stopped fail-safe.";
                 LastStatus = "QSM TIMEOUT";
                 LastCause = RuntimeFaultText;
-                Logger.Error($"QualitySessionMeter V3: {RuntimeFaultText}");
+                Logger.Error($"QualitySessionMeter: {RuntimeFaultText}");
                 Disarm();
                 return false;
             }
@@ -179,12 +177,10 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         }
     }
 
-    private void Account(FrameQualityResult result) {
-        var current = new ValidFrameProgressTracker.Snapshot(
-            ValidFrames, CapturedFrames, RejectedFrames, WarningFrames, LearningFrames, ErrorFrames, LastAccountedFrameIndex);
-        var next = ValidFrameProgressTracker.Account(current, result, CountWarningsAsValid);
-        if (next.LastFrameIndex == current.LastFrameIndex) return;
+    private ValidFrameProgressTracker.Snapshot CurrentSnapshot => new(
+        ValidFrames, CapturedFrames, RejectedFrames, WarningFrames, LearningFrames, ErrorFrames, LastAccountedFrameIndex);
 
+    private void Publish(ValidFrameProgressTracker.Snapshot next) {
         ValidFrames = next.Valid;
         CapturedFrames = next.Captured;
         RejectedFrames = next.Rejected;
@@ -192,10 +188,54 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         LearningFrames = next.Learning;
         ErrorFrames = next.Error;
         LastAccountedFrameIndex = next.LastFrameIndex;
-        LastStatus = result.StatusText;
-        LastCause = result.ProbableCause ?? "";
         RaisePropertyChanged(nameof(BreakdownText));
-        Logger.Info($"QualitySessionMeter V3 valid-frame progress: {ProgressText}; {BreakdownText}; last={LastStatus} {LastCause}");
+    }
+
+    private void Account(FrameQualityResult result) {
+        lock (accountingSync) {
+            var current = CurrentSnapshot;
+            var next = ValidFrameProgressTracker.Account(current, result);
+            if (next.LastFrameIndex == current.LastFrameIndex) return;
+            Publish(next);
+            if (result.Status == FrameStatus.Learning) {
+                countedStatus[result.FrameIndex] = result.Status;
+                SubscribeToReclassification();
+            }
+        }
+        LastStatus = result.StatusLabel;
+        LastCause = result.ReasonText == "—" ? "" : result.ReasonText;
+        Logger.Info($"QualitySessionMeter valid-frame progress: {ProgressText}; {BreakdownText}; last={LastStatus} {LastCause}");
+    }
+
+    private void SubscribeToReclassification() {
+        var runtime = QualitySessionRuntimeRegistry.Current;
+        if (runtime == null || ReferenceEquals(runtime, subscribedRuntime)) return;
+        UnsubscribeFromReclassification();
+        runtime.FramesReclassified += RuntimeFramesReclassified;
+        subscribedRuntime = runtime;
+    }
+
+    private void UnsubscribeFromReclassification() {
+        if (subscribedRuntime != null) subscribedRuntime.FramesReclassified -= RuntimeFramesReclassified;
+        subscribedRuntime = null;
+    }
+
+    private void RuntimeFramesReclassified(object sender, IReadOnlyList<FrameReclassification> changes) {
+        lock (accountingSync) {
+            var snapshot = CurrentSnapshot;
+            bool changed = false;
+            foreach (var change in changes) {
+                if (!countedStatus.TryGetValue(change.Result.FrameIndex, out var counted)) continue;
+                snapshot = ValidFrameProgressTracker.Reclassify(snapshot, counted, change.Result.Status);
+                if (change.Result.Status == FrameStatus.Learning) countedStatus[change.Result.FrameIndex] = change.Result.Status;
+                else countedStatus.Remove(change.Result.FrameIndex);
+                changed = true;
+            }
+            if (!changed) return;
+            Publish(snapshot);
+            if (countedStatus.Count == 0) UnsubscribeFromReclassification();
+        }
+        Logger.Info($"QualitySessionMeter valid-frame progress after reference validation: {ProgressText}; {BreakdownText}");
     }
 
     private void Disarm() {
@@ -219,6 +259,10 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         RuntimeFaultText = "";
         blockStartFrameIndex = 0;
         blockResultConsumed = false;
+        lock (accountingSync) {
+            countedStatus.Clear();
+            UnsubscribeFromReclassification();
+        }
         Status = SequenceEntityStatus.CREATED;
         RaisePropertyChanged(nameof(BreakdownText));
     }
@@ -241,7 +285,6 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         Category = Category,
         Description = Description,
         TargetValidFrames = TargetValidFrames,
-        CountWarningsAsValid = CountWarningsAsValid,
         ClassificationTimeoutSeconds = ClassificationTimeoutSeconds
     };
 

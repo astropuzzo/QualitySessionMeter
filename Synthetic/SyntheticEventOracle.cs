@@ -109,11 +109,9 @@ public static class SyntheticEventOracle {
             TimestampUtc = timestamp,
             Status = status,
             ConfidenceScore = confidence,
-            ProbableCause = reasons.Any(x => x.Contains("GUIDE", StringComparison.Ordinal))
-                ? "WIND / GUIDING DISTURBANCE"
-                : reasons.Length > 0 ? "CLOUD / TRANSPARENCY LOSS" : "NORMAL"
         };
         result.RejectReasons.AddRange(reasons);
+        result.ProbableCause = QualityVocabulary.Diagnosis(result);
         return result;
     }
 }

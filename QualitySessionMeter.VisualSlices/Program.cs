@@ -117,7 +117,7 @@ internal static class Program {
         if (frames is not IList frameList || frameList.Count == 0)
             throw new InvalidOperationException("Preview frame list is empty.");
         SetProperty(main, "CurrentFrame", frameList[frameList.Count - 1]);
-        SetProperty(main, "ModeText", "ACTIVE REJECT HANDLING · Advanced Sequencer LIGHTs");
+        SetProperty(main, "ModeText", "FILE ACTIONS ON · ADVANCED SEQUENCER LIGHTS");
         SetProperty(main, "SessionFolder", @"C:\Users\astro\AppData\Local\NINA\QualitySessionMeter\Sessions\2026-09-08_22-24-00");
         SetProperty(main, "ReviewMessage", "Select a rejected frame to review it in N.I.N.A.'s Image view.");
 

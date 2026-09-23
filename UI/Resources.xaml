@@ -4,10 +4,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:NINA.Plugin.QualitySessionMeter.UI">
 
-    <GeometryGroup x:Key="QSM_MeterSVG">
-        <EllipseGeometry Center="32,32" RadiusX="29" RadiusY="29"/>
-        <PathGeometry Figures="M 10,38 C 16,19 28,13 32,13 C 42,13 51,22 55,35"/>
-        <PathGeometry Figures="M 32,32 L 47,22"/>
+    <!-- Same closed figures as PluginIcon: N.I.N.A. fills icon geometry. -->
+    <GeometryGroup x:Key="QSM_MeterSVG" FillRule="Nonzero">
+        <PathGeometry Figures="M 8.24,49.63 A 29,29 0 0 1 10.79,13.22 L 15.54,17.66 A 22.5,22.5 0 0 0 13.57,45.91 Z"/>
+        <PathGeometry Figures="M 12.97,11.11 A 29,29 0 0 1 51.03,11.11 L 46.76,16.02 A 22.5,22.5 0 0 0 17.24,16.02 Z"/>
+        <PathGeometry Figures="M 53.21,13.22 A 29,29 0 0 1 55.76,49.63 L 50.43,45.91 A 22.5,22.5 0 0 0 48.46,17.66 Z"/>
+        <PathGeometry Figures="M 32.0,18.0 Q 34.2,30.8 47.0,33.0 Q 34.2,35.2 32.0,48.0 Q 29.8,35.2 17.0,33.0 Q 29.8,30.8 32.0,18.0 Z"/>
     </GeometryGroup>
 
     <SolidColorBrush x:Key="QsmCard" Color="#171A20"/>
@@ -52,10 +54,8 @@
                         </StackPanel>
                         <StackPanel Grid.Column="2" Margin="12,0,0,0">
                             <TextBlock Text="{Binding ModeText}" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
-                            <TextBlock Text="{Binding CurrentFrame.StatusText, TargetNullValue=IDLE}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
-                            <TextBlock Text="{Binding CurrentFrame.ProbableCause, TargetNullValue=Waiting for first LIGHT frame}" Foreground="{StaticResource QsmSecondaryText}" Margin="0,3,0,0"/>
-                            <TextBlock Text="{Binding CurrentFrame.ReasonText}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                            <TextBlock Text="{Binding CurrentFrame.DecisionSummary}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,3,0,0" FontStyle="Italic"/>
+                            <TextBlock Text="{Binding CurrentFrame.StatusLabel, TargetNullValue=WAITING}" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource QsmPrimaryText}"/>
+                            <TextBlock Text="{Binding CurrentFrame.DecisionSummary, TargetNullValue=Waiting for the first LIGHT frame.}" Foreground="{StaticResource QsmPrimaryText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
                             <TextBlock Text="{Binding CurrentFrame.FrameIdentity}" TextWrapping="Wrap" Margin="0,5,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
                             <TextBlock Text="{Binding CurrentFrame.ImageEvidence.Detail}" TextWrapping="Wrap" Margin="0,3,0,0" Foreground="{StaticResource QsmSecondaryText}"/>
                             <WrapPanel Margin="0,6,0,0">
@@ -99,7 +99,7 @@
                             <TextBlock Text="{Binding CurrentFrame.BackgroundTrendResidualText}" Foreground="{StaticResource QsmSecondaryText}" FontSize="11"/>
                         </StackPanel>
                         <StackPanel Grid.Column="4">
-                            <TextBlock Text="TEMPORAL" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
+                            <TextBlock Text="TREND" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
                             <TextBlock Text="{Binding CurrentFrame.TrendText, TargetNullValue=N/A}" FontSize="16" FontWeight="SemiBold"/>
                             <TextBlock Text="{Binding EventCount, StringFormat={}{0} session events}" Foreground="{StaticResource QsmSecondaryText}" FontSize="11"/>
                         </StackPanel>
@@ -112,10 +112,10 @@
                             <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0"><TextBlock Text="CAPTURED" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding Captured}" FontSize="16"/></StackPanel>
-                        <StackPanel Grid.Column="1"><TextBlock Text="USABLE" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding Usable}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="1"><TextBlock Text="ACCEPTED" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding Usable}" FontSize="16"/></StackPanel>
                         <StackPanel Grid.Column="2"><TextBlock Text="REJECTED" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding Rejected}" FontSize="16"/></StackPanel>
-                        <StackPanel Grid.Column="3"><TextBlock Text="ACCEPTANCE" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding AcceptanceRate, StringFormat={}{0:0.0}%}" FontSize="16"/></StackPanel>
-                        <StackPanel Grid.Column="4"><TextBlock Text="USABLE FRAME QUALITY" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding SessionQuality, StringFormat={}{0:0}}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="3"><TextBlock Text="ACCEPTANCE RATE" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding AcceptanceRate, StringFormat={}{0:0.0}%}" FontSize="16"/></StackPanel>
+                        <StackPanel Grid.Column="4"><TextBlock Text="MEAN QUALITY" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding SessionQuality, StringFormat={}{0:0}}" FontSize="16"/></StackPanel>
                         <StackPanel Grid.Column="5"><TextBlock Text="MEAN EVIDENCE" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/><TextBlock Text="{Binding SessionConfidence, StringFormat={}{0:0} / 100}" FontSize="16"/></StackPanel>
                     </Grid>
                 </Border>
@@ -144,13 +144,13 @@
                 <Border Background="{DynamicResource SecondaryBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                     <StackPanel>
                         <TextBlock Text="STELLAR ANALYSIS" FontWeight="SemiBold" FontSize="11"/>
-                        <TextBlock Text="Recovered frames are kept. Other failed rules still apply." TextWrapping="Wrap" Opacity="0.78" Margin="0,4,0,7"/>
+                        <TextBlock Text="Frames whose guiding or star-count flag was cleared by star analysis. Any other failed rule still rejects the frame." TextWrapping="Wrap" Opacity="0.78" Margin="0,4,0,7"/>
                         <DataGrid ItemsSource="{Binding SecondPassFrames}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" MaxHeight="180" MinHeight="45">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="45"/>
-                                <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="110"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusLabel}" Width="130"/>
                                 <DataGridTemplateColumn Header="Stellar evidence" CellTemplate="{StaticResource QsmStarEvidenceCell}" Width="200"/>
-                                <DataGridTextColumn Header="Why" Binding="{Binding DecisionSummary}" Width="*"/>
+                                <DataGridTextColumn Header="Decision" Binding="{Binding DecisionSummary}" Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </StackPanel>
@@ -159,8 +159,8 @@
                 <Border Background="{DynamicResource SecondaryBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                     <Grid Height="270">
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                        <TextBlock Text="MULTICHANNEL TIMELINE — live values, rolling baseline and active reject limits" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
-                        <TextBlock Grid.Row="1" Margin="0,0,0,4" Foreground="{StaticResource QsmSecondaryText}" FontSize="10" Text="Dashed 0% = rolling clean-frame baseline · dashed colored lines = current limits · hover anywhere in the plot for exact frame/baseline values."/>
+                        <TextBlock Text="TIMELINE — measured values, reference and active limits" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
+                        <TextBlock Grid.Row="1" Margin="0,0,0,4" Foreground="{StaticResource QsmSecondaryText}" FontSize="10" Text="Dashed 0% = reference from accepted frames · dashed colored lines = active limits · hover the plot for exact values."/>
                         <local:QualityTimelineControl Grid.Row="2"
                                                       ItemsSource="{Binding Frames}"
                                                       MaxGuideRms="{Binding Settings.MaxGuideRms}"
@@ -177,16 +177,16 @@
                 <Border Background="{DynamicResource SecondaryBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8">
                     <Grid>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="150"/></Grid.RowDefinitions>
-                        <TextBlock Text="SESSION EVENTS — latest 12" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
+                        <TextBlock Text="SESSION EVENTS (latest 12)" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
                         <DataGrid Grid.Row="1" ItemsSource="{Binding Events}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Event" Binding="{Binding Id}" Width="55"/>
                                 <DataGridTextColumn Header="Time" Binding="{Binding TimeRangeText}" Width="90"/>
-                                <DataGridTextColumn Header="Type" Binding="{Binding TypeText}" Width="170"/>
+                                <DataGridTextColumn Header="Channel" Binding="{Binding TypeText}" Width="190"/>
                                 <DataGridTextColumn Header="Frames" Binding="{Binding AffectedFrames}" Width="62"/>
                                 <DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="65"/>
                                 <DataGridTextColumn Header="Severity" Binding="{Binding SeverityText}" Width="75"/>
-                                <DataGridTextColumn Header="Primary cause" Binding="{Binding PrimaryCause}" Width="*"/>
+                                <DataGridTextColumn Header="Main finding" Binding="{Binding PrimaryCause}" Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>
@@ -197,14 +197,14 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <Grid Grid.Column="0">
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="125"/></Grid.RowDefinitions>
-                            <TextBlock Text="BEST ACCEPTED" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
+                            <TextBlock Text="HIGHEST QUALITY" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
                             <DataGrid Grid.Row="1" ItemsSource="{Binding BestAccepted}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
                                 <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/><DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/><DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="62"/><DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*"/></DataGrid.Columns>
                             </DataGrid>
                         </Grid>
                         <Grid Grid.Column="2">
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="125"/></Grid.RowDefinitions>
-                            <TextBlock Text="WORST ACCEPTED" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
+                            <TextBlock Text="LOWEST QUALITY" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
                             <DataGrid Grid.Row="1" ItemsSource="{Binding WorstAccepted}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False">
                                 <DataGrid.Columns><DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/><DataGridTextColumn Header="Quality" Binding="{Binding QualityText}" Width="62"/><DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="62"/><DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*"/></DataGrid.Columns>
                             </DataGrid>
@@ -216,8 +216,8 @@
                     <Grid>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="220"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <DockPanel>
-                            <TextBlock Text="REJECTED REVIEW — click a row to load the real FITS/XISF in N.I.N.A. Image" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
-                            <TextBlock DockPanel.Dock="Right" Text="Automatic verdict is preserved for audit" Foreground="{StaticResource QsmSecondaryText}" FontSize="10"/>
+                            <TextBlock Text="REJECTED FRAMES — select a row to open it in N.I.N.A. Image" Foreground="{DynamicResource ButtonForegroundBrush}" Opacity="0.78" FontSize="11" FontWeight="SemiBold" TextAlignment="Left"/>
+                            <TextBlock DockPanel.Dock="Right" Text="Undoing a file action keeps the recorded verdict" TextAlignment="Right" Margin="12,0,0,0" Foreground="{StaticResource QsmSecondaryText}" FontSize="10"/>
                         </DockPanel>
                         <TextBlock Grid.Row="1" Text="{Binding ReviewMessage}" Foreground="{StaticResource QsmSecondaryText}" TextWrapping="Wrap" Margin="0,0,0,7"/>
                         <DataGrid Grid.Row="2" ItemsSource="{Binding RejectedFrames}" SelectedItem="{Binding SelectedRejectedFrame, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column" CanUserAddRows="False" SelectionMode="Single">
@@ -227,10 +227,10 @@
                                 <DataGridTextColumn Header="File action" Binding="{Binding FileDispositionText}" Width="105"/>
                                 <DataGridTextColumn Header="Q" Binding="{Binding QualityText}" Width="45"/>
                                 <DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="60"/>
-                                <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="66"/>
+                                <DataGridTextColumn Header="Guide RMS" Binding="{Binding GuideRmsText}" Width="82"/>
                                 <DataGridTextColumn Header="Stars Δ" Binding="{Binding StarDeltaText}" Width="72"/>
-                                <DataGridTextColumn Header="BG Δ" Binding="{Binding BackgroundDeltaText}" Width="72"/>
-                                <DataGridTextColumn Header="Cause" Binding="{Binding ProbableCause}" Width="*"/>
+                                <DataGridTextColumn Header="Background Δ" Binding="{Binding BackgroundDeltaText}" Width="100"/>
+                                <DataGridTextColumn Header="Failed rules" Binding="{Binding ReasonText}" Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>
                         <DockPanel Grid.Row="3" Margin="0,8,0,0">
@@ -252,14 +252,14 @@
                                 <DataGridTextColumn Header="#" Binding="{Binding FrameIndex}" Width="42"/>
                                 <DataGridTextColumn Header="Q" Binding="{Binding QualityText}" Width="45"/>
                                 <DataGridTextColumn Header="Evidence" Binding="{Binding ConfidenceText}" Width="58"/>
-                                <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="88"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding StatusLabel}" Width="130"/>
                                 <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="180"/>
-                                <DataGridTextColumn Header="RMS" Binding="{Binding GuideRmsText}" Width="65"/>
+                                <DataGridTextColumn Header="Guide RMS" Binding="{Binding GuideRmsText}" Width="82"/>
                                 <DataGridTextColumn Header="Pattern" Binding="{Binding GuidePatternText}" Width="110"/>
                                 <DataGridTextColumn Header="Trend" Binding="{Binding TrendText}" Width="68"/>
                                 <DataGridTextColumn Header="Stars Δ" Binding="{Binding StarDeltaText}" Width="70"/>
-                                <DataGridTextColumn Header="BG Δ" Binding="{Binding BackgroundDeltaText}" Width="70"/>
-                                <DataGridTextColumn Header="Cause" Binding="{Binding ProbableCause}" Width="*"/>
+                                <DataGridTextColumn Header="Background Δ" Binding="{Binding BackgroundDeltaText}" Width="100"/>
+                                <DataGridTextColumn Header="Failed rules" Binding="{Binding ReasonText}" Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>

@@ -6,10 +6,10 @@
     xmlns:nina="clr-namespace:NINA.View.Sequencer;assembly=NINA.Sequencer"
     xmlns:mini="clr-namespace:NINA.View.Sequencer.MiniSequencer;assembly=NINA.Sequencer">
 
-    <GeometryGroup x:Key="QSM_ValidTargetSVG">
-        <EllipseGeometry Center="32,32" RadiusX="27" RadiusY="27"/>
-        <PathGeometry Figures="M 16,33 L 27,44 L 49,20"/>
-        <PathGeometry Figures="M 13,51 L 51,51"/>
+    <!-- Ring and check as closed figures: N.I.N.A. fills icon geometry. -->
+    <GeometryGroup x:Key="QSM_ValidTargetSVG" FillRule="Nonzero">
+        <PathGeometry Figures="M 32,3 A 29,29 0 1 1 31.99,3 Z M 32,9.5 A 22.5,22.5 0 1 0 32.01,9.5 Z"/>
+        <PathGeometry Figures="M 17,33 L 21.5,28.5 L 28,35 L 42.5,20.5 L 47,25 L 28,44 Z"/>
     </GeometryGroup>
 
     <GeometryGroup x:Key="QSM_RecoverySVG">
@@ -28,14 +28,9 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Valid target" FontWeight="SemiBold"
-                               ToolTip="Number of genuinely valid QSM-classified frames this repeated container must accumulate before the condition completes. Physical captures can exceed this number because REJECTED, ERROR and LEARNING frames do not advance valid progress."/>
+                               ToolTip="Number of genuinely valid QSM-classified frames this repeated container must accumulate before the condition completes. Physical captures can exceed this number because only ACCEPTED and ACCEPTED (REVIEW) frames advance it. PROVISIONAL frames count once their reference is validated; REJECTED and NOT ASSESSED frames never count."/>
                     <TextBox Grid.Row="0" Grid.Column="1" Margin="6,0,0,0" Text="{Binding TargetValidFrames, UpdateSourceTrigger=LostFocus}" TextAlignment="Right"
-                             ToolTip="Requested valid-frame count. Example: target 300 means QSM keeps the repeated acquisition running until 300 valid frames have been counted, regardless of how many rejected/learning/error frames were physically captured."/>
-
-                    <TextBlock Grid.Row="0" Grid.Column="3" VerticalAlignment="Center" Text="Count WARNING as valid" FontWeight="SemiBold"
-                               ToolTip="WARNING is a usable frame that raised a non-reject condition. ON (default) lets WARNING advance the valid target. OFF records WARNING but does not increment valid progress."/>
-                    <CheckBox Grid.Row="0" Grid.Column="4" VerticalAlignment="Center" IsChecked="{Binding CountWarningsAsValid}" Margin="8,0,14,0"
-                              ToolTip="Recommended default ON. ACCEPTED always counts. REJECTED, ERROR and LEARNING never count in V3. WARNING counts only when this switch is ON."/>
+                             ToolTip="Requested valid-frame count. Example: target 300 means QSM keeps the repeated acquisition running until 300 valid frames have been counted, regardless of how many rejected or unassessed frames were physically captured."/>
 
                     <StackPanel Grid.Row="0" Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Right"
                                 ToolTip="Live QSM progress and the latest classification consumed by this condition.">
@@ -45,9 +40,9 @@
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="6" Margin="0,6,0,0" Opacity="0.72" TextWrapping="Wrap"
                                Text="QSM waits for the classification belonging to the controlled LIGHT from this iteration. It never decrements N.I.N.A.'s native Take Exposure counter; it owns a separate valid-frame target."
-                               ToolTip="Safety model: one eligible controlled LIGHT per repeated iteration is the supported V3 field-test pattern. If the matching QSM result is missing, the condition fails safe instead of capturing indefinitely."/>
+                               ToolTip="Safety model: one eligible controlled LIGHT per repeated iteration is the supported pattern. If the matching QSM result is missing, the condition fails safe instead of capturing indefinitely."/>
                     <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="6" Margin="0,5,0,0" Opacity="0.82" Text="{Binding BreakdownText}"
-                               ToolTip="Breakdown of physically captured eligible frames: valid, rejected, warning, learning and error. The total captured count can therefore be larger than the valid count."/>
+                               ToolTip="Captured frames by verdict. PROVISIONAL frames move to accepted or rejected when their reference is validated, and the valid count updates then."/>
                 </Grid>
             </nina:SequenceBlockView.SequenceItemContent>
         </nina:SequenceBlockView>

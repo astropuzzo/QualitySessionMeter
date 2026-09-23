@@ -12,7 +12,7 @@ public sealed class QualityEngine {
 
     public FrameQualityResult Evaluate(FrameQualityInput input, QualitySettings settings) {
         var result = new FrameQualityResult {
-            AssessmentVersion = settings.UseExposureAssessment ? "1.4" : "1.3",
+            AssessmentVersion = settings.UseExposureAssessment ? ExposureAssessment.Version : "1.3",
             ImageEvidence = input.ImageEvidence ?? new ImageEvidence(),
             FrameIndex = input.FrameIndex,
             TimestampUtc = input.TimestampUtc,
@@ -143,9 +143,9 @@ public sealed class QualityEngine {
         if (dataErrors.Count > 0) {
             result.Status = FrameStatus.Error;
             result.ErrorMessage = string.Join(", ", dataErrors);
-            result.ProbableCause = "ANALYSIS DATA UNAVAILABLE";
+            result.ProbableCause = QualityVocabulary.Diagnosis(result);
             confidenceEngine.Apply(input, result, settings);
-            result.DecisionSummary = "Unassessed: required analysis data is missing. The file is retained; this is not a successful stellar rescue.";
+            result.DecisionSummary = "Not assessed: " + QualityVocabulary.LabelsInSentence(dataErrors) + ". The file is kept.";
             return result;
         }
 
@@ -161,17 +161,12 @@ public sealed class QualityEngine {
         }
 
         if (settings.UseExposureAssessment) ExposureAssessment.Apply(input, result, settings);
-        result.ProbableCause = ClassifyCause(result);
         confidenceEngine.Apply(input, result, settings);
         if (settings.UseExposureAssessment) {
             result.ConfidenceScore = Math.Min(result.ConfidenceScore, result.ImageEvidence.Available ? 85 : 65);
             result.ConfidenceReason = "Evidence strength, not a probability that the photograph is good or bad. " + result.DecisionSummary;
-            if (result.RejectReasons.Any(x => x.StartsWith("STAR_SHAPE"))) result.ProbableCause = "MEASURED STAR-SHAPE DAMAGE";
-            else if (result.RejectReasons.Contains("LOW_SESSION_SIGNAL")) result.ProbableCause = "LOW STELLAR SIGNAL";
-            else if (result.RejectReasons.Contains("SKY_SIGNAL_LOSS") || result.RejectReasons.Contains("STELLAR_FLUX_LOSS")) result.ProbableCause = "SUDDEN STELLAR SIGNAL LOSS";
-            else if (result.RejectReasons.Any(x => x.Contains("GUIDE"))) result.ProbableCause = "GUIDE LIMIT EXCEEDED";
-            else if (result.ReviewReasons.Count > 0) result.ProbableCause = "REVIEW RECOMMENDED";
         }
+        result.ProbableCause = QualityVocabulary.Diagnosis(result);
         return result;
     }
 
@@ -227,21 +222,6 @@ public sealed class QualityEngine {
         if (hardThreshold <= normalThreshold) return value >= hardThreshold ? 0 : 100;
         if (value >= hardThreshold) return 0;
         return 100 * (1 - ((value - normalThreshold) / (hardThreshold - normalThreshold)));
-    }
-
-    private static string ClassifyCause(FrameQualityResult result) {
-        bool guide = result.RejectReasons.Any(x => x.Contains("GUIDE"));
-        bool stars = result.RejectReasons.Contains("STAR_COUNT_DROP");
-        bool bright = result.RejectReasons.Contains("BACKGROUND_HIGH");
-        bool dark = result.RejectReasons.Contains("BACKGROUND_LOW");
-
-        if (guide && !stars && !bright && !dark) return "WIND / GUIDING DISTURBANCE";
-        if (stars && bright && !guide) return "CLOUD / BRIGHT SKY EVENT";
-        if (stars && dark && !guide) return "CLOUD / TRANSPARENCY LOSS";
-        if (stars && !guide) return "CLOUD / TRANSPARENCY LOSS";
-        if ((bright || dark) && !guide && !stars) return "BACKGROUND / HAZE EVENT";
-        if (guide || stars || bright || dark) return "MIXED CONDITIONS";
-        return "NORMAL";
     }
 
     private static double Clamp(double value, double min, double max) => value < min ? min : value > max ? max : value;

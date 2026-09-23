@@ -43,16 +43,16 @@
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.MonitorOnly}" HorizontalAlignment="Left"/>
                 </Grid>
 
-                <Grid Margin="16,5,0,5" ToolTip="Maximum number of recent clean LEARNING/ACCEPTED samples retained for each target/filter/exposure/gain/binning/camera baseline. Larger is steadier but adapts more slowly.">
+                <Grid Margin="16,5,0,5" ToolTip="Maximum number of recent accepted frames kept in the star/background reference of each target, filter, exposure, gain, binning and camera. Larger is steadier but adapts more slowly.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Baseline Window" VerticalAlignment="Center"/>
+                    <TextBlock Text="Reference Window" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.BaselineWindow, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="frames (4–50)" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
-                <Grid Margin="16,5,0,10" ToolTip="Clean same-context frames required before relative star/background baselines are mature. Until then the context remains LEARNING.">
+                <Grid Margin="16,5,0,10" ToolTip="Frames needed to validate the star/background reference of a new target and setup. Until then frames are PROVISIONAL; once enough of them agree, they are accepted, and outliers are rejected.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Minimum Learning Frames" VerticalAlignment="Center"/>
+                    <TextBlock Text="Frames to Validate Reference" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MinimumLearningFrames, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="frames" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
@@ -129,7 +129,7 @@
 
                 <TextBlock Text="Image Signal" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,3"/>
                 <TextBlock Margin="16,0,0,7" Width="910" FontSize="11" Opacity="0.74" TextWrapping="Wrap"
-                           Text="Stars and background are compared with the rolling clean baseline for the same target, filter, exposure, gain, binning and camera."/>
+                           Text="Stars and background are compared with the reference built from accepted frames of the same target, filter, exposure, gain, binning and camera."/>
 
                 <Grid Margin="16,5,0,5" ToolTip="Hard rejection rule comparing detected star count with the mature rolling baseline. QSM does not use HFR/FWHM/eccentricity alone as hard rejection criteria.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -366,7 +366,7 @@
                 <TextBlock Text="Features" FontSize="18" Margin="0,16,0,5"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>
                 <TextBlock Margin="16,0,0,0" Width="910" TextWrapping="Wrap"
-                           Text="• Last-frame quality and diagnostic evidence strength&#x0a;• Exposure guide RMS plus sustained/hard excursion rules&#x0a;• Rolling star/background baselines&#x0a;• Reversible rejected-file handling&#x0a;• Session events, predictive diagnostics and reports&#x0a;• Valid Frame Target; stellar analysis&#x0a;• Read-only local Web Dashboard&#x0a;• Separate tokenized OpenAstro companion API"/>
+                           Text="• Last-frame quality and diagnostic evidence strength&#x0a;• Exposure guide RMS plus sustained/hard excursion rules&#x0a;• Validated star/background references&#x0a;• Reversible rejected-file handling&#x0a;• Session events, predictive diagnostics and reports&#x0a;• Valid Frame Target; stellar analysis&#x0a;• Read-only local Web Dashboard&#x0a;• Separate tokenized OpenAstro companion API"/>
 
                 <TextBlock Text="Getting Help" FontSize="18" Margin="0,16,0,5"/>
                 <Border Height="1" Background="{DynamicResource BorderBrush}" Opacity="0.45" Margin="0,0,0,10"/>

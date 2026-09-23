@@ -36,56 +36,57 @@ public static class HtmlReportWriter {
         sb.AppendLine("*{box-sizing:border-box}body{margin:0;background:#0f1115;color:#f1f3f4;font:14px 'Segoe UI',Arial,sans-serif}main{max-width:1440px;margin:auto;padding:24px}h1{margin:0;font-size:28px}h2{font-size:17px;margin:0 0 12px}h3{font-size:11px;color:#9aa0a6;text-transform:uppercase;letter-spacing:.06em;margin:0 0 7px}.muted{color:#9aa0a6}.top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px}.card{background:#171a20;border:1px solid #2a3039;border-radius:10px;padding:14px}.section{margin-top:12px}.big{font-size:28px;font-weight:650}.good{color:#81c995}.bad{color:#f28b82}.accent{color:#8ab4f8}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.legend{display:flex;gap:14px;flex-wrap:wrap;color:#bdc1c6;margin:0 0 8px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}.reject-key{display:inline-block;color:#ffd7d3;background:#542329;border:1px solid #f28b82;border-radius:5px;padding:1px 6px;margin-right:5px;font-size:11px}.rank{display:grid;grid-template-columns:50px 1fr 58px 80px;gap:8px;padding:7px 0;border-top:1px solid #2a3039}.rank:first-of-type{border-top:0}.event{display:grid;grid-template-columns:55px 170px 1fr 78px 72px;gap:8px;padding:8px 0;border-bottom:1px solid #2a3039}.pill{border:1px solid #353b45;border-radius:999px;padding:2px 8px;font-size:11px}.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}input,select,button{background:#11151b;color:#f1f3f4;border:1px solid #343b46;border-radius:6px;padding:7px 9px}button{cursor:pointer}.tablewrap{max-height:600px;overflow:auto;border:1px solid #2a3039;border-radius:8px}table{width:100%;border-collapse:collapse;font-size:12px}th{position:sticky;top:0;background:#171a20;color:#9aa0a6;text-align:left;padding:8px;border-bottom:1px solid #353b45}td{padding:7px 8px;border-bottom:1px solid #242933;white-space:nowrap}td:last-child{white-space:normal;min-width:260px;max-width:540px}tr:hover td{background:#1d222a}.cause{display:grid;grid-template-columns:minmax(150px,260px) 1fr 40px;gap:8px;align-items:center;margin:7px 0}.bar{height:8px;background:#252b34;border-radius:5px;overflow:hidden}.fill{height:100%;background:#8ab4f8}.footer{margin-top:16px;color:#737a84;font-size:12px}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.event{grid-template-columns:55px 1fr 70px}.event .optional{display:none}}");
         sb.AppendLine("</style></head><body><main>");
 
-        sb.Append("<div class='top'><div><h1>QualitySessionMeter</h1><div class='muted'>Exposure assessment 1.4 — session report</div></div><div class='muted'>")
+        sb.Append("<div class='top'><div><h1>QualitySessionMeter</h1><div class='muted'>Exposure assessment " + ExposureAssessment.Version + " — session report</div></div><div class='muted'>")
           .Append(H((createdUtc == default ? DateTime.UtcNow : createdUtc).ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)))
           .AppendLine("</div></div>");
 
         sb.AppendLine("<div class='grid'>");
         Metric(sb, "Captured", frames.Count.ToString(CultureInfo.InvariantCulture), "");
-        Metric(sb, "Accepted", accepted.Length.ToString(CultureInfo.InvariantCulture), "good");
+        Metric(sb, "Accepted", usable.Length.ToString(CultureInfo.InvariantCulture), "good");
         Metric(sb, "Rejected", rejected.ToString(CultureInfo.InvariantCulture), rejected > 0 ? "bad" : "good");
-        Metric(sb, "Acceptance", acceptance.ToString("0.0", CultureInfo.InvariantCulture) + "%", "accent");
-        Metric(sb, "Usable frame quality", meanQuality.ToString("0", CultureInfo.InvariantCulture), "accent");
-        Metric(sb, "Mean evidence strength", meanConfidence.ToString("0", CultureInfo.InvariantCulture) + " / 100", "accent");
+        Metric(sb, "Acceptance rate", acceptance.ToString("0.0", CultureInfo.InvariantCulture) + "%", "accent");
+        Metric(sb, "Mean quality", meanQuality.ToString("0", CultureInfo.InvariantCulture), "accent");
+        Metric(sb, "Mean evidence", meanConfidence.ToString("0", CultureInfo.InvariantCulture) + " / 100", "accent");
         sb.AppendLine("</div>");
 
         sb.AppendLine("<section class='card section'><h2>Multichannel timeline</h2>");
         sb.AppendLine("<div class='legend'><span><i class='dot' style='background:#8ab4f8'></i>Quality</span><span><i class='dot' style='background:#c58af9'></i>Evidence</span><span><i class='dot' style='background:#81c995'></i>Guide RMS</span><span><i class='dot' style='background:#fdd663'></i>Stars Δ</span><span><i class='dot' style='background:#f28b82'></i>Background Δ</span></div>");
-        sb.AppendLine($"<div class='legend'><span><b class='reject-key'>REJECT</b>{RejectionVisual.GuideIcon} guide / wind &nbsp; {RejectionVisual.SkyIcon} stars / cloud &nbsp; {RejectionVisual.BackgroundIcon} background / haze</span></div>");
+        sb.AppendLine($"<div class='legend'><span><b class='reject-key'>REJECTED</b>{H(RejectionVisual.Legend)}</span></div>");
         sb.AppendLine(BuildTimeline(frames));
         sb.AppendLine("</section>");
 
         sb.AppendLine("<div class='two section'>");
-        sb.AppendLine("<section class='card'><h2>Best accepted frames</h2>");
+        sb.AppendLine("<section class='card'><h2>Highest-quality accepted frames</h2>");
         Ranking(sb, best);
-        sb.AppendLine("</section><section class='card'><h2>Worst accepted frames</h2>");
+        sb.AppendLine("</section><section class='card'><h2>Lowest-quality accepted frames</h2>");
         Ranking(sb, worst);
         sb.AppendLine("</section></div>");
 
         sb.AppendLine("<div class='two section'>");
         sb.AppendLine("<section class='card'><h2>Session events</h2>");
-        if (events.Count == 0) sb.AppendLine("<div class='muted'>No warning/rejection/error event detected.</div>");
+        if (events.Count == 0) sb.AppendLine("<div class='muted'>No review, rejection or unassessed frames.</div>");
         foreach (var e in events) {
             sb.Append("<div class='event'><b>").Append(H(e.Id)).Append("</b><span>").Append(H(e.TypeText)).Append("</span><span class='optional'>")
               .Append(H(e.PrimaryCause)).Append("</span><span>").Append(e.AffectedFrames).Append(" frames</span><span class='pill'>")
               .Append(H(e.SeverityText)).AppendLine("</span></div>");
         }
-        sb.AppendLine("</section><section class='card'><h2>Rejection / warning causes</h2>");
+        sb.AppendLine("</section><section class='card'><h2>Failed rules and review findings</h2>");
         Causes(sb, frames);
         sb.AppendLine("</section></div>");
 
         sb.AppendLine("<section class='card section'><h2>Frame history</h2>");
-        sb.AppendLine("<div class='tools'><input id='q' placeholder='Search filename / cause / pattern…' oninput='filterRows()'><select id='status' onchange='filterRows()'><option value=''>All statuses</option><option>ACCEPTED</option><option>WARNING</option><option>WOULD REJECT</option><option>REJECTED</option><option>LEARNING</option><option>ERROR</option></select><button onclick=\"sortRows('frame')\">Frame order</button><button onclick=\"sortRows('quality')\">Quality ↓</button></div>");
-        sb.AppendLine("<div class='tablewrap'><table id='frames'><thead><tr><th>#</th><th>File</th><th>Status</th><th>Quality</th><th>Evidence strength</th><th>RMS</th><th>Guide pattern</th><th>Trend</th><th>Stars Δ</th><th>BG Δ</th><th>Cause</th></tr></thead><tbody>");
+        sb.AppendLine("<div class='tools'><input id='q' placeholder='Search filename / cause / pattern…' oninput='filterRows()'><select id='status' onchange='filterRows()'><option value=''>All statuses</option><option>ACCEPTED</option><option>ACCEPTED (REVIEW)</option><option>PROVISIONAL</option><option>REJECTED</option><option>REJECTED (MONITOR ONLY)</option><option>NOT ASSESSED</option></select><button onclick=\"sortRows('frame')\">Frame order</button><button onclick=\"sortRows('quality')\">Quality ↓</button></div>");
+        sb.AppendLine("<div class='tablewrap'><table id='frames'><thead><tr><th>#</th><th>File</th><th>Status</th><th>Quality</th><th>Evidence</th><th>Guide RMS</th><th>Guide pattern</th><th>Trend</th><th>Stars Δ</th><th>Background Δ</th><th>Decision</th></tr></thead><tbody>");
         foreach (var f in frames) {
-            string search = $"{f.FileName} {f.StatusText} {f.ProbableCause} {f.GuidePatternText} {f.TrendText}".ToLowerInvariant();
-            string causeIcon = f.Status is FrameStatus.Rejected or FrameStatus.Error ? RejectionVisual.GetIcons(f) : string.Empty;
-            string causeText = string.IsNullOrWhiteSpace(causeIcon) ? f.ProbableCause : $"{causeIcon} {f.ProbableCause}";
-            sb.Append("<tr data-frame='").Append(f.FrameIndex).Append("' data-quality='").Append(N(f.OverallQuality)).Append("' data-status='").Append(A(f.StatusText)).Append("' data-search='").Append(A(search)).Append("'>")
-              .Append("<td>").Append(f.FrameIndex).Append("</td><td>").Append(H(f.FileName)).Append("</td><td>").Append(H(f.StatusText)).Append("</td><td>").Append(H(f.QualityText)).Append("</td><td>").Append(H(f.ConfidenceText)).Append("</td><td>").Append(H(f.GuideRmsText)).Append("</td><td title='").Append(A(f.GuidePatternDetail)).Append("'>").Append(H(f.GuidePatternText)).Append("</td><td>").Append(H(f.TrendText)).Append("</td><td>").Append(H(f.StarDeltaText)).Append("</td><td>").Append(H(f.BackgroundDeltaText)).Append("</td><td>").Append(H(causeText + " · " + f.DecisionSummary + " " + f.ImageEvidence.Detail)).Append(StarProof(f)).AppendLine("</td></tr>");
+            string search = $"{f.FileName} {f.StatusLabel} {f.ReasonText} {f.GuidePatternText} {f.TrendText}".ToLowerInvariant();
+            string causeIcon = RejectionVisual.GetIcons(f);
+            string decision = !string.IsNullOrWhiteSpace(f.DecisionSummary) ? f.DecisionSummary : f.ReasonText == "—" ? "" : f.ReasonText;
+            string causeText = string.IsNullOrWhiteSpace(causeIcon) ? decision : $"[{causeIcon}] {decision}";
+            sb.Append("<tr data-frame='").Append(f.FrameIndex).Append("' data-quality='").Append(N(f.OverallQuality)).Append("' data-status='").Append(A(f.StatusLabel)).Append("' data-search='").Append(A(search)).Append("'>")
+              .Append("<td>").Append(f.FrameIndex).Append("</td><td>").Append(H(f.FileName)).Append("</td><td>").Append(H(f.StatusLabel)).Append("</td><td>").Append(H(f.QualityText)).Append("</td><td>").Append(H(f.ConfidenceText)).Append("</td><td>").Append(H(f.GuideRmsText)).Append("</td><td title='").Append(A(f.GuidePatternDetail)).Append("'>").Append(H(f.GuidePatternText)).Append("</td><td>").Append(H(f.TrendText)).Append("</td><td>").Append(H(f.StarDeltaText)).Append("</td><td>").Append(H(f.BackgroundDeltaText)).Append("</td><td>").Append(H(causeText)).Append(StarProof(f)).AppendLine("</td></tr>");
         }
         sb.AppendLine("</tbody></table></div></section>");
-        sb.AppendLine("<div class='footer'>Guide pattern, trend and probable-cause labels are diagnostic interpretations of measured data; they are not guaranteed physical-cause identifications.</div>");
+        sb.AppendLine("<div class='footer'>Letters in brackets mark the failed channel: " + H(RejectionVisual.Legend) + ". Guide pattern and trend labels interpret measured data; they do not identify a physical cause.</div>");
         sb.AppendLine("<script>function filterRows(){const q=document.getElementById('q').value.toLowerCase(),s=document.getElementById('status').value;document.querySelectorAll('#frames tbody tr').forEach(r=>r.style.display=(!q||r.dataset.search.includes(q))&&(!s||r.dataset.status===s)?'':'none')}function sortRows(k){const b=document.querySelector('#frames tbody');[...b.rows].sort((a,c)=>k==='quality'?Number(c.dataset.quality)-Number(a.dataset.quality):Number(a.dataset.frame)-Number(c.dataset.frame)).forEach(r=>b.appendChild(r))}</script>");
         sb.AppendLine("</main></body></html>");
 
@@ -107,7 +108,7 @@ public static class HtmlReportWriter {
         int plotW = width - left - right;
         var sb = new StringBuilder();
         sb.Append($"<svg viewBox='0 0 {width} {height}' style='min-width:820px;width:100%;height:auto;background:#101318;border-radius:8px'>");
-        Band(sb, left, top, plotW, band, "Quality / Confidence");
+        Band(sb, left, top, plotW, band, "Quality / Evidence");
         Band(sb, left, top + band + gap, plotW, band, "Guide RMS");
         Band(sb, left, top + 2 * (band + gap), plotW, band, "Stars Δ / Background Δ");
         if (frames.Count > 0) {
@@ -174,15 +175,18 @@ public static class HtmlReportWriter {
     }
 
     private static void Ranking(StringBuilder sb, IReadOnlyList<FrameQualityResult> frames) {
-        if (frames.Count == 0) { sb.AppendLine("<div class='muted'>No accepted frame available.</div>"); return; }
-        foreach (var f in frames) sb.Append("<div class='rank'><span>#").Append(f.FrameIndex).Append("</span><span>").Append(H(f.FileName)).Append("</span><b>").Append(H(f.QualityText)).Append(" Q</b><span class='muted'>").Append(H(f.ConfidenceText)).AppendLine(" conf</span></div>");
+        if (frames.Count == 0) { sb.AppendLine("<div class='muted'>No accepted frames yet.</div>"); return; }
+        foreach (var f in frames) sb.Append("<div class='rank'><span>#").Append(f.FrameIndex).Append("</span><span>").Append(H(f.FileName)).Append("</span><b>Q ").Append(H(f.QualityText)).Append("</b><span class='muted'>evidence ").Append(H(f.ConfidenceText)).AppendLine("</span></div>");
     }
 
     private static void Causes(StringBuilder sb, IReadOnlyList<FrameQualityResult> frames) {
-        var groups = frames.Where(x => x.Status is FrameStatus.Warning or FrameStatus.Rejected or FrameStatus.Error)
-            .GroupBy(x => string.IsNullOrWhiteSpace(x.ProbableCause) ? "UNKNOWN" : x.ProbableCause)
-            .Select(x => (Name: x.Key, Count: x.Count())).OrderByDescending(x => x.Count).ToArray();
-        if (groups.Length == 0) { sb.AppendLine("<div class='muted'>No abnormal-frame causes.</div>"); return; }
+        // One frame can fail several rules; each failed rule and review finding is counted once per frame.
+        var groups = frames
+            .SelectMany(x => x.Status == FrameStatus.Rejected ? x.RejectReasons.Distinct().Select(QualityVocabulary.ReasonLabel)
+                : x.Status == FrameStatus.Warning ? x.ReviewReasons.Distinct().Select(r => QualityVocabulary.ReasonLabel(r) + " (review)")
+                : x.Status == FrameStatus.Error ? new[] { "Not assessed" } : Array.Empty<string>())
+            .GroupBy(x => x).Select(x => (Name: x.Key, Count: x.Count())).OrderByDescending(x => x.Count).ToArray();
+        if (groups.Length == 0) { sb.AppendLine("<div class='muted'>No failed rules or review findings.</div>"); return; }
         int max = groups.Max(x => x.Count);
         foreach (var g in groups) sb.Append("<div class='cause'><span>").Append(H(g.Name)).Append("</span><div class='bar'><div class='fill' style='width:").Append((100.0 * g.Count / max).ToString("0.0", CultureInfo.InvariantCulture)).Append("%'></div></div><b>").Append(g.Count).AppendLine("</b></div>");
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace NINA.Plugin.QualitySessionMeter.Models;
 
@@ -10,76 +11,43 @@ namespace NINA.Plugin.QualitySessionMeter.Models;
 /// </summary>
 public static class RejectionVisual {
     public const string GuideIcon = "G";
-    public const string SkyIcon = "S";
+    public const string ShapeIcon = "S";
+    public const string TransparencyIcon = "T";
     public const string BackgroundIcon = "B";
     public const string UnknownIcon = "?";
     public const string ErrorIcon = "!";
+    public const string Legend = "G guiding · S star shape · T transparency · B sky background · ! not assessed";
 
     public static string GetIcons(FrameQualityResult frame) {
         if (frame == null) return string.Empty;
-
-        var icons = new List<string>(3);
-        foreach (var reason in frame.RejectReasons ?? new List<string>()) {
-            switch (reason) {
-                case "GUIDE_RMS":
-                case "SUSTAINED_GUIDE_EXCURSION":
-                case "HARD_GUIDE_EXCURSION":
-                    AddDistinct(icons, GuideIcon);
-                    break;
-                case "STAR_COUNT_DROP":
-                    AddDistinct(icons, SkyIcon);
-                    break;
-                case "BACKGROUND_HIGH":
-                case "BACKGROUND_LOW":
-                    AddDistinct(icons, BackgroundIcon);
-                    break;
-            }
-        }
-
-        // Fallback for future reason codes while keeping the marker useful.
-        if (icons.Count == 0) {
-            var cause = frame.ProbableCause ?? string.Empty;
-            if (Contains(cause, "WIND") || Contains(cause, "GUIDE")) AddDistinct(icons, GuideIcon);
-            if (Contains(cause, "CLOUD") || Contains(cause, "TRANSPARENCY")) AddDistinct(icons, SkyIcon);
-            if (Contains(cause, "BACKGROUND") || Contains(cause, "HAZE") || Contains(cause, "BRIGHT SKY")) AddDistinct(icons, BackgroundIcon);
-        }
-
-        if (frame.Status == FrameStatus.Error && icons.Count == 0) AddDistinct(icons, ErrorIcon);
-        if (frame.Status == FrameStatus.Rejected && icons.Count == 0) AddDistinct(icons, UnknownIcon);
-
-        return string.Concat(icons);
+        if (frame.Status == FrameStatus.Error) return ErrorIcon;
+        var codes = string.Concat(QualityVocabulary.Channels(frame.RejectReasons)
+            .Where(c => c != QualityChannel.Data)
+            .Select(QualityVocabulary.ChannelCode));
+        return codes.Length == 0 && frame.Status == FrameStatus.Rejected ? UnknownIcon : codes;
     }
 
     public static string GetTooltip(FrameQualityResult frame) {
         if (frame == null) return string.Empty;
-        var codes = GetIcons(frame);
-        var cause = string.IsNullOrWhiteSpace(frame.ProbableCause) ? "Unknown cause" : frame.ProbableCause;
         var reasons = frame.ReasonText == "—" ? string.Empty : $" · {frame.ReasonText}";
-        return $"Frame #{frame.FrameIndex} · {ExpandCodes(codes)} · {cause}{reasons}";
+        return $"Frame #{frame.FrameIndex} · {frame.StatusLabel}{reasons}";
     }
 
     public static string ExpandCodes(string codes) {
-        if (string.IsNullOrWhiteSpace(codes)) return "No cause code";
+        if (string.IsNullOrWhiteSpace(codes)) return "No failed channel";
         var labels = new List<string>();
         foreach (char code in codes) {
-            switch (code) {
-                case 'G': AddDistinct(labels, "G = guiding / tracking"); break;
-                case 'S': AddDistinct(labels, "S = stars / transparency / cloud"); break;
-                case 'B': AddDistinct(labels, "B = background / haze / sky brightness"); break;
-                case '!': AddDistinct(labels, "! = analysis error / unassessed"); break;
-                case '?': AddDistinct(labels, "? = unmapped rejection cause"); break;
-            }
+            string label = code switch {
+                'G' => "G = guiding",
+                'S' => "S = star shape",
+                'T' => "T = transparency (stars / stellar signal)",
+                'B' => "B = sky background",
+                '!' => "! = not assessed",
+                '?' => "? = unmapped rule",
+                _ => null
+            };
+            if (label != null && !labels.Contains(label)) labels.Add(label);
         }
-        return labels.Count == 0 ? "No cause code" : string.Join("; ", labels);
-    }
-
-    private static bool Contains(string value, string token) =>
-        value?.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
-
-    private static void AddDistinct(List<string> values, string value) {
-        foreach (var existing in values) {
-            if (string.Equals(existing, value, StringComparison.Ordinal)) return;
-        }
-        values.Add(value);
+        return labels.Count == 0 ? "No failed channel" : string.Join("; ", labels);
     }
 }

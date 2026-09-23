@@ -8,21 +8,32 @@ QSM deliberately separates **display scores** from **hard rejection rules**.
 
 - `Quality` is a 0–100 composite presentation score.
 - **Evidence strength** (stored as `ConfidenceScore` for compatibility) describes completeness/agreement of the available diagnostics; it is not a calibrated probability.
-- `ACCEPTED`, `WARNING`, `REJECTED`, `LEARNING` and `ERROR` are frame states.
+- `ACCEPTED`, `WARNING`, `REJECTED`, `LEARNING` and `ERROR` are frame states. The interface shows them as **ACCEPTED**, **ACCEPTED (REVIEW)**, **REJECTED**, **PROVISIONAL** and **NOT ASSESSED**; exports keep the state codes.
 - A frame is `REJECTED` when at least one enabled rule remains failed after the optional stellar second pass. A high Quality score does not override a failed hard rule.
-- A `WARNING` frame is kept: it has reduced diagnostic quality, inconclusive/borderline stellar evidence, or a guide/count flag cleared by stellar verification.
+- A `WARNING` frame is accepted with reservation: it has reduced diagnostic quality, inconclusive/borderline stellar evidence, or a guide/count flag cleared by stellar verification. It counts as valid.
+- A `LEARNING` frame is provisional. It passed every rule QSM could evaluate, but star count and background cannot be judged before a reference exists. It is settled when the reference is validated (see below).
 
 This separation is intentional. It prevents a good value in one channel from numerically hiding a severe failure in another.
 
 ## Frame states
 
-| State | Meaning | Counts as usable? | Trains clean baseline? |
+| State (shown as) | Meaning | Counts as valid? | Forms the reference? |
 |---|---|---:|---:|
-| `LEARNING` | Same-context baseline is still being established. | No | Yes |
-| `ACCEPTED` | No enabled hard rule failed. | Yes | Yes |
-| `WARNING` | Kept for review: low score or stellar-confirmed guide false positive. | Yes | No |
-| `REJECTED` | One or more enabled hard rules failed. | No | No |
-| `ERROR` | QSM could not assess the frame safely. | No | No |
+| `LEARNING` (PROVISIONAL) | Reference for this context not validated yet. | Not until settled | Only after validation |
+| `ACCEPTED` (ACCEPTED) | No enabled rule failed. | Yes | Yes |
+| `WARNING` (ACCEPTED (REVIEW)) | Accepted with a review finding or a quality score below 65. | Yes | No |
+| `REJECTED` (REJECTED) | One or more enabled rules failed. | No | No |
+| `ERROR` (NOT ASSESSED) | Required analysis data was missing. | No | No |
+
+### Reference validation
+
+Star count and background are relative measurements, so the first frames of a target and setup cannot be judged when they arrive. They are provisional until **Frames to Validate Reference** (default 4) exist:
+
+1. The star reference is the median of the better half of the provisional frames. Cloud or haze only removes stars, so a minority of degraded frames cannot pull it down. The background reference is the median of the frames that pass the star-count limit.
+2. Every provisional frame is re-evaluated against that reference. Frames that fail are rejected and never enter the reference. If too few frames agree, the outliers are rejected at once and the rest stay provisional until enough agree.
+3. If the whole start was degraded, the frames agree with each other and are accepted. When a later run of **Frames to Validate Reference** consecutive frames shows so many more stars, without a brighter sky, that the reference itself would fail the star-count rule, the reference is rebuilt from that run. Earlier frames of the context are re-checked and rejected if they fail. This happens only while the context has at most twice the **Reference Window** accepted frames; later, earlier verdicts stand and the rolling reference follows the change.
+
+Retrospective verdicts update the panel, reports, `frames.csv`, the Valid Frame Target count and, outside Monitor Only, the rejected-file action. The decision text ends with "Decided after the session reference was validated."
 
 File handling is a separate concern. In **Monitor Only** mode a rejected frame is reported but not renamed or moved.
 
@@ -92,7 +103,7 @@ A clean baseline is separated by:
 
 A baseline from one acquisition context must never silently become the reference for another context.
 
-Only `LEARNING` and `ACCEPTED` frames update the clean baseline. `WARNING`, `REJECTED` and `ERROR` frames do not, preventing a degraded period from becoming QSM's new definition of normal.
+Only validated and `ACCEPTED` frames update the reference. `WARNING`, `REJECTED` and `ERROR` frames do not, preventing a degraded period from becoming QSM's new definition of normal.
 
 ## Quality 0–100
 
@@ -106,7 +117,7 @@ In 1.4.1, a cleared guide flag removes guide/stability penalties from the score;
 
 The former Worst-channel Influence option is retired. Disabling stellar verification keeps the 1.4 score and strict guide rejection; it does not restore the 1.3 score. Historical V1/V2/V3 fixtures explicitly select their legacy scoring only in development builds.
 
-Rejected frames show **STAR DAMAGE** or **LIMIT EXCEEDED**; warnings show **KEPT FOR REVIEW**. These explain disposition rather than disguising it as an aesthetic grade. Other assessed frames retain these score labels:
+Rejected frames show **REJECTED**, frames accepted for review **REVIEW**, provisional frames **PROVISIONAL** and unassessed frames **NOT ASSESSED** under the score, so a disposition is never disguised as an aesthetic grade. Other frames use these score labels:
 
 | Score | Label |
 |---:|---|
@@ -124,22 +135,30 @@ The existing completeness, baseline maturity, threshold separation and channel a
 
 The Web Dashboard and N.I.N.A. dock use these definitions:
 
-- **Captured** — number of QSM frame results in the current session, including `LEARNING` and `ERROR`.
-- **Usable** — `ACCEPTED + WARNING`.
+- **Captured** — number of QSM frame results in the current session, including provisional and unassessed frames.
+- **Accepted** — `ACCEPTED + WARNING`.
 - **Rejected** — number of `REJECTED` frames.
-- **Acceptance** — `Usable / (Usable + Rejected) × 100`. `LEARNING` and `ERROR` are deliberately excluded from the denominator.
-- **Usable frame quality** — mean Quality of usable frames.
-- **Mean evidence strength** — mean finite Confidence of usable frames.
+- **Acceptance rate** — `Accepted / (Accepted + Rejected) × 100`. Provisional and unassessed frames are excluded until they have a verdict.
+- **Mean quality** — mean Quality of accepted frames.
+- **Mean evidence** — mean finite evidence strength of accepted frames.
 
-## Probable cause
+## Failed rules and channels
 
-Probable cause is a diagnostic interpretation of measured evidence, for example:
+Each rule has a stable code in exports and a name in the interface:
 
-- guiding/tracking disturbance;
-- cloud/transparency loss;
-- background/haze/sky-brightness event.
+| Code | Name | Channel (marker) |
+|---|---|---|
+| `GUIDE_RMS` | Guide RMS above limit | Guiding (G) |
+| `SUSTAINED_GUIDE_EXCURSION` | Sustained guide excursion | Guiding (G) |
+| `HARD_GUIDE_EXCURSION` | Guide excursion peak | Guiding (G) |
+| `STAR_SHAPE_CONFIRMED` | Distorted star shapes | Star shape (S) |
+| `STAR_COUNT_DROP` | Fewer stars than reference | Transparency (T) |
+| `STELLAR_FLUX_LOSS` | Stellar signal loss | Transparency (T) |
+| `SKY_SIGNAL_LOSS` | Signal and star loss | Transparency (T) |
+| `LOW_SESSION_SIGNAL` | Signal below session minimum | Transparency (T) |
+| `BACKGROUND_HIGH` / `BACKGROUND_LOW` | Brighter / darker sky background | Sky background (B) |
 
-It is explanatory metadata. It does **not** replace the explicit rejection reason(s), threshold values or frame state.
+The `ProbableCause` field holds the failed channels in words, for example "Guiding + Transparency". QSM names what it measured; it does not claim wind, cloud or haze. Only when a weather device is connected does the environmental hint relate a failure to measured wind, cloud cover or humidity. Session events group consecutive abnormal frames by the same channels.
 
 ## Stellar shape, tails and repeated peaks
 

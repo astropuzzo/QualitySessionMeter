@@ -55,9 +55,9 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
     private const string TimelineHelp =
         "QSM timeline. Blue = Quality (0–100), purple = Evidence (0–100), green = Guide RMS in arcseconds. " +
-        "Yellow Stars Δ and salmon Background Δ are percentages RELATIVE TO the rolling clean-frame baseline; the dashed 0% line is that baseline. " +
-        "Dashed colored lines show active reject limits. Red vertical lines mark REJECTED frames, amber lines mark WARNING frames, and ! marks analysis errors. " +
-        "G = guiding/tracking, S = stars/transparency/cloud, B = background/haze/sky brightness. Hover the graph for exact frame values, baseline values and limits.";
+        "Stars Δ (yellow) and Background Δ (salmon) are percentages relative to the reference built from accepted frames; the dashed 0% line is that reference. " +
+        "Dashed colored lines show the active rejection limits. Red vertical lines mark rejected frames, amber lines frames accepted for review, and ! frames that could not be assessed. " +
+        "Marker letters name the failed channel: G guiding, S star shape, T transparency (stars or stellar signal), B sky background. Hover the graph for exact values, reference and limits.";
 
     private sealed class MarkerHit {
         public Rect Area { get; init; }
@@ -187,8 +187,8 @@ public sealed class QualityTimelineControl : FrameworkElement {
         DrawLegendItem(dc, 3, topBand + 3, labelWidth - 8, qualityBrush, secondaryText, "Quality", "0–100");
         DrawLegendItem(dc, 3, topBand + 25, labelWidth - 8, confidenceBrush, secondaryText, "Evidence", "0–100");
         DrawLegendItem(dc, 3, rmsBand + 5, labelWidth - 8, guideBrush, secondaryText, "Guide RMS", "arcsec · lower is better");
-        DrawLegendItem(dc, 3, imgBand + 3, labelWidth - 8, starsBrush, secondaryText, "Stars Δ", EnableStarCount ? $"% vs baseline · reject < -{MaxStarLossPercent:0.#}%" : "% vs baseline · disabled");
-        DrawLegendItem(dc, 3, imgBand + 27, labelWidth - 8, backgroundBrush, secondaryText, "Background Δ", EnableBackground ? $"limits -{MaxBackgroundDecreasePercent:0.#}/+{MaxBackgroundIncreasePercent:0.#}%" : "% vs baseline · disabled");
+        DrawLegendItem(dc, 3, imgBand + 3, labelWidth - 8, starsBrush, secondaryText, "Stars Δ", EnableStarCount ? $"% vs reference · limit -{MaxStarLossPercent:0.#}%" : "% vs reference · rule off");
+        DrawLegendItem(dc, 3, imgBand + 27, labelWidth - 8, backgroundBrush, secondaryText, "Background Δ", EnableBackground ? $"% vs reference · limits -{MaxBackgroundDecreasePercent:0.#}/+{MaxBackgroundIncreasePercent:0.#}%" : "% vs reference · rule off");
 
         // Everything belonging to the graph is clipped to the plot rectangle. This prevents
         // marker badges/reference labels from leaking into the legend on narrow dock layouts.
@@ -232,7 +232,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
         DrawSeries(dc, frames, labelWidth, imgBand, plotW, bandH, f => f.BackgroundDeviationPercent, -imgAbsMax, imgAbsMax, backgroundPen);
 
         double zeroY = ValueToY(0, -imgAbsMax, imgAbsMax, imgBand, bandH);
-        DrawReferenceLine(dc, labelWidth, plotW, zeroY, ThemeDashedPen("BorderBrush", 120, 128, 138, 1.1), "0% rolling baseline", textBrush, background);
+        DrawReferenceLine(dc, labelWidth, plotW, zeroY, ThemeDashedPen("BorderBrush", 120, 128, 138, 1.1), "0% = reference", textBrush, background);
 
         if (EnableStarCount && MaxStarLossPercent > 0) {
             double y = ValueToY(-MaxStarLossPercent, -imgAbsMax, imgAbsMax, imgBand, bandH);
@@ -261,7 +261,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
         else band = "IMAGE DELTA vs ROLLING BASELINE";
 
         var sb = new StringBuilder();
-        sb.Append("Frame #").Append(frame.FrameIndex).Append(" · ").Append(frame.StatusText).Append(" · ").AppendLine(band);
+        sb.Append("Frame #").Append(frame.FrameIndex).Append(" · ").Append(frame.StatusLabel).Append(" · ").AppendLine(band);
         sb.Append("Quality ").Append(FormatValue(frame.OverallQuality, "0")).Append(" / 100 · Evidence ").Append(double.IsNaN(frame.ConfidenceScore) ? "N/A" : frame.ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + " / 100").AppendLine();
         sb.Append("Guide RMS ").Append(FormatArcsec(frame.GuideRmsArcsec));
         if (EnableGuideRms) sb.Append(" · limit ").Append(MaxGuideRms.ToString("0.00", CultureInfo.InvariantCulture)).Append('"');
@@ -270,11 +270,11 @@ public sealed class QualityTimelineControl : FrameworkElement {
         if (frame.StarCount >= 0) {
             sb.Append("Stars ").Append(frame.StarCount.ToString(CultureInfo.InvariantCulture));
             if (Finite(frame.StarBaseline) && frame.StarBaseline > 0) {
-                sb.Append(" · baseline ").Append(frame.StarBaseline.ToString("0", CultureInfo.InvariantCulture))
+                sb.Append(" · reference ").Append(frame.StarBaseline.ToString("0", CultureInfo.InvariantCulture))
                   .Append(" · Δ ").Append(FormatPercent(frame.StarDeviationPercent));
                 if (EnableStarCount) sb.Append(" · reject below -").Append(MaxStarLossPercent.ToString("0.#", CultureInfo.InvariantCulture)).Append('%');
             } else {
-                sb.Append(" · baseline learning/not ready");
+                sb.Append(" · reference not validated yet");
             }
             sb.AppendLine();
         }
@@ -282,17 +282,16 @@ public sealed class QualityTimelineControl : FrameworkElement {
         if (Finite(frame.BackgroundMedian)) {
             sb.Append("Background ").Append(frame.BackgroundMedian.ToString("0.##", CultureInfo.InvariantCulture));
             if (Finite(frame.BackgroundBaseline) && frame.BackgroundBaseline > 0) {
-                sb.Append(" · baseline ").Append(frame.BackgroundBaseline.ToString("0.##", CultureInfo.InvariantCulture))
+                sb.Append(" · reference ").Append(frame.BackgroundBaseline.ToString("0.##", CultureInfo.InvariantCulture))
                   .Append(" · Δ ").Append(FormatPercent(frame.BackgroundDeviationPercent));
                 if (EnableBackground) sb.Append(" · limits -").Append(MaxBackgroundDecreasePercent.ToString("0.#", CultureInfo.InvariantCulture)).Append("/+").Append(MaxBackgroundIncreasePercent.ToString("0.#", CultureInfo.InvariantCulture)).Append('%');
             } else {
-                sb.Append(" · baseline learning/not ready");
+                sb.Append(" · reference not validated yet");
             }
             sb.AppendLine();
         }
 
-        if (!string.IsNullOrWhiteSpace(frame.ProbableCause)) sb.Append("Cause: ").Append(frame.ProbableCause);
-        if (!string.IsNullOrWhiteSpace(frame.ReasonText) && frame.ReasonText != "—") sb.Append(" · ").Append(frame.ReasonText);
+        if (!string.IsNullOrWhiteSpace(frame.DecisionSummary)) sb.Append(frame.DecisionSummary);
         return sb.ToString();
     }
 
@@ -325,7 +324,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
 
             if (frame.Status == FrameStatus.Warning) {
                 dc.DrawLine(warningPen, new Point(x, markerLane), new Point(x, height));
-                markerHits.Add(new MarkerHit { Area = new Rect(x - 5, markerLane, 10, Math.Max(1, height - markerLane)), Text = $"Frame #{frame.FrameIndex} · WARNING · {frame.ProbableCause} · {frame.ReasonText}" });
+                markerHits.Add(new MarkerHit { Area = new Rect(x - 5, markerLane, 10, Math.Max(1, height - markerLane)), Text = $"Frame #{frame.FrameIndex} · {frame.StatusLabel} · {frame.ReasonText}" });
                 continue;
             }
 
@@ -359,7 +358,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
     private static void DrawEventLaneLabel(DrawingContext dc, Brush brush, Brush secondary, double maxWidth) {
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, Math.Max(1, maxWidth), 36)));
         dc.DrawText(Format("EVENTS", 8.5, brush, FontWeights.SemiBold), new Point(3, 2));
-        dc.DrawText(Format("G guide · S sky · B background · ! error", 8.1, secondary, FontWeights.Normal), new Point(3, 16));
+        dc.DrawText(Format("G guiding · S shape · T transparency · B background", 8.1, secondary, FontWeights.Normal), new Point(3, 16));
         dc.Pop();
     }
 

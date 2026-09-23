@@ -24,11 +24,11 @@ function makeFrames() {
     let rms = 0.42 + ((i * 17) % 13) / 100;
     let stars = ((i * 11) % 13 - 6) * 0.7;
     let bg = ((i * 7) % 11 - 5) * 0.55;
-    let cause = 'NORMAL';
-    if ([10, 12, 13].includes(i)) { rms = i === 13 ? 2.56 : 1.78 + (i % 2) * 0.14; cause = 'WIND / GUIDING DISTURBANCE'; }
-    if ([17, 21, 22].includes(i)) { stars = i === 17 ? -27 : -44 - (i % 2) * 4; cause = 'CLOUD / TRANSPARENCY LOSS'; }
-    if ([25, 29].includes(i)) { bg = i === 25 ? 24 : 42; cause = 'BACKGROUND / HAZE EVENT'; }
-    if (i === 30) { rms = null; stars = null; bg = null; cause = 'ANALYSIS DATA UNAVAILABLE'; }
+    let cause = '';
+    if ([10, 12, 13].includes(i)) { rms = i === 13 ? 2.56 : 1.78 + (i % 2) * 0.14; cause = i === 13 ? 'HARD_GUIDE_EXCURSION' : 'GUIDE_RMS'; }
+    if ([17, 21, 22].includes(i)) { stars = i === 17 ? -27 : -44 - (i % 2) * 4; cause = 'STAR_COUNT_DROP'; }
+    if ([25, 29].includes(i)) { bg = i === 25 ? 24 : 42; cause = 'BACKGROUND_HIGH'; }
+    if (i === 30) { rms = null; stars = null; bg = null; cause = 'GUIDE_DATA_UNAVAILABLE'; }
     const quality = status === 'LEARNING' || status === 'ERROR' ? null : status === 'REJECTED' ? 42 + (i % 9) : status === 'WARNING' ? 72 + (i % 5) : 92 + (i % 8);
     const confidence = status === 'LEARNING' ? 25 + i * 13 : status === 'ERROR' ? 0 : 86 + (i % 11);
     rows.push({
@@ -43,8 +43,11 @@ function makeFrames() {
       filter: 'L',
       fileName: `frame_${String(i).padStart(3, '0')}_M31_L_180s.fits`,
       finalFileName: status === 'REJECTED' ? `BAD_frame_${String(i).padStart(3, '0')}_M31_L_180s.fits` : `frame_${String(i).padStart(3, '0')}_M31_L_180s.fits`,
-      probableCause: cause,
-      reason: status === 'REJECTED' ? 'Configured hard limit exceeded' : status === 'ERROR' ? 'Required analysis data unavailable' : ''
+      statusLabel: { LEARNING: 'PROVISIONAL', ACCEPTED: 'ACCEPTED', WARNING: 'ACCEPTED (REVIEW)', REJECTED: 'REJECTED', ERROR: 'NOT ASSESSED' }[status],
+      probableCause: { GUIDE_RMS: 'Guiding', HARD_GUIDE_EXCURSION: 'Guiding', STAR_COUNT_DROP: 'Transparency', BACKGROUND_HIGH: 'Brighter sky background', GUIDE_DATA_UNAVAILABLE: 'Analysis data unavailable' }[cause] || '',
+      reason: status === 'REJECTED' || status === 'ERROR' ? cause : '',
+      reasonText: { GUIDE_RMS: 'Guide RMS above limit', HARD_GUIDE_EXCURSION: 'Guide excursion peak', STAR_COUNT_DROP: 'Fewer stars than reference', BACKGROUND_HIGH: 'Brighter sky background', GUIDE_DATA_UNAVAILABLE: 'No guiding data' }[cause] || '',
+      markerCodes: status === 'ERROR' ? '!' : status !== 'REJECTED' ? '' : ({ GUIDE_RMS: 'G', HARD_GUIDE_EXCURSION: 'G', STAR_COUNT_DROP: 'T', BACKGROUND_HIGH: 'B' }[cause] || '?')
     });
   }
   return rows;

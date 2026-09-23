@@ -14,8 +14,8 @@ public sealed class FrameQualityResult {
     public bool GuideFalsePositive { get; set; }
     public bool StarCountFalsePositive { get; set; }
     public string SecondPassText => GuideFalsePositive || StarCountFalsePositive
-        ? Status == FrameStatus.Rejected ? "FLAG CLEARED · STILL REJECTED" : "RECOVERED"
-        : ImageEvidence.Available ? ImageEvidence.Summary : "NOT VERIFIED";
+        ? Status == FrameStatus.Rejected ? "Flag cleared; another rule failed" : "Flag cleared by star analysis"
+        : ImageEvidence.Summary;
     public string FrameIdentity => $"Frame #{FrameIndex} · {FileName}";
     public int FrameIndex { get; set; }
     public DateTime TimestampUtc { get; set; }
@@ -108,15 +108,17 @@ public sealed class FrameQualityResult {
     public string ProbableCause { get; set; } = "";
     public string ErrorMessage { get; set; } = "";
     public bool MonitorOnly { get; set; }
+    // True when this verdict was decided after capture, against a validated or rebuilt reference.
+    public bool ReferenceRevised { get; set; }
 
     public bool IsUsable => Status is FrameStatus.Accepted or FrameStatus.Warning;
 
     public string QualityLabel {
         get {
-            if (AssessmentVersion == "1.4" && Status == FrameStatus.Rejected) return ImageEvidence.Compromised ? "STAR DAMAGE" : "LIMIT EXCEEDED";
-            if (AssessmentVersion == "1.4" && Status == FrameStatus.Warning) return "KEPT FOR REVIEW";
-            if (Status == FrameStatus.Learning) return "LEARNING";
-            if (Status == FrameStatus.Error) return "UNASSESSED";
+            if (Status == FrameStatus.Rejected) return "REJECTED";
+            if (Status == FrameStatus.Warning) return "REVIEW";
+            if (Status == FrameStatus.Learning) return "PROVISIONAL";
+            if (Status == FrameStatus.Error) return "NOT ASSESSED";
             return OverallQuality switch {
                 >= 90 => "EXCELLENT",
                 >= 80 => "GOOD",
@@ -134,6 +136,9 @@ public sealed class FrameQualityResult {
         >= 45 => "LOW",
         _ => "VERY LOW"
     };
+
+    // People read StatusLabel. StatusText is the stable status code used by the companion API and CSS.
+    public string StatusLabel => QualityVocabulary.StatusLabel(Status, MonitorOnly);
 
     public string StatusText => Status switch {
         FrameStatus.Learning => "LEARNING",
@@ -155,14 +160,18 @@ public sealed class FrameQualityResult {
         ? $"{PredictiveChannel}: {PredictiveMessage} ({PredictiveConfidence:0}% conf.)"
         : "—";
 
+    /// <summary>Failed rules (REJECTED) or review findings (ACCEPTED (REVIEW)) in words; "—" when none.</summary>
     public string ReasonText {
         get {
             var parts = new List<string>();
-            if (RejectReasons.Count > 0) parts.Add(string.Join(", ", RejectReasons));
+            var codes = Status == FrameStatus.Rejected ? RejectReasons : Status == FrameStatus.Warning ? ReviewReasons : new List<string>();
+            if (codes.Count > 0) parts.Add(QualityVocabulary.Labels(codes));
             if (!string.IsNullOrWhiteSpace(ErrorMessage)) parts.Add(ErrorMessage);
             return parts.Count == 0 ? "—" : string.Join(" · ", parts);
         }
     }
+
+    public string DiagnosisText => string.IsNullOrWhiteSpace(ProbableCause) ? "—" : ProbableCause;
 
     public string FileName => string.IsNullOrWhiteSpace(FinalPath ?? OriginalPath)
         ? "(unknown)"
@@ -192,12 +201,12 @@ public sealed class FrameQualityResult {
 
     public string FileDispositionText {
         get {
-            if (IsSyntheticFile) return "SYNTHETIC";
-            if (Status != FrameStatus.Rejected) return "NORMAL";
+            if (IsSyntheticFile) return "Synthetic";
+            if (Status != FrameStatus.Rejected) return "—";
             var path = FinalPath ?? OriginalPath ?? "";
-            if (System.IO.Path.GetFileName(path).StartsWith("BAD_", StringComparison.OrdinalIgnoreCase)) return "BAD_ PREFIX";
-            if (string.Equals(System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(path) ?? ""), "Rejected", StringComparison.OrdinalIgnoreCase)) return "REJECTED FOLDER";
-            return IsBadFileApplied ? "FILE MOVED" : "KEPT";
+            if (System.IO.Path.GetFileName(path).StartsWith("BAD_", StringComparison.OrdinalIgnoreCase)) return "Renamed BAD_";
+            if (string.Equals(System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(path) ?? ""), "Rejected", StringComparison.OrdinalIgnoreCase)) return "Moved to Rejected";
+            return IsBadFileApplied ? "Moved" : "Not moved";
         }
     }
 
@@ -207,12 +216,12 @@ public sealed class FrameQualityResult {
 
     public string ConfidenceText => double.IsNaN(ConfidenceScore)
         ? "N/A"
-        : ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + (AssessmentVersion == "1.4" ? " / 100" : "%");
+        : ConfidenceScore.ToString("0", CultureInfo.InvariantCulture) + " / 100";
 
     public string GuideRmsText => FormatArcsec(GuideRmsArcsec);
     public string ExcursionText => double.IsNaN(MaxGuideExcursionArcsec)
-        ? "max excursion N/A"
-        : "max excursion " + FormatArcsec(MaxGuideExcursionArcsec);
+        ? ""
+        : "peak " + FormatArcsec(MaxGuideExcursionArcsec);
     public string GuidePatternText => GuidePattern switch {
         GuidePatternKind.Unavailable => "N/A",
         GuidePatternKind.Stable => "STABLE",
@@ -224,8 +233,8 @@ public sealed class FrameQualityResult {
         _ => "IRREGULAR"
     };
     public string GuidePatternConfidenceText => double.IsNaN(GuidePatternConfidence)
-        ? "confidence N/A"
-        : "confidence " + GuidePatternConfidence.ToString("0", CultureInfo.InvariantCulture) + "%";
+        ? ""
+        : "pattern match " + GuidePatternConfidence.ToString("0", CultureInfo.InvariantCulture) + "%";
     public string TrendText {
         get {
             if (StarTrendKind == TrendInterpretationKind.AbruptAnomaly || BackgroundTrendKind == TrendInterpretationKind.AbruptAnomaly) return "ABRUPT";
@@ -237,14 +246,17 @@ public sealed class FrameQualityResult {
     public string StarsText => StarCount >= 0 ? StarCount.ToString(CultureInfo.InvariantCulture) : "N/A";
     public string StarDeltaText => FormatPercent(StarDeviationPercent);
     public string StarTrendResidualText => double.IsNaN(StarTrendResidualPercent)
-        ? "trend residual N/A"
-        : "trend residual " + FormatPercent(StarTrendResidualPercent);
-    public string BackgroundText => double.IsNaN(BackgroundMedian) ? "N/A" : BackgroundMedian.ToString("0.##", CultureInfo.InvariantCulture);
+        ? ""
+        : FormatPercent(StarTrendResidualPercent) + " vs trend";
+    public string BackgroundText => double.IsNaN(BackgroundMedian) ? "N/A" : BackgroundMedian.ToString("0", CultureInfo.InvariantCulture) + " ADU";
     public string BackgroundDeltaText => FormatPercent(BackgroundDeviationPercent);
     public string BackgroundTrendResidualText => double.IsNaN(BackgroundTrendResidualPercent)
-        ? "trend residual N/A"
-        : "trend residual " + FormatPercent(BackgroundTrendResidualPercent);
+        ? ""
+        : FormatPercent(BackgroundTrendResidualPercent) + " vs trend";
 
     private static string FormatArcsec(double value) => double.IsNaN(value) ? "N/A" : value.ToString("0.00", CultureInfo.InvariantCulture) + "\"";
     private static string FormatPercent(double value) => double.IsNaN(value) ? "N/A" : value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "%";
 }
+
+/// <summary>A verdict replaced after the session reference was validated or rebuilt.</summary>
+public sealed record FrameReclassification(FrameQualityResult Previous, FrameQualityResult Result);

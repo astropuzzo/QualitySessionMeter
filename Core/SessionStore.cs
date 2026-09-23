@@ -66,6 +66,36 @@ public sealed class SessionStore {
         }
     }
 
+    /// <summary>
+    /// Replaces earlier results after a retrospective reference decision. Every artifact, including
+    /// frames.csv, is rewritten so the files never disagree with the live session.
+    /// </summary>
+    public async Task ReplaceAsync(IReadOnlyCollection<FrameQualityResult> updated) {
+        if (updated == null || updated.Count == 0) return;
+        FrameQualityResult[] copy;
+        lock (sync) {
+            foreach (var frame in updated) {
+                int index = results.FindIndex(x => x.FrameIndex == frame.FrameIndex);
+                if (index >= 0) results[index] = frame;
+            }
+            copy = results.ToArray();
+        }
+        eventGrouping.Reset();
+        foreach (var frame in copy) eventGrouping.Add(frame);
+
+        if (string.IsNullOrWhiteSpace(SessionFolder)) return;
+        await ioLock.WaitAsync();
+        try {
+            await RewriteCsvAsync(copy);
+            await WriteSummaryAsync();
+            await WriteEventsCsvAsync();
+            await WriteSvgAsync();
+            await WriteHtmlReportAsync();
+        } finally {
+            ioLock.Release();
+        }
+    }
+
     public async Task RefreshArtifactsAsync() {
         if (string.IsNullOrWhiteSpace(SessionFolder)) return;
         await ioLock.WaitAsync();
@@ -105,14 +135,7 @@ public sealed class SessionStore {
         }
     }
 
-    private async Task AppendCsvAsync(FrameQualityResult r) {
-        var path = Path.Combine(SessionFolder, "frames.csv");
-        bool exists = File.Exists(path);
-        await using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
-        await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-
-        if (!exists) {
-            await writer.WriteLineAsync(
+    private const string CsvHeader =
                 "Frame,TimestampUtc,Filename,Target,Filter,Exposure,Gain,BinX,BinY," +
                 "SourceKind,SequenceTitle,QsmControlled,ProvenanceFrozen,FileActionEligible," +
                 "Stars,StarsBaseline,StarsDeltaPct,StarTrendUsable,StarTrendExpected,StarTrendPctPerFrame,StarTrendR2,StarTrendResidualPct,StarTrendKind," +
@@ -122,9 +145,26 @@ public sealed class SessionStore {
                 "Confidence,ConfidenceLabel,ConfidenceDataCompleteness,ConfidenceBaselineMaturity,ConfidenceThresholdSeparation,ConfidenceAgreement,ConfidenceReason," +
                 "PredictiveWarning,PredictiveConfidence,PredictiveChannel,PredictiveMessage,PredictiveFramesToThreshold," +
                 "EnvironmentAvailable,CloudCover,Humidity,WindSpeed,WindGust,SkyQuality,AmbientTemperature,DewPoint,EnvironmentalHint," +
-                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly,AssessmentVersion,ReviewReasons,DecisionSummary,ImageEvidenceAvailable,ImageStars,StarAxisRatio,StarTailStrength,ThresholdsUsed,GuideFalsePositive,StarEccentricity,StarDoublePeak,StarMedianFlux,ShapeAnalysisMs,StarCountFalsePositive,ExtendedAvailable,VerifiedRegions,RemotePeakStrength,RemotePeakSupport,SearchRadiusArcsec,RelativeStellarFlux,MatchedStars,StellarReferenceFrames,StarFwhmPixels,StarFwhmRatio,StellarReferenceAgeMinutes,SessionRelativeStellarFlux,StellarSignalTrendUsed,StellarSignalTrendPercentPerHour,MinimumSessionSignalPercent");
-        }
+                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly,AssessmentVersion,ReviewReasons,DecisionSummary,ImageEvidenceAvailable,ImageStars,StarAxisRatio,StarTailStrength,ThresholdsUsed,GuideFalsePositive,StarEccentricity,StarDoublePeak,StarMedianFlux,ShapeAnalysisMs,StarCountFalsePositive,ExtendedAvailable,VerifiedRegions,RemotePeakStrength,RemotePeakSupport,SearchRadiusArcsec,RelativeStellarFlux,MatchedStars,StellarReferenceFrames,StarFwhmPixels,StarFwhmRatio,StellarReferenceAgeMinutes,SessionRelativeStellarFlux,StellarSignalTrendUsed,StellarSignalTrendPercentPerHour,MinimumSessionSignalPercent";
 
+    private async Task AppendCsvAsync(FrameQualityResult r) {
+        var path = Path.Combine(SessionFolder, "frames.csv");
+        bool exists = File.Exists(path);
+        await using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+        if (!exists) await writer.WriteLineAsync(CsvHeader);
+        await writer.WriteLineAsync(CsvLine(r));
+    }
+
+    private async Task RewriteCsvAsync(IEnumerable<FrameQualityResult> frames) {
+        var path = Path.Combine(SessionFolder, "frames.csv");
+        await using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+        await writer.WriteLineAsync(CsvHeader);
+        foreach (var frame in frames) await writer.WriteLineAsync(CsvLine(frame));
+    }
+
+    private static string CsvLine(FrameQualityResult r) {
         string[] fields = {
             r.FrameIndex.ToString(CultureInfo.InvariantCulture),
             r.TimestampUtc.ToString("O", CultureInfo.InvariantCulture),
@@ -148,13 +188,13 @@ public sealed class SessionStore {
             Bool(r.PredictiveWarning), Num(r.PredictiveConfidence), Csv(r.PredictiveChannel), Csv(r.PredictiveMessage), Num(r.PredictiveFramesToThreshold),
             Bool(r.EnvironmentAvailable), Num(r.CloudCover), Num(r.Humidity), Num(r.WindSpeed), Num(r.WindGust), Num(r.SkyQuality),
             Num(r.AmbientTemperature), Num(r.DewPoint), Csv(r.EnvironmentalHint),
-            r.Status.ToString(), Csv(r.ReasonText), Csv(r.ProbableCause), Csv(r.ErrorMessage), Bool(r.MonitorOnly), Csv(r.AssessmentVersion), Csv(string.Join(", ", r.ReviewReasons)),
+            r.Status.ToString(), Csv(string.Join(", ", r.RejectReasons)), Csv(r.ProbableCause), Csv(r.ErrorMessage), Bool(r.MonitorOnly), Csv(r.AssessmentVersion), Csv(string.Join(", ", r.ReviewReasons)),
             Csv(r.DecisionSummary), Bool(r.ImageEvidence.Available), r.ImageEvidence.Stars.ToString(CultureInfo.InvariantCulture),
             Num(r.ImageEvidence.AxisRatio), Num(r.ImageEvidence.TailStrength), Csv(r.ThresholdsUsed), Bool(r.GuideFalsePositive), Num(r.ImageEvidence.Eccentricity), Num(r.ImageEvidence.DoublePeakStrength), Num(r.ImageEvidence.MedianFlux), Num(r.ImageEvidence.ElapsedMilliseconds),
             Bool(r.StarCountFalsePositive),Bool(r.ImageEvidence.ExtendedAvailable),Num(r.ImageEvidence.VerifiedRegions),Num(r.ImageEvidence.RemotePeakStrength),Num(r.ImageEvidence.RemotePeakSupport),
             Num(r.ImageEvidence.SearchRadiusArcsec),Num(r.ImageEvidence.RelativeFlux),Num(r.ImageEvidence.MatchedStars),Num(r.ImageEvidence.ReferenceFrames),Num(r.ImageEvidence.FwhmPixels),Num(r.ImageEvidence.FwhmRatio),Num(r.ImageEvidence.ReferenceAgeMinutes),Num(r.ImageEvidence.SessionRelativeFlux),Bool(r.ImageEvidence.SignalTrendUsed),Num(r.ImageEvidence.SignalTrendPercentPerHour),Num(r.ImageEvidence.MinimumSessionSignalPercent)
         };
-        await writer.WriteLineAsync(string.Join(",", fields));
+        return string.Join(",", fields);
     }
 
     private async Task WriteSummaryAsync() {

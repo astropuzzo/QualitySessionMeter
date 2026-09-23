@@ -71,7 +71,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
         int rejected = allFrames.Count(x => x.Status == FrameStatus.Rejected);
         int learning = allFrames.Count(x => x.Status == FrameStatus.Learning);
         int errors = allFrames.Count(x => x.Status == FrameStatus.Error);
-        int usable = accepted + warnings;
+        int usable = allFrames.Count(x => x.IsUsable);
         double acceptanceRate = usable + rejected == 0 ? 0 : usable * 100.0 / (usable + rejected);
         double sessionQuality = allFrames.Where(x => x.IsUsable).Select(x => x.OverallQuality).DefaultIfEmpty(0).Average();
         double sessionConfidence = allFrames.Where(x => x.IsUsable && Finite(x.ConfidenceScore))
@@ -79,7 +79,7 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
 
         var result = new Dictionary<string, object> {
             ["contractVersion"] = ContractVersion,
-            ["assessmentVersion"] = "1.4.2.1",
+            ["assessmentVersion"] = ExposureAssessment.Version,
             ["available"] = true,
             ["readOnly"] = true,
             ["generatedUtc"] = DateTimeOffset.UtcNow.ToString("O"),
@@ -132,8 +132,8 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
                 ["quality"] = Series("Quality", "#8AB4F8", "score", "0–100; higher is better"),
                 ["confidence"] = Series("Evidence strength", "#C58AF9", "score", "0–100 diagnostic index; not a calibrated probability"),
                 ["guideRms"] = Series("Guide RMS", "#81C995", "arcsec", "absolute RMS; lower is better"),
-                ["starDelta"] = Series("Stars Î”", "#FDD663", "% vs rolling baseline", "negative means fewer stars than the rolling clean-frame reference"),
-                ["backgroundDelta"] = Series("Background Î”", "#F28B82", "% vs rolling baseline", "positive = brighter than baseline; negative = darker")
+                ["starDelta"] = Series("Stars Δ", "#FDD663", "% vs rolling baseline", "negative means fewer stars than the rolling clean-frame reference"),
+                ["backgroundDelta"] = Series("Background Δ", "#F28B82", "% vs rolling baseline", "positive = brighter than baseline; negative = darker")
             },
             ["guidingLive"] = MobileLiveGuide(liveGuide),
             ["currentFrame"] = current == null ? null : MobileFrame(current),
@@ -249,7 +249,12 @@ public sealed class QualitySessionMobileBridge : ISubscriber, IDisposable {
         ["starTrend"] = frame.StarTrendKind.ToString(),
         ["backgroundTrend"] = frame.BackgroundTrendKind.ToString(),
         ["probableCause"] = frame.ProbableCause ?? "",
-        ["reason"] = frame.ReasonText ?? "",
+        // "reason" keeps the machine rule codes for API consumers; people read reasonText and statusLabel.
+        ["reason"] = string.Join(" · ", new[] { string.Join(", ", frame.RejectReasons), frame.ErrorMessage ?? "" }.Where(x => !string.IsNullOrWhiteSpace(x))),
+        ["reasonText"] = frame.ReasonText == "—" ? "" : frame.ReasonText,
+        ["statusLabel"] = frame.StatusLabel,
+        ["markerCodes"] = RejectionVisual.GetIcons(frame),
+        ["referenceRevised"] = frame.ReferenceRevised,
         ["qsmControlled"] = frame.QsmControlled,
         ["source"] = frame.SourceText,
         ["predictiveWarning"] = frame.PredictiveWarning,

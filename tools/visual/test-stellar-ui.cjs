@@ -16,7 +16,7 @@ test('a cleared guide flag cannot override an independent final rejection',()=>{
  assert.doesNotMatch(html,/class="stellar-result rescued"/);assert.match(html,/Guiding or signal limit still exceeded/);
 });
 test('usable recovered frame and unavailable measurements are distinct',()=>{
- assert.match(render({...frame,status:'WARNING',guideFalsePositive:true}),/Usable frame/);
+ assert.match(render({...frame,status:'WARNING',guideFalsePositive:true}),/Accepted frame/);
  assert.match(render({status:'REJECTED',imageEvidenceAttempted:true}),/Stellar check inconclusive/);
  const html=render({...frame,starRescueEccentricityLimit:undefined});assert.match(html,/Applied limits unavailable/);
 });

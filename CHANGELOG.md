@@ -2,6 +2,31 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.2.2] - 2026-09-23
+
+### Reference validation
+
+- Treat the first frames of a target and setup as **PROVISIONAL**. When enough exist, re-evaluate them against a reference built from the better half of the set: frames taken through cloud or haze are rejected and never form the reference; the others are accepted.
+- Rebuild the reference when, early in a context, a run of frames shows far more stars without a brighter sky, and re-check the earlier frames against it. A hazy or cloudy start no longer leaves the clear frames that follow rejected as "darker sky background".
+- Update the panel, reports, `frames.csv`, the Valid Frame Target count and the rejected-file action when a verdict is decided retrospectively.
+- **QSM Valid Frame Target** always counts frames accepted for review; the *Count WARNING as valid* switch is removed. Saved sequences load unchanged.
+
+### Terminology and display
+
+- Name frame states ACCEPTED, ACCEPTED (REVIEW), PROVISIONAL, REJECTED and NOT ASSESSED in the panel, reports and dashboard. Exported state codes are unchanged.
+- Name every failed rule in words ("Fewer stars than reference", "Guide RMS above limit", …) and name the failed channel instead of guessing a cause: "Guiding", "Star shape", "Transparency", "Sky background". Rule codes stay in exports and the companion API.
+- Map the 1.4 rules (star shape, stellar signal loss, minimum session signal) to timeline markers and session events. They previously appeared as "?" and "UNKNOWN". Markers are now G guiding, S star shape, T transparency and B sky background.
+- Rewrite decision summaries as short statements with the measured value where useful. Show evidence strength as "/ 100" everywhere, background in ADU, and hide empty "N/A" detail lines.
+- Show the monitoring scope in words, report the accepted count next to the acceptance rate, and show the real assessment version in the report header.
+- Replace the plugin and Valid Frame Target icons with closed, filled shapes: a three-band quality gauge around a star, and a ring with a check. The old outline icons rendered as filled blobs in N.I.N.A. Update the catalog artwork to match.
+- Rename *Baseline Window* to **Reference Window** and *Minimum Learning Frames* to **Frames to Validate Reference** in Options. Stored settings are unchanged.
+
+### Fixes
+
+- Fix the corrupted "Stars Δ" and "Background Δ" series labels sent to the OpenAstro companion API.
+- Keep rejected manual or external LIGHTs in place without recording a false "Rejected-file action failed" error.
+- Write rule codes, not display text, to the `RejectReasons` column of `frames.csv`.
+
 ## [1.4.2.1] - 2026-09-21
 
 - Raise the default combined sudden signal-and-star loss limit from 20% to 35%, and the direct sudden signal-loss limit from 35% to 50%.

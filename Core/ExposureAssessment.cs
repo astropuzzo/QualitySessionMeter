@@ -6,6 +6,8 @@ using System.Linq;
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
 public static class ExposureAssessment {
+    public const string Version = "1.4.2.2";
+
     public static bool CanTrainBaseline(FrameQualityResult result) => (result.Status is FrameStatus.Accepted or FrameStatus.Learning) && !result.ReviewReasons.Contains("TRANSPARENCY_CHANGE");
 
     public static bool IsGuideRejectCandidate(GuideExposureMetrics guide, QualitySettings settings) => guide?.HasData == true && (
@@ -16,7 +18,7 @@ public static class ExposureAssessment {
     public static void Apply(FrameQualityInput input, FrameQualityResult result, QualitySettings settings) {
         var image = (input.ImageEvidence ?? new ImageEvidence()) with {MinimumSessionSignalPercent=settings.MinimumSessionSignalPercent};
         result.ImageEvidence = image;
-        result.AssessmentVersion = "1.4.2.1";
+        result.AssessmentVersion = Version;
         result.GuideEvidence = input.Guide?.Series?.Take(512).ToList() ?? new();
         result.ThresholdsUsed = $"RMS>{settings.MaxGuideRms:R}; peak>={settings.HardExcursionThreshold:R}; sustained>{settings.ExcursionThreshold:R} for {settings.ExcursionMinimumDuration:R}s; stars -{settings.MaxStarLossPercent:R}%; background +{settings.MaxBackgroundIncreasePercent:R}/-{settings.MaxBackgroundDecreasePercent:R}%";
         bool guideRule = result.RejectReasons.Any(x => x.Contains("GUIDE", StringComparison.Ordinal));
@@ -90,31 +92,44 @@ public static class ExposureAssessment {
         if (result.RejectReasons.Count == 0 && ((settings.EnableStarCount && input.Baseline?.StarsReady != true)
             || (settings.EnableBackground && input.Baseline?.BackgroundReady != true))) result.Status = FrameStatus.Learning;
 
-        result.DecisionSummary = result.Status == FrameStatus.Rejected
-            ? confirmedShape ? image.RemotePeakConfirmed ? "Rejected: repeated distant stellar image." : "Rejected: star-shape limit exceeded."
-                : result.RejectReasons.Contains("LOW_SESSION_SIGNAL") ? "Rejected: stellar signal below the session minimum."
-                : result.RejectReasons.Contains("SKY_SIGNAL_LOSS") ? "Rejected: sudden loss of stellar signal and star detections."
-                : result.RejectReasons.Contains("STELLAR_FLUX_LOSS") ? "Rejected: sudden stellar signal loss beyond the limit."
-                : guideRule && !result.GuideFalsePositive && settings.ImageEvidenceEnabled && image.Available && !image.HasRescueMargin ? $"Rejected: borderline stellar shape. Eccentricity {image.Eccentricity:0.00} must be below {image.Limits.RescueMaxEccentricity:0.00} for automatic rescue; original guide rejection retained."
-                : guideRule && !result.GuideFalsePositive && image.ExtendedAttempted ? $"Guide rejection retained: {image.VerifiedRegions}/5 regions verified; {image.CompromisedRegions} outside shape limits. Stellar recovery not established."
-                : guideRule && !result.GuideFalsePositive && extreme ? "Guide rejection retained: safety limit exceeded; stellar recovery not established."
-                : guideRule && !result.GuideFalsePositive ? settings.ImageEvidenceEnabled ? "Rejected: stellar check inconclusive; original guide limit retained." : "Rejected: guide limit exceeded; stellar analysis is disabled."
-                : result.GuideFalsePositive ? "Guide false positive cleared, but an independent star-count or background rule still rejects this frame."
-                : "Rejected: star-count or background limit exceeded."
-            : result.GuideFalsePositive ? "Kept for review: stellar verification cleared the guide flag."
-            : result.StarCountFalsePositive ? "Kept for review: matched stellar signal is within recovery limits."
-            : result.Status == FrameStatus.Learning ? "Learning: building the reference for this target and imaging setup."
-            : result.ReviewReasons.Contains("TRANSPARENCY_CHANGE") ? "Kept for review: unexpected signal change; reference unchanged."
-            : result.ReviewReasons.Contains("STELLAR_CHECK_UNAVAILABLE") ? "Kept for review: stellar check unavailable."
-            : result.ReviewReasons.Contains("SIGNAL_REFERENCE_UNAVAILABLE") ? "Kept for review: insufficient matched signal references."
-            : result.ReviewReasons.Contains("BORDERLINE_STAR_SHAPE") ? "Kept for review: borderline stellar shape."
-            : result.Status == FrameStatus.Warning ? "Kept for review: reduced image quality."
-            : settings.ImageEvidenceEnabled && settings.RejectSignalDegradation && !image.PhotometryAvailable ? "Kept: available checks passed; signal references are learning."
-            : image.SignalTrendUsed ? "Kept: stellar signal follows the gradual session trend."
-            : "Kept: all active checks passed.";
+        result.DecisionSummary = Summarize(result, image, settings, guideRule, extreme, confirmedShape);
         result.ThresholdsUsed += $"; secondPass={settings.ImageEvidenceEnabled}; eccentricity>={image.Limits.MaxEccentricity:R} in >={image.Limits.DeformedFraction:P0} stars; tail>={image.Limits.MaxTailPercent:R}%; doublePeak>={image.Limits.MaxDoublePeakPercent:R}%; minStars={image.Limits.MinimumStars}; targetStars={image.Limits.TargetStars}; rescue requires RMS<={settings.MaxGuideRms:R} when enabled, peak<{Math.Max(6, settings.HardExcursionThreshold*2):R} when enabled, sustained<{Math.Max(settings.ExcursionMinimumDuration,input.ExposureSeconds*.1):R}s when enabled";
         result.ThresholdsUsed += $"; rescueEccentricity<{image.Limits.RescueMaxEccentricity:R} (0.05 margin)";
         result.ThresholdsUsed += $"; signalReject={settings.RejectSignalDegradation}; unexpectedFluxLoss>{settings.MaxMeasuredFluxLossPercent:R}%; combinedUnexpectedLoss>={settings.MaxCloudSignalLossPercent:R}% with starLoss>={Math.Max(10,settings.MaxStarLossPercent/2):R}%; minimumSessionSignal={settings.MinimumSessionSignalPercent:R}%; gradual matched-signal trend follows past clean frames; unexpected loss >={Math.Min(20,settings.MaxCloudSignalLossPercent*.75):R}% with count loss>=10% or sky rise>=3% freezes reference learning; referenceAge<=360min for loss; <=120min for count rescue";
         result.ThresholdsUsed += $"; extendedRecovery requires >=4/5 regions, covered guide peak, RMS<=3x limit, sustained<25% exposure, tail<half limit; remotePeak>={image.Limits.MaxRemotePeakPercent:R}% in >=60% stars; measuredFluxEnabled={settings.VerifyStarCountWithFlux}; measuredFluxLoss>{settings.MaxMeasuredFluxLossPercent:R}%; countRescueFluxLoss<={Math.Min(20,settings.MaxMeasuredFluxLossPercent-5):R}%";
+    }
+
+    private static string Summarize(FrameQualityResult result, ImageEvidence image, QualitySettings settings, bool guideRule, bool extreme, bool confirmedShape) {
+        var reasons = result.RejectReasons;
+        if (result.Status == FrameStatus.Rejected) {
+            if (confirmedShape) return image.RemotePeakConfirmed ? "Rejected: repeated secondary star images." : "Rejected: star shapes exceed the distortion limits.";
+            if (reasons.Contains("LOW_SESSION_SIGNAL")) return $"Rejected: stellar signal below {settings.MinimumSessionSignalPercent:0}% of the session reference.";
+            if (reasons.Contains("SKY_SIGNAL_LOSS")) return "Rejected: sudden loss of stellar signal with fewer stars.";
+            if (reasons.Contains("STELLAR_FLUX_LOSS")) return $"Rejected: sudden stellar signal loss above {settings.MaxMeasuredFluxLossPercent:0}%.";
+            if (guideRule && !result.GuideFalsePositive) {
+                if (settings.ImageEvidenceEnabled && image.Available && !image.HasRescueMargin)
+                    return $"Rejected: guiding limit exceeded. Star eccentricity {image.Eccentricity:0.00} is too close to the limit to clear it (below {image.Limits.RescueMaxEccentricity:0.00} required).";
+                if (image.ExtendedAttempted)
+                    return $"Rejected: guiding limit exceeded. Star analysis verified {image.VerifiedRegions} of 5 regions ({image.CompromisedRegions} outside limits) and could not clear it.";
+                if (extreme) return "Rejected: guiding far beyond the limit; star analysis cannot clear it.";
+                return settings.ImageEvidenceEnabled ? "Rejected: guiding limit exceeded; star analysis was inconclusive." : "Rejected: guiding limit exceeded.";
+            }
+            string failed = QualityVocabulary.Labels(reasons.Where(x => !x.Contains("GUIDE", StringComparison.Ordinal)));
+            return result.GuideFalsePositive
+                ? $"Rejected: {QualityVocabulary.InSentence(failed)}. The guiding flag alone was cleared by star analysis."
+                : $"Rejected: {QualityVocabulary.LabelsInSentence(reasons)}.";
+        }
+        if (result.Status == FrameStatus.Learning) return "Provisional: waiting for enough frames to validate the star-count and background reference.";
+        if (result.GuideFalsePositive) return "Accepted for review: guiding flag cleared by star analysis.";
+        if (result.StarCountFalsePositive) return "Accepted for review: fewer stars detected, but matched stellar signal is within limits.";
+        var review = result.ReviewReasons;
+        if (review.Contains("TRANSPARENCY_CHANGE")) return "Accepted for review: sudden transparency change. Not used as reference.";
+        if (review.Contains("STELLAR_CHECK_UNAVAILABLE")) return "Accepted for review: star analysis unavailable for this frame.";
+        if (review.Contains("SIGNAL_REFERENCE_UNAVAILABLE")) return "Accepted for review: too few matched frames for a signal comparison.";
+        if (review.Contains("BORDERLINE_STAR_SHAPE")) return "Accepted for review: borderline star shapes.";
+        if (result.Status == FrameStatus.Warning) return $"Accepted for review: quality score {result.OverallQuality:0} is below 65.";
+        if (settings.ImageEvidenceEnabled && settings.RejectSignalDegradation && !image.PhotometryAvailable) return "Accepted: all active checks passed. The signal reference is still being built.";
+        if (image.SignalTrendUsed) return "Accepted: stellar signal follows the gradual session trend.";
+        return "Accepted: all active checks passed.";
     }
 }
