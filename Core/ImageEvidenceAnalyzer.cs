@@ -34,22 +34,38 @@ public static class ImageEvidenceAnalyzer {
             }
             outer.Add(new ImageSample(field, side, side) { PixelsPerSample = step, ArcsecPerSample = arcsecPerPixel * step });
         }
-        return new ImageSample(copy, w, h) { PixelsPerSample = step, ArcsecPerSample = arcsecPerPixel * step, OuterFields = outer.ToArray() };
+        var grid = new List<BackgroundTileEvidence>(25);
+        double ReadCell(int x, int y) {
+            int p = y * width + x;
+            return step == 1 ? pixels[p] : (pixels[p] + (double)pixels[p+1] + pixels[p+width] + pixels[p+width+1]) / 4;
+        }
+        for(int gy=0;gy<5;gy++) for(int gx=0;gx<5;gx++) {
+            var values=new List<double>(1024);var differences=new List<double>(2048);
+            int left=gx*width/5, right=(gx+1)*width/5, top=gy*height/5,bottom=(gy+1)*height/5;
+            int sx=Math.Max(step,(right-left)/32/step*step),sy=Math.Max(step,(bottom-top)/32/step*step);
+            for(int y=top/step*step;y<bottom-step*2;y+=sy)for(int x=left/step*step;x<right-step*2;x+=sx) {
+                double v=ReadCell(x,y);values.Add(v);differences.Add(Math.Abs(v-ReadCell(x+step,y)));differences.Add(Math.Abs(v-ReadCell(x,y+step)));
+            }
+            grid.Add(new BackgroundTileEvidence(gy*5+gx,(gx+.5)/5,(gy+.5)/5,Median(values),1.04836*Median(differences),values.Count));
+        }
+        return new ImageSample(copy, w, h) { PixelsPerSample = step, ArcsecPerSample = arcsecPerPixel * step, OuterFields = outer.ToArray(),
+            SourceWidth=width,SourceHeight=height,BackgroundGrid=grid.ToArray() };
     }
 
-    public static ImageEvidence Analyze(ImageSample sample, StarShapeLimits limits = null) {
+    public static ImageEvidence Analyze(ImageSample sample, StarShapeLimits limits = null, double timeBudgetMilliseconds = 1500, bool includePreview = true) {
         limits ??= new StarShapeLimits();
         var clock = Stopwatch.StartNew();
-        ImageEvidence Unavailable(int count, string why) => new() { Attempted = true, Stars = count, Limits = limits, ElapsedMilliseconds = clock.Elapsed.TotalMilliseconds, Detail = "Stellar check unavailable: " + why };
+        var metadata=new ImageEvidence {SampleWidth=sample?.Width??0,SampleHeight=sample?.Height??0,PixelsPerSample=sample?.PixelsPerSample??1,
+            SourceWidth=sample?.SourceWidth??0,SourceHeight=sample?.SourceHeight??0,BackgroundGrid=sample?.BackgroundGrid??Array.Empty<BackgroundTileEvidence>()};
+        ImageEvidence Unavailable(int count, string why) => metadata with { Attempted = true, Stars = count, Limits = limits, ElapsedMilliseconds = clock.Elapsed.TotalMilliseconds, Detail = "Stellar check unavailable: " + why };
         if (sample == null) return Unavailable(0, "raw pixels unavailable.");
         var a = sample.Pixels; int w = sample.Width, h = sample.Height;
         if (a == null || w < 40 || h < 40 || w > 1024 || h > 1024 || (long)w * h != a.Length || a.Any(v => !float.IsFinite(v))) return Unavailable(0, "invalid raw field.");
-        var sampled = a.Where((_, i) => i % 97 == 0).Select(x => (double)x).ToArray();
-        double bg = Median(sampled), noise = 1.4826 * Median(sampled.Select(x => Math.Abs(x - bg)));
+        var sky=new LocalPixelBackground(a,w,h);
         var candidates = new List<(int X, int Y, double Peak)>();
-        for (int y = 18; y < h - 18; y++) for (int x = 18; x < w - 18; x++) {
+        for (int y = 26; y < h - 26; y++) for (int x = 26; x < w - 26; x++) {
             double p = a[y * w + x];
-            if (p < bg + Math.Max(120, noise * 10) || p >= 58000) continue;
+            if (p < sky.LevelAt(x,y) + Math.Max(120, sky.NoiseAt(x,y) * 10) || p >= 58000) continue;
             bool max = true;
             for (int dy = -2; dy <= 2 && max; dy++) for (int dx = -2; dx <= 2; dx++)
                 if ((dy != 0 || dx != 0) && a[(y + dy) * w + x + dx] >= p) { max = false; break; }
@@ -59,10 +75,11 @@ public static class ImageEvidenceAnalyzer {
         var ratios = new List<double>(); var patches = new List<double[]>(); var cells = new HashSet<int>();
         var fluxes = new List<double>(); var catalog = new List<StarObservation>(); int attempted = 0, examined = 0;
         foreach (var star in candidates.OrderByDescending(x => x.Peak)) {
-            if (clock.ElapsedMilliseconds > 1500) return Unavailable(ratios.Count, "analysis time budget exceeded.");
+            if (clock.Elapsed.TotalMilliseconds > timeBudgetMilliseconds) return Unavailable(ratios.Count, "analysis time budget exceeded.");
             if (centers.Any(p => Math.Abs(p.X - star.X) < 20 && Math.Abs(p.Y - star.Y) < 20)) continue;
             if (++examined > Math.Clamp(limits.TargetStars, 20, 200) * 4) break;
             int x = star.X, y = star.Y;
+            double starNoise=sky.NoiseAt(x,y);
             var border = new List<double>();
             for (int t = -12; t <= 12; t++) {
                 border.Add(a[(y - 12) * w + x + t]); border.Add(a[(y + 12) * w + x + t]);
@@ -71,7 +88,7 @@ public static class ImageEvidenceAnalyzer {
             double local = Median(border), mass = 0, mx = 0, my = 0;
             for (int dy = -4; dy <= 4; dy++) for (int dx = -4; dx <= 4; dx++) {
                 if (dx * dx + dy * dy > 16) continue;
-                double v = Math.Max(0, a[(y + dy) * w + x + dx] - local - noise * 2);
+                double v = Math.Max(0, a[(y + dy) * w + x + dx] - local - starNoise * 2);
                 mass += v; mx += dx * v; my += dy * v;
             }
             if (mass <= 0) continue;
@@ -80,14 +97,14 @@ public static class ImageEvidenceAnalyzer {
             double xx = 0, yy = 0, xy = 0;
             for (int dy = -4; dy <= 4; dy++) for (int dx = -4; dx <= 4; dx++) {
                 if (dx * dx + dy * dy > 16) continue;
-                double v = Math.Max(0, a[(y + dy) * w + x + dx] - local - noise * 2);
+                double v = Math.Max(0, a[(y + dy) * w + x + dx] - local - starNoise * 2);
                 xx += v * (dx - mx) * (dx - mx); yy += v * (dy - my) * (dy - my); xy += v * (dx - mx) * (dy - my);
             }
             xx /= mass; yy /= mass; xy /= mass;
             double delta = Math.Sqrt((xx - yy) * (xx - yy) + 4 * xy * xy);
             double minor = (xx + yy - delta) / 2, major = (xx + yy + delta) / 2;
             double peak = star.Peak - local;
-            var fit = FitCore(a,w,x,y,local,peak,noise);
+            var fit = FitCore(a,w,x,y,local,peak,starNoise);
             // Unresolved single-pixel detections are not failed stellar shape measurements.
             // Count only resolved candidates in the reliability fraction, keeping broad/poor fits as failures.
             if (minor < 0.2) continue;
@@ -102,16 +119,17 @@ public static class ImageEvidenceAnalyzer {
                 patch[(dy + 12) * 25 + dx + 12] = (Bilinear(a, w, x + mx + dx, y + my + dy) - local) / peak;
             centers.Add((x, y)); ratios.Add(ratioValue); patches.Add(patch);
             fluxes.Add(mass);
-            double apertureFlux = 0;
-            for (int dy = -8; dy <= 8; dy++) for (int dx = -8; dx <= 8; dx++)
-                if (dx*dx+dy*dy<=64) apertureFlux += a[(y+dy)*w+x+dx]-local;
-            catalog.Add(new StarObservation(x+mx,y+my,apertureFlux,peak,(fit.Valid?fit.Fwhm:2.35482*Math.Pow(major*minor,.25))*sample.PixelsPerSample));
+            double fwhm=fit.Valid?fit.Fwhm:EstimateFwhm(a,w,x,y,local,peak);
+            if(!double.IsFinite(fwhm))fwhm=2.35482*Math.Pow(major*minor,.25);
+            var measurement=LocalPixelBackground.Measure(sample,x+mx,y+my,fwhm*sample.PixelsPerSample,starNoise,false);
+            if(measurement!=null)catalog.Add(measurement);
             cells.Add((y * 3 / h) * 3 + x * 3 / w);
             if (ratios.Count >= Math.Clamp(limits.TargetStars, 20, 200)) break;
         }
         if (ratios.Count < Math.Clamp(limits.MinimumStars, 20, 200) || cells.Count < 3 || ratios.Count < attempted * .60)
             return Unavailable(ratios.Count, $"{ratios.Count} reliable stars from {attempted} resolved candidates in {cells.Count} field cells.") with {
-                Catalog = catalog.ToArray(), FwhmPixels = catalog.Count > 0 ? Median(catalog.Select(s=>s.Fwhm)) : double.NaN
+                Catalog = catalog.ToArray(), FwhmPixels = catalog.Count > 0 ? Median(catalog.Select(s=>s.Fwhm)) : double.NaN,
+                Regions=new[]{MakeRegion(sample,false,false,double.NaN,catalog.ToArray(),sky)}
             };
         var stack = Enumerable.Range(0, 625).Select(i => Median(patches.Select(p => p[i]))).ToArray();
         double tail = 0;
@@ -131,14 +149,34 @@ public static class ImageEvidenceAnalyzer {
         }
         double ratio = Median(ratios), eccentricity = Math.Sqrt(1 - 1 / (ratio * ratio));
         double elongated = ratios.Count(v => Math.Sqrt(1 - 1 / (v * v)) >= limits.MaxEccentricity) / (double)ratios.Count;
-        string proof = MakePreview(stack, patches);
-        if (clock.ElapsedMilliseconds > 1500) return Unavailable(ratios.Count, "analysis time budget exceeded.");
-        return new ImageEvidence {
+        string proof = includePreview?MakePreview(stack, patches):"";
+        if (clock.Elapsed.TotalMilliseconds > timeBudgetMilliseconds) return Unavailable(ratios.Count, "analysis time budget exceeded.");
+        var result=metadata with {
             Attempted = true, Available = true, Stars = ratios.Count, AxisRatio = ratio, ElongatedFraction = elongated, TailStrength = tail,
             DoublePeakStrength = doublePeak, MedianFlux = Median(fluxes), Limits = limits, PreviewPngBase64 = proof, ElapsedMilliseconds = clock.Elapsed.TotalMilliseconds,
             Catalog = catalog.ToArray(), FwhmPixels = Median(catalog.Select(s=>s.Fwhm)), VerifiedRegions = 1, WorstRegionEccentricity = eccentricity,
             Detail = $"{ratios.Count} central stars · eccentricity {eccentricity:0.00} / limit {limits.MaxEccentricity:0.00} · deformed {elongated:P0} / {limits.DeformedFraction:P0} · tail {tail*100:0.0}% / {limits.MaxTailPercent:0.0}% · secondary peak {doublePeak*100:0.0}% / {limits.MaxDoublePeakPercent:0.0}%."
         };
+        return result with {Regions=new[]{MakeRegion(sample,true,result.Compromised,eccentricity,catalog.ToArray(),sky) with {
+            TailStrength=tail,DoublePeakStrength=doublePeak,ElongatedFraction=elongated}}};
+    }
+
+    private static StellarRegionEvidence MakeRegion(ImageSample sample,bool available,bool compromised,double eccentricity,StarObservation[] catalog,LocalPixelBackground sky)
+        =>new() {RegionId=0,Width=sample.Width,Height=sample.Height,PixelsPerSample=sample.PixelsPerSample,
+            Background=sky.Median,Noise=sky.Noise,ShapeAvailable=available,ShapeCompromised=compromised,Eccentricity=eccentricity,
+            Catalog=catalog,FwhmPixels=Median(catalog.Select(s=>s.Fwhm))};
+
+    private static double EstimateFwhm(float[] a,int w,int x,int y,double sky,double peak) {
+        double Crossing(int dx,int dy) {
+            double last=peak;
+            for(int r=1;r<=14;r++) {
+                double value=(a[(y+dy*r)*w+x+dx*r]+a[(y-dy*r)*w+x-dx*r])/2.0-sky;
+                if(value<=peak*.5)return r-1+(last-peak*.5)/Math.Max(1e-9,last-value);
+                last=value;
+            }
+            return double.NaN;
+        }
+        return 2*Math.Sqrt(Crossing(1,0)*Crossing(0,1));
     }
 
     private static (bool Valid,double Ratio,double Fwhm) FitCore(float[] a,int w,int x,int y,double bg,double peak,double noise) {

@@ -43,7 +43,7 @@
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.MonitorOnly}" HorizontalAlignment="Left"/>
                 </Grid>
 
-                <Grid Margin="16,5,0,5" ToolTip="Maximum number of recent accepted frames kept in the star/background reference of each target, filter, exposure, gain, binning and camera. Larger is steadier but adapts more slowly.">
+                <Grid Margin="16,5,0,5" ToolTip="Maximum recent reference frames for the same target, filter, exposure, gain, offset, binning, readout mode, camera, image size and pier side.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Reference Window" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.BaselineWindow, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
@@ -129,9 +129,9 @@
 
                 <TextBlock Text="Image Signal" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,3"/>
                 <TextBlock Margin="16,0,0,7" Width="910" FontSize="11" Opacity="0.74" TextWrapping="Wrap"
-                           Text="Stars and background are compared with the reference built from accepted frames of the same target, filter, exposure, gain, binning and camera."/>
+                           Text="Stellar signal is compared across the central field and four outer regions. Background changes are diagnostic."/>
 
-                <Grid Margin="16,5,0,5" ToolTip="Hard rejection rule comparing detected star count with the mature rolling baseline. QSM does not use HFR/FWHM/eccentricity alone as hard rejection criteria.">
+                <Grid Margin="16,5,0,5" ToolTip="Compares detected stars with the validated reference. Count flags can be cleared only when stellar signal and field coverage are reliable.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Reject Relative Star Loss" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnableStarCount}" HorizontalAlignment="Left"/>
@@ -144,25 +144,20 @@
                     <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
-                <Grid Margin="16,5,0,5" ToolTip="Hard rejection rule comparing image-background median with the mature same-context baseline. Brightening and darkening are evaluated independently.">
+                <Grid Margin="16,5,0,5" ToolTip="Tracks sky-background changes against the validated reference. Brightening may require review; background changes alone do not reject a frame.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Reject Background Deviation" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="Monitor Sky Background" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <CheckBox Grid.Column="1" IsChecked="{Binding Settings.EnableBackground}" HorizontalAlignment="Left"/>
                 </Grid>
 
-                <Grid Margin="16,5,0,5" ToolTip="Maximum allowed positive background change relative to the mature baseline.">
+                <Grid Margin="16,5,0,5" ToolTip="Background increase that marks a frame for review. This is not a rejection limit.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Maximum Background Increase" VerticalAlignment="Center"/>
+                    <TextBlock Text="Background Review Threshold" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.MaxBackgroundIncreasePercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
 
-                <Grid Margin="16,5,0,10" ToolTip="Maximum allowed negative background change relative to the mature baseline.">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Maximum Background Decrease" VerticalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Text="{Binding Settings.MaxBackgroundDecreasePercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
-                    <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
-                </Grid>
+                <TextBlock Text="A darker sky is retained. Sudden stellar loss remains subject to the signal limits below." Margin="16,2,0,10" FontSize="11" Opacity="0.74"/>
 
                 <TextBlock Text="Adaptive Calibration" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,3"/>
                 <TextBlock Margin="16,0,0,7" Width="910" FontSize="11" Opacity="0.74" TextWrapping="Wrap"
@@ -212,7 +207,7 @@
                     <TextBox Grid.Column="1" Text="{Binding Settings.AutoSafetyMaxStarLossPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
                     <TextBlock Grid.Column="2" Text="%" VerticalAlignment="Center" Opacity="0.72"/>
                 </Grid>
-                <Grid Margin="16,4,0,10" ToolTip="Upper safety cap shared by automatically generated background increase/decrease suggestions.">
+                <Grid Margin="16,4,0,10" ToolTip="Maximum background review threshold that Automatic calibration may set.">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Auto Safety: Max Background" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Text="{Binding Settings.AutoSafetyMaxBackgroundPercent, UpdateSourceTrigger=LostFocus}" Width="100" HorizontalAlignment="Left"/>
@@ -220,7 +215,7 @@
                 </Grid>
 
                 <TextBlock Text="Stellar Analysis" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
-                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Checks star shapes on each LIGHT. Guide and star-count flags trigger an extended check."/>
+                <TextBlock Margin="40,0,10,8" TextWrapping="Wrap" Opacity="0.8" Text="Checks star shapes and signal across five sampled regions on each LIGHT. Guide and star-count flags also trigger the extended profile."/>
                 <Grid Margin="16,5,0,5">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="280"/><ColumnDefinition Width="320"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <TextBlock Text="Enable Stellar Analysis" FontWeight="SemiBold" VerticalAlignment="Center"/>

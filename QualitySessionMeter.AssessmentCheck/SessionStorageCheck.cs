@@ -9,6 +9,7 @@ internal static class SessionStorageCheck {
         string root=Path.Combine(Path.GetTempPath(),"qsm-storage-check-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         string fallbackSession=null;
+        string fallbackRoot=Path.Combine(root,"fallback");
         void RemoveOwned(string path,string parent) {
             if(string.IsNullOrEmpty(path)||!Directory.Exists(path))return;
             if(!Path.GetFullPath(path).StartsWith(Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))throw new Exception("Cleanup outside test root");
@@ -31,15 +32,15 @@ internal static class SessionStorageCheck {
             check(store.SessionFolder==first && File.ReadAllLines(Path.Combine(first,"frames.csv")).Length==3,"changing destination does not split the active session");
             store.Reset();await store.AppendAsync(Frame(3));
             check(store.SessionFolder!=first && store.SessionFolder.StartsWith(destination),"next session uses the changed destination");
-            var fallback=new SessionStore(directoryResolver:r=>throw new UnauthorizedAccessException("Test destination unavailable"));
+            var fallback=new SessionStore(directoryResolver:r=>throw new UnauthorizedAccessException("Test destination unavailable"), fallbackDirectoryOverride:fallbackRoot);
             await fallback.AppendAsync(Frame(4));fallbackSession=fallback.SessionFolder;
             check(fallback.StorageWarning.Contains("default local") && File.Exists(Path.Combine(fallbackSession,"session.json")) && fallback.Results.Single().Status==FrameStatus.Accepted,"unwritable destination falls back visibly without changing the verdict");
-            var invalid=new SessionStore(directoryResolver:r=>SessionPathResolver.Resolve(1,"relative-path",r.OriginalPath));
+            var invalid=new SessionStore(directoryResolver:r=>SessionPathResolver.Resolve(1,"relative-path",r.OriginalPath), fallbackDirectoryOverride:fallbackRoot);
             await invalid.AppendAsync(Frame(5));
             check(invalid.StorageWarning.Length>0,"relative custom paths cannot silently redirect reports");
-            RemoveOwned(invalid.SessionFolder,SessionPathResolver.DefaultDirectory);
+            RemoveOwned(invalid.SessionFolder,fallbackRoot);
         } finally {
-            RemoveOwned(fallbackSession,SessionPathResolver.DefaultDirectory);
+            RemoveOwned(fallbackSession,fallbackRoot);
             RemoveOwned(root,Path.GetTempPath());
         }
     }

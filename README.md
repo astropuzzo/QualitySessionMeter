@@ -8,7 +8,7 @@ QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combin
 
 ## Release status
 
-**1.4.2.2** — [Download and changelog](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.2.2).
+**1.4.3.0** — [Download and changelog](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.3.0).
 
 QSM is listed in the N.I.N.A. plugin catalog; its first entry, 1.4.0.2, was accepted on September 16, 2026. New versions appear in the Plugin Manager after the corresponding catalog update is accepted and published.
 
@@ -30,7 +30,7 @@ QSM deliberately separates the human-readable score from hard frame rejection:
 ```text
 Quality score != reject switch
 Guide or star-count rule fails -> optional stellar verification -> final verdict
-Measured stellar damage, enabled signal-loss or background rule fails -> REJECTED
+Measured stellar damage or enabled signal-loss rule fails -> REJECTED
 Any remaining failed rule -> REJECTED
 ```
 
@@ -42,19 +42,18 @@ The current hard-rule channels are:
 - sustained total guide-error excursion;
 - hard peak total guide-error excursion;
 - relative star-count loss versus the mature same-context clean baseline;
-- background increase/decrease versus the mature same-context clean baseline;
 - measured stellar signal loss against matched prior clean frames;
-- combined signal loss, fewer stars and brighter sky.
+- combined sudden signal loss and fewer stars.
 
-QSM 1.4.1 measures eccentricity, asymmetric tails and repeated secondary images. Stellar damage can reject a frame without a guiding alarm. Guide and star-count flags are cleared only with sufficient measured evidence; background limits remain independent. Exact bounds are listed in [SETTINGS.md](docs/SETTINGS.md#stellar-second-pass).
+Stellar analysis measures eccentricity, asymmetric tails and repeated secondary images. Stellar damage can reject a frame without a guiding alarm. Guide and star-count flags require sufficient measured evidence to be cleared. Background changes require review and cannot reject a frame alone. Signal comparison samples the center and four outer regions; its coverage is shown separately from shape coverage. Exact bounds are listed in [SETTINGS.md](docs/SETTINGS.md#stellar-second-pass).
 
 Baselines are isolated by:
 
 ```text
-target + filter + exposure + gain + binning + camera
+target + filter + exposure + gain + offset + readout mode + binning + camera + image dimensions + pier side
 ```
 
-Only clean baseline-eligible data teaches the reference; degraded/rejected/error frames do not redefine normal conditions. See **[docs/METRICS.md](docs/METRICS.md)** for the normative metric definitions.
+Reference eligibility is checked independently for count, background and stellar photometry. Uncertain transparency freezes learning; a guide defect can still leave a valid background measurement. See **[docs/METRICS.md](docs/METRICS.md)** for the metric definitions.
 
 ## N.I.N.A. integration
 
@@ -70,7 +69,7 @@ The normal Imaging dock is operational/observational and provides:
 - Usable frame quality and Mean evidence strength;
 - a three-band multichannel timeline with active limits, event markers and adaptive **Frame #** axis;
 - session events, frame history and stellar-proof hover/expand views;
-- rejected-frame review in N.I.N.A. Image;
+- rejected-frame review in N.I.N.A. Image, with color display when the file contains a supported Bayer pattern;
 - reversible QSM-applied `BAD_` / `Rejected` file actions;
 - session report/folder controls;
 - an Apply/Ignore action only when **Adaptive Calibration → Suggest Only** has a real proposal ready.
@@ -197,7 +196,7 @@ The official release pipeline verifies:
 - manifest generation from the immutable final DLL;
 - manifest validation against the current `isbeorn/nina.plugin.manifests` repository.
 
-Online visual regression also renders the actual QSM WPF templates and embedded Web Dashboard on GitHub-hosted runners. Real N.I.N.A. host testing was completed during the 1.3.0.x field-test cycle before the 1.3.1.1 catalog freeze.
+Online visual regression also renders the QSM WPF templates and embedded Web Dashboard on GitHub-hosted runners.
 
 ## N.I.N.A. catalog and updates
 

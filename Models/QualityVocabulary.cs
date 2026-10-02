@@ -34,6 +34,9 @@ public static class QualityVocabulary {
         "BORDERLINE_STAR_SHAPE" => "Borderline star shapes",
         "STELLAR_CHECK_UNAVAILABLE" => "Star analysis unavailable",
         "SIGNAL_REFERENCE_UNAVAILABLE" => "No signal reference yet",
+        "SIGNAL_COMPARISON_FAILED" => "Stellar signal comparison unavailable",
+        "SPATIAL_SIGNAL_VARIATION" => "Uneven stellar signal across the image",
+        "COUNT_SIGNAL_MISMATCH" => "Star-count loss without confirmed severe signal loss",
         "GUIDE_DATA_UNAVAILABLE" => "No guiding data",
         "STAR_COUNT_UNAVAILABLE" => "No star count",
         "BACKGROUND_UNAVAILABLE" => "No background measurement",
@@ -43,9 +46,9 @@ public static class QualityVocabulary {
     public static QualityChannel? ChannelOf(string code) => code switch {
         "GUIDE_RMS" or "SUSTAINED_GUIDE_EXCURSION" or "HARD_GUIDE_EXCURSION" => QualityChannel.Guiding,
         "STAR_SHAPE_CONFIRMED" or "BORDERLINE_STAR_SHAPE" => QualityChannel.StarShape,
-        "STAR_COUNT_DROP" or "STELLAR_FLUX_LOSS" or "SKY_SIGNAL_LOSS" or "LOW_SESSION_SIGNAL" or "TRANSPARENCY_CHANGE" => QualityChannel.Transparency,
+        "STAR_COUNT_DROP" or "STELLAR_FLUX_LOSS" or "SKY_SIGNAL_LOSS" or "LOW_SESSION_SIGNAL" or "TRANSPARENCY_CHANGE" or "SPATIAL_SIGNAL_VARIATION" or "COUNT_SIGNAL_MISMATCH" => QualityChannel.Transparency,
         "BACKGROUND_HIGH" or "BACKGROUND_LOW" => QualityChannel.SkyBackground,
-        "GUIDE_DATA_UNAVAILABLE" or "STAR_COUNT_UNAVAILABLE" or "BACKGROUND_UNAVAILABLE" => QualityChannel.Data,
+        "GUIDE_DATA_UNAVAILABLE" or "STAR_COUNT_UNAVAILABLE" or "BACKGROUND_UNAVAILABLE" or "SIGNAL_COMPARISON_FAILED" or "SIGNAL_REFERENCE_UNAVAILABLE" => QualityChannel.Data,
         _ => null
     };
 

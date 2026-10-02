@@ -1,6 +1,6 @@
 # QualitySessionMeter — V1 Quality Algorithm
 
-This document is the normative description of the V1 frame-quality algorithm.
+Historical V1 algorithm, retained for development fixtures. Current product behavior is described in [METRICS.md](METRICS.md) and [SETTINGS.md](SETTINGS.md).
 
 ## 1. Inputs
 

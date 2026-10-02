@@ -97,24 +97,24 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     }
 
     public double AutoSafetyMaxGuideRms {
-        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxGuideRms), 2.50), 0.5, 10);
-        set { accessor.SetValueDouble(nameof(AutoSafetyMaxGuideRms), Clamp(value, 0.5, 10)); Raise(); }
+        get => SafeShapeValue(nameof(AutoSafetyMaxGuideRms), 2.50, 0.5, 10);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxGuideRms), double.IsFinite(value) ? Clamp(value, 0.5, 10) : 2.50); Raise(); }
     }
     public double AutoSafetyMaxExcursion {
-        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxExcursion), 4.0), 1, 20);
-        set { accessor.SetValueDouble(nameof(AutoSafetyMaxExcursion), Clamp(value, 1, 20)); Raise(); }
+        get => SafeShapeValue(nameof(AutoSafetyMaxExcursion), 4.0, 1, 20);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxExcursion), double.IsFinite(value) ? Clamp(value, 1, 20) : 4.0); Raise(); }
     }
     public double AutoSafetyMaxHardExcursion {
-        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxHardExcursion), 8.0), AutoSafetyMaxExcursion, 30);
-        set { accessor.SetValueDouble(nameof(AutoSafetyMaxHardExcursion), Clamp(value, AutoSafetyMaxExcursion, 30)); Raise(); }
+        get => SafeShapeValue(nameof(AutoSafetyMaxHardExcursion), Math.Max(8.0, AutoSafetyMaxExcursion), AutoSafetyMaxExcursion, 30);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxHardExcursion), double.IsFinite(value) ? Clamp(value, AutoSafetyMaxExcursion, 30) : Math.Max(8.0, AutoSafetyMaxExcursion)); Raise(); }
     }
     public double AutoSafetyMaxStarLossPercent {
-        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxStarLossPercent), 45.0), 10, 80);
-        set { accessor.SetValueDouble(nameof(AutoSafetyMaxStarLossPercent), Clamp(value, 10, 80)); Raise(); }
+        get => SafeShapeValue(nameof(AutoSafetyMaxStarLossPercent), 45.0, 10, 80);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxStarLossPercent), double.IsFinite(value) ? Clamp(value, 10, 80) : 45.0); Raise(); }
     }
     public double AutoSafetyMaxBackgroundPercent {
-        get => Clamp(accessor.GetValueDouble(nameof(AutoSafetyMaxBackgroundPercent), 45.0), 10, 100);
-        set { accessor.SetValueDouble(nameof(AutoSafetyMaxBackgroundPercent), Clamp(value, 10, 100)); Raise(); }
+        get => SafeShapeValue(nameof(AutoSafetyMaxBackgroundPercent), 45.0, 10, 100);
+        set { accessor.SetValueDouble(nameof(AutoSafetyMaxBackgroundPercent), double.IsFinite(value) ? Clamp(value, 10, 100) : 45.0); Raise(); }
     }
 
     public bool PredictiveWarningsEnabled {
@@ -196,8 +196,8 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueBoolean(nameof(EnableGuideRms), value); Raise(); }
     }
     public double MaxGuideRms {
-        get => accessor.GetValueDouble(nameof(MaxGuideRms), 1.50);
-        set { accessor.SetValueDouble(nameof(MaxGuideRms), Clamp(value, 0.05, 20)); Raise(); }
+        get => SafeShapeValue(nameof(MaxGuideRms), 1.50, 0.05, 20);
+        set { accessor.SetValueDouble(nameof(MaxGuideRms), double.IsFinite(value) ? Clamp(value, 0.05, 20) : 1.50); Raise(); }
     }
 
     public bool EnableSustainedExcursion {
@@ -205,9 +205,9 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueBoolean(nameof(EnableSustainedExcursion), value); Raise(); }
     }
     public double ExcursionThreshold {
-        get => accessor.GetValueDouble(nameof(ExcursionThreshold), 2.00);
+        get => SafeShapeValue(nameof(ExcursionThreshold), 2.00, 0.05, 50);
         set {
-            var clamped = Clamp(value, 0.05, 50);
+            var clamped = double.IsFinite(value) ? Clamp(value, 0.05, 50) : 2.00;
             accessor.SetValueDouble(nameof(ExcursionThreshold), clamped);
             if (HardExcursionThreshold < clamped) {
                 accessor.SetValueDouble(nameof(HardExcursionThreshold), clamped);
@@ -217,8 +217,8 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         }
     }
     public double ExcursionMinimumDuration {
-        get => accessor.GetValueDouble(nameof(ExcursionMinimumDuration), 2.0);
-        set { accessor.SetValueDouble(nameof(ExcursionMinimumDuration), Clamp(value, 0.1, 60)); Raise(); }
+        get => SafeShapeValue(nameof(ExcursionMinimumDuration), 2.0, 0.1, 60);
+        set { accessor.SetValueDouble(nameof(ExcursionMinimumDuration), double.IsFinite(value) ? Clamp(value, 0.1, 60) : 2.0); Raise(); }
     }
 
     public bool EnableHardExcursion {
@@ -226,8 +226,8 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueBoolean(nameof(EnableHardExcursion), value); Raise(); }
     }
     public double HardExcursionThreshold {
-        get => accessor.GetValueDouble(nameof(HardExcursionThreshold), 5.0);
-        set { accessor.SetValueDouble(nameof(HardExcursionThreshold), Clamp(value, ExcursionThreshold, 100)); Raise(); }
+        get => SafeShapeValue(nameof(HardExcursionThreshold), Math.Max(5.0, ExcursionThreshold), ExcursionThreshold, 100);
+        set { accessor.SetValueDouble(nameof(HardExcursionThreshold), double.IsFinite(value) ? Clamp(value, ExcursionThreshold, 100) : Math.Max(5.0, ExcursionThreshold)); Raise(); }
     }
 
     public bool EnableStarCount {
@@ -235,8 +235,8 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueBoolean(nameof(EnableStarCount), value); Raise(); }
     }
     public double MaxStarLossPercent {
-        get => accessor.GetValueDouble(nameof(MaxStarLossPercent), 35.0);
-        set { accessor.SetValueDouble(nameof(MaxStarLossPercent), Clamp(value, 1, 95)); Raise(); }
+        get => SafeShapeValue(nameof(MaxStarLossPercent), 35.0, 1, 95);
+        set { accessor.SetValueDouble(nameof(MaxStarLossPercent), double.IsFinite(value) ? Clamp(value, 1, 95) : 35.0); Raise(); }
     }
 
     public bool EnableBackground {
@@ -244,12 +244,12 @@ public sealed class QualitySettings : INotifyPropertyChanged {
         set { accessor.SetValueBoolean(nameof(EnableBackground), value); Raise(); }
     }
     public double MaxBackgroundIncreasePercent {
-        get => accessor.GetValueDouble(nameof(MaxBackgroundIncreasePercent), 30.0);
-        set { accessor.SetValueDouble(nameof(MaxBackgroundIncreasePercent), Clamp(value, 1, 500)); Raise(); }
+        get => SafeShapeValue(nameof(MaxBackgroundIncreasePercent), 30.0, 1, 500);
+        set { accessor.SetValueDouble(nameof(MaxBackgroundIncreasePercent), double.IsFinite(value) ? Clamp(value, 1, 500) : 30.0); Raise(); }
     }
     public double MaxBackgroundDecreasePercent {
-        get => accessor.GetValueDouble(nameof(MaxBackgroundDecreasePercent), 30.0);
-        set { accessor.SetValueDouble(nameof(MaxBackgroundDecreasePercent), Clamp(value, 1, 95)); Raise(); }
+        get => SafeShapeValue(nameof(MaxBackgroundDecreasePercent), 30.0, 1, 95);
+        set { accessor.SetValueDouble(nameof(MaxBackgroundDecreasePercent), double.IsFinite(value) ? Clamp(value, 1, 95) : 30.0); Raise(); }
     }
 
     public int BaselineWindow {
@@ -271,8 +271,8 @@ public sealed class QualitySettings : INotifyPropertyChanged {
     }
 
     public double WorstMetricWeight {
-        get => Clamp(accessor.GetValueDouble(nameof(WorstMetricWeight), 0.70), 0.50, 0.95);
-        set { accessor.SetValueDouble(nameof(WorstMetricWeight), Clamp(value, 0.50, 0.95)); Raise(); }
+        get => SafeShapeValue(nameof(WorstMetricWeight), 0.70, 0.50, 0.95);
+        set { accessor.SetValueDouble(nameof(WorstMetricWeight), double.IsFinite(value) ? Clamp(value, 0.50, 0.95) : 0.70); Raise(); }
     }
 
     public RejectedFileAction RejectedFileAction {

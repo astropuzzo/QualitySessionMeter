@@ -28,6 +28,11 @@ public sealed class FrameQualityResult {
     public int BinX { get; set; }
     public int BinY { get; set; }
     public string Camera { get; set; }
+    public int CameraOffset { get; set; } = -1;
+    public int ReadoutModeIndex { get; set; } = -1;
+    public string PierSide { get; set; } = "";
+    public int ImageWidth { get; set; }
+    public int ImageHeight { get; set; }
 
     public FrameSourceKind SourceKind { get; set; } = FrameSourceKind.Unknown;
     public string SequenceTitle { get; set; } = "";

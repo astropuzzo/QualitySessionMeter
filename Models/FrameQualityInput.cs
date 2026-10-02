@@ -13,15 +13,22 @@ public sealed class FrameQualityInput {
     public int BinX { get; init; }
     public int BinY { get; init; }
     public string Camera { get; init; }
+    public int CameraOffset { get; init; } = -1;
+    public int ReadoutModeIndex { get; init; } = -1;
+    public string PierSide { get; init; } = "";
+    public int ImageWidth { get; init; }
+    public int ImageHeight { get; init; }
     public int StarCount { get; init; } = -1;
     public double BackgroundMedian { get; init; } = double.NaN;
     public BaselineSnapshot Baseline { get; init; }
     public GuideExposureMetrics Guide { get; init; }
     public ImageEvidence ImageEvidence { get; init; }
 
-    public FrameQualityInput WithBaseline(BaselineSnapshot baseline) => new() {
+    public FrameQualityInput WithBaseline(BaselineSnapshot baseline, ImageEvidence evidence = null) => new() {
         FrameIndex = FrameIndex, TimestampUtc = TimestampUtc, OriginalPath = OriginalPath, Target = Target, Filter = Filter,
         ExposureSeconds = ExposureSeconds, Gain = Gain, BinX = BinX, BinY = BinY, Camera = Camera, StarCount = StarCount,
-        BackgroundMedian = BackgroundMedian, Baseline = baseline, Guide = Guide, ImageEvidence = ImageEvidence
+        CameraOffset = CameraOffset, ReadoutModeIndex = ReadoutModeIndex, PierSide = PierSide,
+        ImageWidth = ImageWidth, ImageHeight = ImageHeight,
+        BackgroundMedian = BackgroundMedian, Baseline = baseline, Guide = Guide, ImageEvidence = evidence ?? ImageEvidence
     };
 }

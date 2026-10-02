@@ -188,7 +188,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
         DrawLegendItem(dc, 3, topBand + 25, labelWidth - 8, confidenceBrush, secondaryText, "Evidence", "0–100");
         DrawLegendItem(dc, 3, rmsBand + 5, labelWidth - 8, guideBrush, secondaryText, "Guide RMS", "arcsec · lower is better");
         DrawLegendItem(dc, 3, imgBand + 3, labelWidth - 8, starsBrush, secondaryText, "Stars Δ", EnableStarCount ? $"% vs reference · limit -{MaxStarLossPercent:0.#}%" : "% vs reference · rule off");
-        DrawLegendItem(dc, 3, imgBand + 27, labelWidth - 8, backgroundBrush, secondaryText, "Background Δ", EnableBackground ? $"% vs reference · limits -{MaxBackgroundDecreasePercent:0.#}/+{MaxBackgroundIncreasePercent:0.#}%" : "% vs reference · rule off");
+        DrawLegendItem(dc, 3, imgBand + 27, labelWidth - 8, backgroundBrush, secondaryText, "Background Δ", EnableBackground ? $"% vs reference · review > +{MaxBackgroundIncreasePercent:0.#}%" : "% vs reference · check off");
 
         // Everything belonging to the graph is clipped to the plot rectangle. This prevents
         // marker badges/reference labels from leaking into the legend on narrow dock layouts.
@@ -224,7 +224,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
         DrawScaleHint(dc, labelWidth + 4, rmsBand + 2, $"0–{maxRms:0.0}\"", secondaryText);
 
         double observedAbs = frames.SelectMany(f => new[] { AbsFinite(f.StarDeviationPercent), AbsFinite(f.BackgroundDeviationPercent) }).DefaultIfEmpty(0).Max();
-        double thresholdAbs = Math.Max(MaxStarLossPercent, Math.Max(MaxBackgroundIncreasePercent, MaxBackgroundDecreasePercent));
+        double thresholdAbs = Math.Max(MaxStarLossPercent, MaxBackgroundIncreasePercent);
         double imgAbsMax = Math.Max(50.0, Math.Max(observedAbs * 1.15, thresholdAbs * 1.25));
         imgAbsMax = Math.Min(500.0, imgAbsMax);
 
@@ -241,10 +241,6 @@ public sealed class QualityTimelineControl : FrameworkElement {
         if (EnableBackground) {
             if (MaxBackgroundIncreasePercent > 0) {
                 double y = ValueToY(MaxBackgroundIncreasePercent, -imgAbsMax, imgAbsMax, imgBand, bandH);
-                DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(242, 139, 130, 0.9), null, backgroundBrush, background);
-            }
-            if (MaxBackgroundDecreasePercent > 0) {
-                double y = ValueToY(-MaxBackgroundDecreasePercent, -imgAbsMax, imgAbsMax, imgBand, bandH);
                 DrawReferenceLine(dc, labelWidth, plotW, y, FrozenDashedPen(242, 139, 130, 0.9), null, backgroundBrush, background);
             }
         }
@@ -284,7 +280,7 @@ public sealed class QualityTimelineControl : FrameworkElement {
             if (Finite(frame.BackgroundBaseline) && frame.BackgroundBaseline > 0) {
                 sb.Append(" · reference ").Append(frame.BackgroundBaseline.ToString("0.##", CultureInfo.InvariantCulture))
                   .Append(" · Δ ").Append(FormatPercent(frame.BackgroundDeviationPercent));
-                if (EnableBackground) sb.Append(" · limits -").Append(MaxBackgroundDecreasePercent.ToString("0.#", CultureInfo.InvariantCulture)).Append("/+").Append(MaxBackgroundIncreasePercent.ToString("0.#", CultureInfo.InvariantCulture)).Append('%');
+                if (EnableBackground) sb.Append(" · review > +").Append(MaxBackgroundIncreasePercent.ToString("0.#", CultureInfo.InvariantCulture)).Append('%');
             } else {
                 sb.Append(" · reference not validated yet");
             }

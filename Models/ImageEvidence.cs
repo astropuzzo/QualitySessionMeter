@@ -29,9 +29,32 @@ public sealed record ImageEvidence {
     public int MatchedStars { get; init; }
     public int ReferenceFrames { get; init; }
     public double ReferenceAgeMinutes { get; init; } = double.NaN;
+    public int SampleWidth { get; init; }
+    public int SampleHeight { get; init; }
+    public int PixelsPerSample { get; init; } = 1;
+    public int SourceWidth { get; init; }
+    public int SourceHeight { get; init; }
+    public string PierSide { get; init; } = "";
+    public PhotometryState PhotometryState { get; init; }
+    public int ExpectedReferenceStars { get; init; }
+    public int MissingReferenceStars { get; init; }
+    public double AffectedStarFraction { get; init; } = double.NaN;
+    public double LowerQuartileRelativeFlux { get; init; } = double.NaN;
+    public int PhotometryRegionsMeasured { get; init; }
+    public int PhotometryRegionsExpected { get; init; }
+    public bool PhotometryCoverageReliable { get; init; }
+    public bool SpatialSignalInconsistent { get; init; }
+    public double RegionalSignalMinimum { get; init; } = double.NaN;
+    public double RegionalSignalUpperMinimum { get; init; } = double.NaN;
+    public StellarRegionEvidence[] Regions { get; init; } = Array.Empty<StellarRegionEvidence>();
+    public BackgroundTileEvidence[] BackgroundGrid { get; init; } = Array.Empty<BackgroundTileEvidence>();
     public double FwhmRatio { get; init; } = double.NaN;
     public int VerifiedRegions { get; init; }
     public int CompromisedRegions { get; init; }
+    public int RawCompromisedRegions { get; init; }
+    public int StableOpticalRegions { get; init; }
+    public bool ShapeReferenceVerified { get; init; }
+    public DateTime ShapeTimestampUtc { get; init; }
     public double WorstRegionEccentricity { get; init; } = double.NaN;
     public bool ExtendedAttempted { get; init; }
     public bool ExtendedAvailable { get; init; }
@@ -43,13 +66,13 @@ public sealed record ImageEvidence {
     public string ExtendedPreviewPngBase64 { get; init; } = "";
     [JsonIgnore] public StarObservation[] Catalog { get; init; } = Array.Empty<StarObservation>();
     public bool RemotePeakConfirmed => ExtendedAvailable && RemotePeakStrength >= Limits.MaxRemotePeakPercent / 100 && RemotePeakSupport >= Limits.DeformedFraction;
-    public bool PhotometryAvailable => ReferenceFrames >= 2 && MatchedStars >= 20 && double.IsFinite(RelativeFlux) && RelativeFlux > 0;
+    public bool PhotometryAvailable => ReferenceFrames >= 2 && MatchedStars >= 20 && double.IsFinite(RelativeFlux) && RelativeFlux >= 0;
     public double Eccentricity => AxisRatio >= 1 ? Math.Sqrt(1 - 1 / (AxisRatio * AxisRatio)) : double.NaN;
     public bool Compromised => Available && ((Eccentricity >= Limits.MaxEccentricity && ElongatedFraction >= Limits.DeformedFraction)
         || TailStrength >= Limits.MaxTailPercent / 100 || DoublePeakStrength >= Limits.MaxDoublePeakPercent / 100 || RemotePeakConfirmed);
     public bool HasRescueMargin => Available && !Compromised && Eccentricity < Limits.RescueMaxEccentricity;
     public bool HasExtendedRescueEvidence => HasRescueMargin && ExtendedAvailable && GuideSearchCovered && VerifiedRegions >= 4 && CompromisedRegions == 0
-        && WorstRegionEccentricity < Limits.MaxEccentricity && TailStrength < Limits.MaxTailPercent / 200
+        && (WorstRegionEccentricity < Limits.MaxEccentricity || ShapeReferenceVerified) && TailStrength < Limits.MaxTailPercent / 200
         && DoublePeakStrength < Limits.MaxDoublePeakPercent / 200;
     public string Summary => !Available ? "Not measured" : Compromised ? "Distorted stars" : HasRescueMargin ? "Round stars" : "Borderline star shapes";
     public string ExtendedCaption => ExtendedAvailable ? "Extended profile · enhanced contrast" : "";
@@ -73,9 +96,53 @@ public sealed record ImageSample(float[] Pixels, int Width, int Height) {
     public int PixelsPerSample { get; init; } = 1;
     public double ArcsecPerSample { get; init; } = double.NaN;
     public ImageSample[] OuterFields { get; init; } = Array.Empty<ImageSample>();
+    public int SourceWidth { get; init; }
+    public int SourceHeight { get; init; }
+    public BackgroundTileEvidence[] BackgroundGrid { get; init; } = Array.Empty<BackgroundTileEvidence>();
 }
 
-public sealed record StarObservation(double X, double Y, double Flux, double Peak, double Fwhm);
+public sealed record StarObservation(double X, double Y, double Flux, double Peak, double Fwhm,
+    double FluxUncertainty = double.NaN, bool WasForcedMeasurement = false, bool Saturated = false);
+
+public enum PhotometryState { NotMeasured, ReferenceLearning, Reliable, SpatiallyVariable, InsufficientMatches }
+
+public sealed record StellarRegionEvidence {
+    public int RegionId { get; init; }
+    public int Width { get; init; }
+    public int Height { get; init; }
+    public int PixelsPerSample { get; init; } = 1;
+    public double Background { get; init; } = double.NaN;
+    public double Noise { get; init; } = double.NaN;
+    public bool ShapeAvailable { get; init; }
+    public bool ShapeCompromised { get; init; }
+    public double Eccentricity { get; init; } = double.NaN;
+    public double TailStrength { get; init; } = double.NaN;
+    public double DoublePeakStrength { get; init; } = double.NaN;
+    public double ElongatedFraction { get; init; } = double.NaN;
+    public int ShapeReferenceFrames { get; init; }
+    public double ShapeReferenceEccentricity { get; init; } = double.NaN;
+    public double ShapeReferenceScatter { get; init; } = double.NaN;
+    public bool StableOpticalElongation { get; init; }
+    public double FwhmPixels { get; init; } = double.NaN;
+    public PhotometryState PhotometryState { get; init; }
+    public double RelativeFlux { get; init; } = double.NaN;
+    public double RelativeFluxUpperBound { get; init; } = double.NaN;
+    public double SessionRelativeFlux { get; init; } = double.NaN;
+    public double SessionFluxUpperBound { get; init; } = double.NaN;
+    public double LowerQuartileRelativeFlux { get; init; } = double.NaN;
+    public double AffectedStarFraction { get; init; } = double.NaN;
+    public int MatchedStars { get; init; }
+    public int ExpectedReferenceStars { get; init; }
+    public int MissingReferenceStars { get; init; }
+    public int ReferenceFrames { get; init; }
+    public double ReferenceAgeMinutes { get; init; } = double.NaN;
+    public bool SignalTrendUsed { get; init; }
+    public double SignalTrendPercentPerHour { get; init; } = double.NaN;
+    [JsonIgnore] public StarObservation[] Catalog { get; init; } = Array.Empty<StarObservation>();
+    [JsonIgnore] public bool PhotometryAvailable => ReferenceFrames >= 2 && MatchedStars >= 20 && double.IsFinite(RelativeFlux);
+}
+
+public sealed record BackgroundTileEvidence(int TileId, double X, double Y, double Median, double Noise, int Samples);
 
 public sealed record StarShapeLimits {
     public int TargetStars { get; init; } = 100;

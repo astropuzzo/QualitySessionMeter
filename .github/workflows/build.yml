@@ -162,7 +162,10 @@ jobs:
             Copy-Item "bin/Release/net10.0-windows7.0/QualitySessionMeter.pdb" "artifacts/production/QualitySessionMeter.pdb" -Force
           }
           Copy-Item README.md, CHANGELOG.md, LICENSE, SECURITY.md "artifacts/production/" -Force
-          if (Test-Path docs) { Copy-Item docs "artifacts/production/docs" -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path "artifacts/production/docs" | Out-Null
+          foreach ($doc in @('SETTINGS.md','METRICS.md','WEB-DASHBOARD.md','OPENASTRO-MOBILE.md','TOUCH-N-STARS.md','PUBLISHING.md','QUALITY_ALGORITHM.md')) {
+            Copy-Item "docs/$doc" "artifacts/production/docs/" -Force
+          }
 
       - name: Build field-test plugin with Synthetic Lab
         run: dotnet build QualitySessionMeter.csproj -c Release --no-restore -p:QsmDevelopmentBuild=true

@@ -149,7 +149,10 @@ jobs:
           if ((Get-FileHash "package/QualitySessionMeter.dll" -Algorithm SHA256).Hash -ne (Get-Content production-dll.sha256)) { throw "Preserved production DLL changed during regression." }
           ./tools/VerifyProductionAssembly.ps1 -File "package/QualitySessionMeter.dll" -ExpectedVersion '${{ github.ref_name }}'
           Copy-Item README.md, CHANGELOG.md, LICENSE, SECURITY.md "package/" -Force
-          if (Test-Path docs) { Copy-Item docs "package/docs" -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path "package/docs" | Out-Null
+          foreach ($doc in @('SETTINGS.md','METRICS.md','WEB-DASHBOARD.md','OPENASTRO-MOBILE.md','TOUCH-N-STARS.md','PUBLISHING.md','QUALITY_ALGORITHM.md')) {
+            Copy-Item "docs/$doc" "package/docs/" -Force
+          }
 
       - name: Generate N.I.N.A. archive and manifest from final DLL
         shell: pwsh
@@ -248,7 +251,7 @@ jobs:
         run: |
           gh pr create \
             --title "Add QualitySessionMeter ${{ github.ref_name }}" \
-            --body $'QualitySessionMeter manifest generated from the immutable tagged production DLL and validated with the official gather.js pipeline.\n\nAI assistance disclosure: material AI assistance was used during development. astropuzzo is the accountable human maintainer. Validation scope and limitations are documented in the release notes and linked field reports. The maintainer accepts responsibility for review, testing, security, privacy, licensing, provenance, debugging and maintenance.' \
+            --body $'QualitySessionMeter manifest generated from the immutable tagged production DLL and validated with the official gather.js pipeline. Release checks cover assessment, Bayer display, WPF dispatcher boundaries and production assembly isolation.\n\nAI assistance disclosure: material AI assistance was used during development. astropuzzo is the accountable human maintainer. The maintainer accepts responsibility for review, testing, security, privacy, licensing, provenance, debugging and maintenance.' \
             --head "${{ github.repository_owner }}:QualitySessionMeter/${{ github.ref_name }}" \
             --base main \
             --repo isbeorn/nina.plugin.manifests

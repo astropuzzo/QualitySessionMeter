@@ -2,6 +2,23 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.3.0] - 2026-10-02
+
+- Measure stellar signal independently in the center and four outer field regions. Report uneven attenuation, missing reference stars and measured coverage.
+- Keep severe signal loss measurable below the former fixed peak thresholds. Remeasure faint or missing reference stars with conservative measurement allowances when alignment is reliable.
+- Estimate local background and noise separately from sky gradients; preserve stellar flux through ordinary PSF broadening.
+- Treat sky-background changes as diagnostics. A darker sky is retained; a brighter sky can require review and cannot reject a frame by itself.
+- Protect each reference channel independently during uncertain transparency changes and retain valid background information from guide-damaged frames.
+- Rebuild stellar anchors together with the star-count/background reference and recompute stored signal comparisons after retrospective decisions.
+- Separate references by camera offset, readout mode, image dimensions and pier side as well as target, filter, exposure, gain, binning and camera.
+- Show signal coverage, regional measurements and comparison status in frame inspection and exports.
+- Clear guiding flags when peripheral elongation matches at least three previous accepted exposures. Keep the central rescue margin and tail/secondary-peak limits.
+- Retain moderate star-count changes for review when the measured regions support usable signal; incomplete coverage cannot clear a count flag as a false positive.
+- Preserve available image measurements when guiding or another diagnostic is unavailable.
+- Preserve Monitor Only file protection through consecutive reference revisions, including after the current setting changes.
+- Fit the stellar inspector and session report to narrow screens while keeping regional tables scrollable.
+- Display rejected color-camera frames debayered in the N.I.N.A. Image view, using the file's Bayer pattern and offsets. Preserve monochrome images and original raw data.
+
 ## [1.4.2.2] - 2026-09-23
 
 ### Reference validation

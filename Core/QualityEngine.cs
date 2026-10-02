@@ -25,6 +25,11 @@ public sealed class QualityEngine {
             BinX = input.BinX,
             BinY = input.BinY,
             Camera = input.Camera,
+            CameraOffset = input.CameraOffset,
+            ReadoutModeIndex = input.ReadoutModeIndex,
+            PierSide = input.PierSide,
+            ImageWidth = input.ImageWidth,
+            ImageHeight = input.ImageHeight,
             StarCount = input.StarCount,
             BackgroundMedian = input.BackgroundMedian,
             GuideSamples = input.Guide?.Samples ?? 0,
@@ -52,27 +57,33 @@ public sealed class QualityEngine {
         var dataErrors = new List<string>();
 
         bool guideRequired = settings.EnableGuideRms || settings.EnableSustainedExcursion || settings.EnableHardExcursion;
-        bool guideAvailable = input.Guide?.HasData == true;
+        bool guideHasData = input.Guide?.HasData == true;
+        bool rmsAvailable = guideHasData && double.IsFinite(input.Guide.RmsArcsec) && input.Guide.RmsArcsec >= 0;
+        bool peakAvailable = guideHasData && double.IsFinite(input.Guide.MaxExcursionArcsec) && input.Guide.MaxExcursionArcsec >= 0;
+        bool durationAvailable = guideHasData && double.IsFinite(input.Guide.MaxSustainedExcursionSeconds) && input.Guide.MaxSustainedExcursionSeconds >= 0;
+        bool guideAvailable = (!settings.EnableGuideRms || rmsAvailable)
+            && (!settings.EnableHardExcursion || peakAvailable)
+            && (!settings.EnableSustainedExcursion || (peakAvailable && durationAvailable));
         bool starDataAvailable = input.StarCount >= 0;
-        bool backgroundDataAvailable = !double.IsNaN(input.BackgroundMedian) && !double.IsInfinity(input.BackgroundMedian);
+        bool backgroundDataAvailable = double.IsFinite(input.BackgroundMedian) && input.BackgroundMedian > 0;
 
         if (guideRequired && !guideAvailable) dataErrors.Add("GUIDE_DATA_UNAVAILABLE");
         if (settings.EnableStarCount && !starDataAvailable) dataErrors.Add("STAR_COUNT_UNAVAILABLE");
         if (settings.EnableBackground && !backgroundDataAvailable) dataErrors.Add("BACKGROUND_UNAVAILABLE");
 
-        if (settings.EnableGuideRms && guideAvailable) {
+        if (settings.EnableGuideRms && rmsAvailable) {
             result.GuidingQuality = ScoreUpper(input.Guide.RmsArcsec, settings.MaxGuideRms);
             if (input.Guide.RmsArcsec > settings.MaxGuideRms) reasons.Add("GUIDE_RMS");
         }
 
-        if (guideAvailable && (settings.EnableSustainedExcursion || settings.EnableHardExcursion)) {
+        if (peakAvailable && (settings.EnableSustainedExcursion || settings.EnableHardExcursion)) {
             var peakScore = ScoreBetween(input.Guide.MaxExcursionArcsec, settings.ExcursionThreshold, settings.HardExcursionThreshold);
-            var durationScore = settings.EnableSustainedExcursion
+            var durationScore = settings.EnableSustainedExcursion && durationAvailable
                 ? ScoreUpper(input.Guide.MaxSustainedExcursionSeconds, settings.ExcursionMinimumDuration)
                 : 100.0;
             result.StabilityQuality = Math.Min(peakScore, durationScore);
 
-            if (settings.EnableSustainedExcursion &&
+            if (settings.EnableSustainedExcursion && durationAvailable &&
                 input.Guide.MaxSustainedExcursionSeconds >= settings.ExcursionMinimumDuration &&
                 input.Guide.MaxExcursionArcsec > settings.ExcursionThreshold) {
                 reasons.Add("SUSTAINED_GUIDE_EXCURSION");
@@ -85,11 +96,12 @@ public sealed class QualityEngine {
         }
 
         bool starsReady = !settings.EnableStarCount || input.Baseline?.StarsReady == true;
-        if (settings.EnableStarCount && starsReady && starDataAvailable && input.Baseline.StarMedian > 0) {
+        bool measureStars = settings.EnableStarCount || (settings.ImageEvidenceEnabled && settings.RejectSignalDegradation);
+        if (measureStars && input.Baseline?.StarsReady == true && starDataAvailable && input.Baseline.StarMedian > 0) {
             result.StarDeviationPercent = ((input.StarCount - result.StarBaseline) / result.StarBaseline) * 100.0;
             var loss = Math.Max(0, -result.StarDeviationPercent);
-            result.TransparencyQuality = ScoreUpper(loss, settings.MaxStarLossPercent);
-            if (loss > settings.MaxStarLossPercent) reasons.Add("STAR_COUNT_DROP");
+            if (settings.EnableStarCount) result.TransparencyQuality = ScoreUpper(loss, settings.MaxStarLossPercent);
+            if (settings.EnableStarCount && loss > settings.MaxStarLossPercent) reasons.Add("STAR_COUNT_DROP");
 
             if (result.StarTrendUsable && result.StarTrendExpected > 0) {
                 result.StarTrendResidualPercent = ((input.StarCount - result.StarTrendExpected) / result.StarTrendExpected) * 100.0;
@@ -140,7 +152,7 @@ public sealed class QualityEngine {
         result.StarTrendKind = ClassifyStarTrend(input, result, settings, starsReady, starDataAvailable);
         result.BackgroundTrendKind = ClassifyBackgroundTrend(input, result, settings, backgroundReady, backgroundDataAvailable);
 
-        if (dataErrors.Count > 0) {
+        if (!settings.UseExposureAssessment && dataErrors.Count > 0) {
             result.Status = FrameStatus.Error;
             result.ErrorMessage = string.Join(", ", dataErrors);
             result.ProbableCause = QualityVocabulary.Diagnosis(result);
@@ -148,6 +160,9 @@ public sealed class QualityEngine {
             result.DecisionSummary = "Not assessed: " + QualityVocabulary.LabelsInSentence(dataErrors) + ". The file is kept.";
             return result;
         }
+
+        result.ReviewReasons.AddRange(dataErrors);
+        if (dataErrors.Count > 0) result.ErrorMessage = QualityVocabulary.Labels(dataErrors);
 
         bool learning = !starsReady || !backgroundReady;
         if (reasons.Count > 0) {
@@ -161,6 +176,17 @@ public sealed class QualityEngine {
         }
 
         if (settings.UseExposureAssessment) ExposureAssessment.Apply(input, result, settings);
+        if (dataErrors.Count > 0 && result.Status != FrameStatus.Rejected) {
+            bool measured = scores.Length > 0 || result.ImageEvidence.Available || result.ImageEvidence.PhotometryAvailable
+                || (measureStars && starDataAvailable) || (settings.EnableBackground && backgroundDataAvailable);
+            result.Status = !measured ? FrameStatus.Error : learning ? FrameStatus.Learning : FrameStatus.Warning;
+            string unavailable = QualityVocabulary.LabelsInSentence(dataErrors);
+            result.DecisionSummary = result.Status switch {
+                FrameStatus.Learning => "Provisional: " + unavailable + ". References are still being established.",
+                FrameStatus.Warning => "Accepted for review: " + unavailable + ".",
+                _ => "Not assessed: " + unavailable + "."
+            };
+        }
         confidenceEngine.Apply(input, result, settings);
         if (settings.UseExposureAssessment) {
             result.ConfidenceScore = Math.Min(result.ConfidenceScore, result.ImageEvidence.Available ? 85 : 65);
@@ -207,7 +233,7 @@ public sealed class QualityEngine {
     }
 
     private static double ScoreUpper(double value, double threshold) {
-        if (double.IsNaN(value) || threshold <= 0) return 100;
+        if (!double.IsFinite(value) || !double.IsFinite(threshold) || threshold <= 0) return 100;
         if (value <= threshold * 0.5) return 100;
         if (value <= threshold) {
             return 100 - 50 * ((value - threshold * 0.5) / (threshold * 0.5));

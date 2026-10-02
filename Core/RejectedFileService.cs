@@ -7,6 +7,18 @@ using System.Threading.Tasks;
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
 public sealed class RejectedFileService {
+    private static bool RevisionActionsAuthorized(FrameQualityResult previous, FrameQualityResult next, QualitySettings settings) =>
+        previous != null && next != null && settings != null && !settings.MonitorOnly
+        && !previous.MonitorOnly && !next.MonitorOnly && previous.FileActionEligible && next.FileActionEligible;
+
+    public static bool MayApplyAfterReferenceRevision(FrameQualityResult previous, FrameQualityResult next, QualitySettings settings) =>
+        RevisionActionsAuthorized(previous, next, settings) && previous.Status != FrameStatus.Rejected && next.Status == FrameStatus.Rejected;
+
+    public static bool MayRestoreAfterReferenceRevision(FrameQualityResult previous, FrameQualityResult next, QualitySettings settings) =>
+        RevisionActionsAuthorized(previous, next, settings) && previous.Status == FrameStatus.Rejected && next.Status != FrameStatus.Rejected
+        && previous.IsBadFileApplied && !string.IsNullOrWhiteSpace(previous.OriginalPath) && !string.IsNullOrWhiteSpace(previous.FinalPath)
+        && !string.Equals(previous.OriginalPath, previous.FinalPath, StringComparison.OrdinalIgnoreCase);
+
     public async Task<string> ApplyAsync(string path, QualitySettings settings, bool sourceAuthorized) {
         if (settings.MonitorOnly || settings.RejectedFileAction == RejectedFileAction.KeepInPlace) return path;
         if (!sourceAuthorized) {
