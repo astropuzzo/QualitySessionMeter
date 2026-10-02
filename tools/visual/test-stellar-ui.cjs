@@ -4,7 +4,8 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 const js=fs.readFileSync(path.join(__dirname,'../../Core/WebDashboardPage.cs'),'utf8');
-const body=js.slice(js.indexOf('function evidenceMarkup('),js.indexOf('let selectedEvidenceKey='));
+const helpers=js.slice(js.indexOf('const finite='),js.indexOf('function renderPhotometry('));
+const body=helpers+js.slice(js.indexOf('function evidenceMarkup('),js.indexOf('let selectedEvidenceKey='));
 const context=vm.createContext({});vm.runInContext(body,context);
 const render=f=>context.evidenceMarkup(f,'en');
 const frame={frameIndex:6,status:'REJECTED',imageEvidenceAvailable:true,imageEvidenceHasRescueMargin:false,starEccentricity:.58,starEccentricityLimit:.60,starRescueEccentricityLimit:.55};
@@ -46,4 +47,22 @@ test('photometry remains visible without claiming verified stellar shapes',()=>{
 test('signal rejection does not require verified stellar shape in the inspector',()=>{
  const html=render({status:'REJECTED',imageEvidenceAttempted:true,imageEvidenceAvailable:false,stellarPhotometryAvailable:true,relativeStellarFlux:.5,reason:'STELLAR_FLUX_LOSS'});
  assert.match(html,/Measured stellar signal loss exceeds the limit/);assert.match(html,/50%/);assert.doesNotMatch(html,/class="stellar-result rescued"/);
+});
+
+test('photometry coverage is separate from shape coverage and missing references remain visible',()=>{
+ const html=render({...frame,status:'WARNING',stellarPhotometryAvailable:true,stellarPhotometryState:'SpatiallyVariable',
+  spatialSignalInconsistent:true,photometryRegionsMeasured:3,photometryRegionsExpected:5,verifiedStarRegions:5,
+  missingReferenceStars:19,expectedReferenceStars:80});
+ assert.match(html,/Uneven signal/);assert.match(html,/<strong>3 \/ 5<\/strong>/);assert.match(html,/incomplete coverage/);
+ assert.match(html,/5\/5/);assert.match(html,/19/);
+ assert.doesNotMatch(html,/class="stellar-result rescued"/);
+});
+
+test('regional signal values and historical optics are shown without accepting the frame',()=>{
+ const html=render({...frame,shapeReferenceVerified:true,stableOpticalRegions:4,stellarRegions:[{
+  regionId:1,photometryState:'Reliable',relativeFlux:.48,eccentricity:.68,shapeReferenceEccentricity:.67,
+  shapeReferenceFrames:3,matchedStars:12,expectedReferenceStars:18,missingReferenceStars:6,background:1400,noise:15}]});
+ assert.match(html,/Stable peripheral elongation/);assert.match(html,/48%/);
+ assert.match(html,/3 prior frames/);assert.match(html,/0.68 \/ 0.67/);
+ assert.doesNotMatch(html,/class="stellar-result rescued"/);
 });
