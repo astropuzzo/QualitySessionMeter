@@ -45,7 +45,7 @@ The payload is the same plain-object contract used by the in-process `QualitySes
 - Quality / evidence strength (0–100 diagnostic index) / exposure-integrated Guide RMS;
 - stellar result, proof PNG, sampled stars, shape metrics and the applied per-frame limits;
 - stars/background rolling baselines and deltas;
-- acquisition context (target, filter, exposure, gain, binning, camera);
+- acquisition context (target, filter, exposure, gain, offset, readout mode, binning, camera, image dimensions and pier side);
 - cause/reason, prediction and environmental hints;
 - canonical chart-series colors;
 - `guidingLive`: the latest 20 seconds of real N.I.N.A. `GuideEvent` samples, converted to arcseconds using the guider pixel scale, with RA/DEC/total RMS, max excursion and up to 120 timestamped RA/DEC points.
@@ -59,6 +59,8 @@ These additive V1 fields describe the recorded analysis, not the current setting
 Older snapshots may omit them. Missing limits must remain unavailable in clients.
 `guideFalsePositive` only clears guide reasons: the final status can still be rejected
 by an independent signal rule. `LEARNING`/`ERROR` quality is JSON null, not zero.
+
+From 1.4.3.0 the payload also exposes `stellarPhotometryState`, measured/expected region counts, `photometryCoverageReliable`, reference-star counts and `stellarRegions` with signal, upper bounds, local background and noise. Shape-reference diagnostics identify stable peripheral elongation. Consumers must show missing measurements as unavailable rather than zero or a verified clear sky.
 
 ## Latest LIGHT preview
 

@@ -19,12 +19,14 @@ public sealed class SessionStore {
     private readonly SemaphoreSlim ioLock = new(1, 1);
     private readonly string baseDirectoryOverride;
     private readonly Func<FrameQualityResult, string> directoryResolver;
+    private readonly string fallbackDirectoryOverride;
     private string sessionFolder;
     private DateTime sessionCreatedUtc;
 
-    public SessionStore(string baseDirectoryOverride = null, Func<FrameQualityResult, string> directoryResolver = null) {
+    public SessionStore(string baseDirectoryOverride = null, Func<FrameQualityResult, string> directoryResolver = null, string fallbackDirectoryOverride = null) {
         this.baseDirectoryOverride = baseDirectoryOverride;
         this.directoryResolver = directoryResolver;
+        this.fallbackDirectoryOverride = fallbackDirectoryOverride;
     }
 
     public string StorageWarning { get; private set; } = "";
@@ -122,7 +124,7 @@ public sealed class SessionStore {
                 using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
             } catch (Exception ex) when (directoryResolver != null && ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) {
                 StorageWarning = "Selected session folder unavailable. Reports are saved in the default local folder. " + ex.Message;
-                baseDir = SessionPathResolver.DefaultDirectory;
+                baseDir = fallbackDirectoryOverride ?? SessionPathResolver.DefaultDirectory;
                 Directory.CreateDirectory(baseDir);
             }
             sessionCreatedUtc = DateTime.UtcNow;
@@ -145,7 +147,8 @@ public sealed class SessionStore {
                 "Confidence,ConfidenceLabel,ConfidenceDataCompleteness,ConfidenceBaselineMaturity,ConfidenceThresholdSeparation,ConfidenceAgreement,ConfidenceReason," +
                 "PredictiveWarning,PredictiveConfidence,PredictiveChannel,PredictiveMessage,PredictiveFramesToThreshold," +
                 "EnvironmentAvailable,CloudCover,Humidity,WindSpeed,WindGust,SkyQuality,AmbientTemperature,DewPoint,EnvironmentalHint," +
-                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly,AssessmentVersion,ReviewReasons,DecisionSummary,ImageEvidenceAvailable,ImageStars,StarAxisRatio,StarTailStrength,ThresholdsUsed,GuideFalsePositive,StarEccentricity,StarDoublePeak,StarMedianFlux,ShapeAnalysisMs,StarCountFalsePositive,ExtendedAvailable,VerifiedRegions,RemotePeakStrength,RemotePeakSupport,SearchRadiusArcsec,RelativeStellarFlux,MatchedStars,StellarReferenceFrames,StarFwhmPixels,StarFwhmRatio,StellarReferenceAgeMinutes,SessionRelativeStellarFlux,StellarSignalTrendUsed,StellarSignalTrendPercentPerHour,MinimumSessionSignalPercent";
+                "Status,RejectReasons,ProbableCause,ErrorMessage,MonitorOnly,AssessmentVersion,ReviewReasons,DecisionSummary,ImageEvidenceAvailable,ImageStars,StarAxisRatio,StarTailStrength,ThresholdsUsed,GuideFalsePositive,StarEccentricity,StarDoublePeak,StarMedianFlux,ShapeAnalysisMs,StarCountFalsePositive,ExtendedAvailable,VerifiedRegions,RemotePeakStrength,RemotePeakSupport,SearchRadiusArcsec,RelativeStellarFlux,MatchedStars,StellarReferenceFrames,StarFwhmPixels,StarFwhmRatio,StellarReferenceAgeMinutes,SessionRelativeStellarFlux,StellarSignalTrendUsed,StellarSignalTrendPercentPerHour,MinimumSessionSignalPercent," +
+                "CameraOffset,ReadoutModeIndex,PierSide,ImageWidth,ImageHeight,PhotometryState,ExpectedReferenceStars,MissingReferenceStars,AffectedStarFraction,LowerQuartileRelativeFlux,PhotometryRegionsMeasured,PhotometryRegionsExpected,PhotometryCoverageReliable,SpatialSignalInconsistent,RegionalSignalMinimum,RelativeFluxUpperBound,SessionFluxUpperBound,RegionalSignalUpperMinimum";
 
     private async Task AppendCsvAsync(FrameQualityResult r) {
         var path = Path.Combine(SessionFolder, "frames.csv");
@@ -192,7 +195,11 @@ public sealed class SessionStore {
             Csv(r.DecisionSummary), Bool(r.ImageEvidence.Available), r.ImageEvidence.Stars.ToString(CultureInfo.InvariantCulture),
             Num(r.ImageEvidence.AxisRatio), Num(r.ImageEvidence.TailStrength), Csv(r.ThresholdsUsed), Bool(r.GuideFalsePositive), Num(r.ImageEvidence.Eccentricity), Num(r.ImageEvidence.DoublePeakStrength), Num(r.ImageEvidence.MedianFlux), Num(r.ImageEvidence.ElapsedMilliseconds),
             Bool(r.StarCountFalsePositive),Bool(r.ImageEvidence.ExtendedAvailable),Num(r.ImageEvidence.VerifiedRegions),Num(r.ImageEvidence.RemotePeakStrength),Num(r.ImageEvidence.RemotePeakSupport),
-            Num(r.ImageEvidence.SearchRadiusArcsec),Num(r.ImageEvidence.RelativeFlux),Num(r.ImageEvidence.MatchedStars),Num(r.ImageEvidence.ReferenceFrames),Num(r.ImageEvidence.FwhmPixels),Num(r.ImageEvidence.FwhmRatio),Num(r.ImageEvidence.ReferenceAgeMinutes),Num(r.ImageEvidence.SessionRelativeFlux),Bool(r.ImageEvidence.SignalTrendUsed),Num(r.ImageEvidence.SignalTrendPercentPerHour),Num(r.ImageEvidence.MinimumSessionSignalPercent)
+            Num(r.ImageEvidence.SearchRadiusArcsec),Num(r.ImageEvidence.RelativeFlux),Num(r.ImageEvidence.MatchedStars),Num(r.ImageEvidence.ReferenceFrames),Num(r.ImageEvidence.FwhmPixels),Num(r.ImageEvidence.FwhmRatio),Num(r.ImageEvidence.ReferenceAgeMinutes),Num(r.ImageEvidence.SessionRelativeFlux),Bool(r.ImageEvidence.SignalTrendUsed),Num(r.ImageEvidence.SignalTrendPercentPerHour),Num(r.ImageEvidence.MinimumSessionSignalPercent),
+            Num(r.CameraOffset),Num(r.ReadoutModeIndex),Csv(r.PierSide),Num(r.ImageWidth),Num(r.ImageHeight),r.ImageEvidence.PhotometryState.ToString(),
+            Num(r.ImageEvidence.ExpectedReferenceStars),Num(r.ImageEvidence.MissingReferenceStars),Num(r.ImageEvidence.AffectedStarFraction),Num(r.ImageEvidence.LowerQuartileRelativeFlux),
+            Num(r.ImageEvidence.PhotometryRegionsMeasured),Num(r.ImageEvidence.PhotometryRegionsExpected),Bool(r.ImageEvidence.PhotometryCoverageReliable),Bool(r.ImageEvidence.SpatialSignalInconsistent),
+            Num(r.ImageEvidence.RegionalSignalMinimum),Num(r.ImageEvidence.RelativeFluxUpperBound),Num(r.ImageEvidence.SessionFluxUpperBound),Num(r.ImageEvidence.RegionalSignalUpperMinimum)
         };
         return string.Join(",", fields);
     }

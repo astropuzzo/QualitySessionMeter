@@ -20,6 +20,9 @@ public sealed class FrameSourceInfo {
     public bool FileActionEligible { get; init; }
     public string ControlToken { get; init; } = "";
     public bool ProvenanceFrozen { get; init; }
+    public int ImageWidth { get; set; }
+    public int ImageHeight { get; set; }
+    public int SampleStep { get; set; } = 1;
     [System.Text.Json.Serialization.JsonIgnore]
     public ImageSample ImageSample { get; set; }
 

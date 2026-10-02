@@ -119,7 +119,7 @@ public sealed class QualitySessionRuntime : IDisposable {
         sessionStore = new SessionStore(directoryResolver: frame => SessionPathResolver.Resolve(
             settings.SessionStorageModeIndex, settings.SessionOutputDirectory, frame.OriginalPath));
         guideCollector = new GuideCollector(guiderMediator);
-        referenceReview = new ReferenceReview(baseline, qualityEngine);
+        referenceReview = new ReferenceReview(baseline, qualityEngine, stellarAnalysis);
 
         imageSaveMediator.BeforeFinalizeImageSaved += BeforeFinalizeImageSaved;
         imageSaveMediator.ImageSaved += ImageSaved;
@@ -257,12 +257,16 @@ public sealed class QualitySessionRuntime : IDisposable {
         if (e.Image.RawImageData.MetaData.Image.ImageType != CaptureSequence.ImageTypes.LIGHT) return;
 
         var meta = e.Image.RawImageData.MetaData;
+        var raw = e.Image.RawImageData;
         var source = CaptureSource(meta.Sequence?.Title ?? "");
+        // Geometry belongs to acquisition metadata and survives disabled or unavailable pixel analysis.
+        source.ImageWidth = raw.Properties.Width;
+        source.ImageHeight = raw.Properties.Height;
+        source.SampleStep = raw.Properties.IsBayered ? 2 : 1;
         FreezeSource(meta.Image.Id, meta.Image.ExposureNumber, meta.Image.ExposureStart, source);
         if (!source.MonitoringEligible) return;
         if (settings.ImageEvidenceEnabled) {
             try {
-                var raw = e.Image.RawImageData;
                 double pixelScale = meta.Telescope?.FocalLength > 0 && meta.Camera?.PixelSize > 0
                     ? 206.264806 * meta.Camera.PixelSize * Math.Max(1,meta.Camera.BinX) / meta.Telescope.FocalLength : double.NaN;
                 source.ImageSample = ImageEvidenceAnalyzer.Capture(raw.Data?.FlatArray, raw.Properties.Width, raw.Properties.Height, raw.Properties.IsBayered,pixelScale);
@@ -329,6 +333,8 @@ public sealed class QualitySessionRuntime : IDisposable {
             if (start != DateTime.MinValue) frameTimestampUtc = start;
 
             var guide = guideCollector.GetExposureMetrics(start, e.Duration, settings.ExcursionThreshold);
+            var sample = source.ImageSample;
+            string pierSide = meta.Telescope?.SideOfPier.ToString() ?? "Unknown";
 
             var key = new BaselineKey(
                 meta.Target?.Name,
@@ -337,12 +343,16 @@ public sealed class QualitySessionRuntime : IDisposable {
                 meta.Camera?.Gain ?? -1,
                 meta.Camera?.BinX ?? 1,
                 meta.Camera?.BinY ?? 1,
-                meta.Camera?.Name);
+                meta.Camera?.Name,
+                meta.Camera?.Offset ?? -1,
+                meta.Camera?.ReadoutModeIndex ?? -1,
+                source.ImageWidth,
+                source.ImageHeight,
+                source.SampleStep,
+                pierSide);
 
             var snapshot = baseline.GetSnapshot(key, settings.MinimumLearningFrames, frameTimestampUtc);
             var imageEvidence = new ImageEvidence();
-            var sample = source.ImageSample;
-            string pierSide = meta.Telescope?.SideOfPier.ToString() ?? "Unknown";
             if (settings.ImageEvidenceEnabled) {
                 var limits = settings.GetStarShapeLimits();
                 try { imageEvidence = await Task.Run(() => stellarAnalysis.Analyze(key,sample,guide,snapshot,
@@ -364,6 +374,11 @@ public sealed class QualitySessionRuntime : IDisposable {
                 BinX = meta.Camera?.BinX ?? 1,
                 BinY = meta.Camera?.BinY ?? 1,
                 Camera = meta.Camera?.Name ?? "",
+                CameraOffset = key.CameraOffset,
+                ReadoutModeIndex = key.ReadoutModeIndex,
+                PierSide = pierSide,
+                ImageWidth = key.ImageWidth,
+                ImageHeight = key.ImageHeight,
                 StarCount = e.StarDetectionAnalysis?.DetectedStars ?? -1,
                 BackgroundMedian = e.Statistics?.Median ?? double.NaN,
                 Baseline = snapshot,
@@ -398,9 +413,12 @@ public sealed class QualitySessionRuntime : IDisposable {
             result.EnvironmentalHint = environment.CorrelationHint;
 
             bool couldTrain = ExposureAssessment.CanTrainBaseline(result);
-            if (couldTrain) {
-                baseline.AddAccepted(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow, frameTimestampUtc);
-                stellarAnalysis.AddReference(key,sample,imageEvidence,result.Status,frameTimestampUtc,pierSide,settings.BaselineWindow);
+            baseline.AddMeasurements(key, input.StarCount, input.BackgroundMedian, settings.BaselineWindow, frameTimestampUtc,
+                ExposureAssessment.CanTrainStarCount(result), ExposureAssessment.CanTrainBackground(result));
+            if (ExposureAssessment.CanTrainPhotometry(result)) {
+                // Per-channel eligibility authorizes healthy warning frames as references too.
+                stellarAnalysis.AddReference(key,sample,imageEvidence,result.Status==FrameStatus.Learning?FrameStatus.Learning:FrameStatus.Accepted,
+                    frameTimestampUtc,pierSide,settings.BaselineWindow);
             }
             referenceReview.Record(key, input, result, couldTrain);
 
@@ -469,10 +487,9 @@ public sealed class QualitySessionRuntime : IDisposable {
             var previous = change.Previous;
             var next = change.Result;
             try {
-                if (next.Status == FrameStatus.Rejected && previous.Status != FrameStatus.Rejected
-                    && !settings.MonitorOnly && next.FileActionEligible) {
+                if (RejectedFileService.MayApplyAfterReferenceRevision(previous, next, settings)) {
                     next.FinalPath = await rejectedFileService.ApplyAsync(previous.FinalPath ?? previous.OriginalPath, settings, true);
-                } else if (next.Status != FrameStatus.Rejected && previous.IsBadFileApplied) {
+                } else if (RejectedFileService.MayRestoreAfterReferenceRevision(previous, next, settings)) {
                     next.FinalPath = await rejectedFileService.RestoreAsync(previous);
                 }
             } catch (Exception ex) {

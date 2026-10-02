@@ -50,7 +50,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         ? $"READY · {Calibration.SampleCount} stable accepted frames · {Calibration.Context}"
         : Calibration?.Reason ?? "No calibration suggestion is currently available.";
     public string CalibrationValues => CalibrationAvailable
-        ? $"RMS ≤ {Calibration.SuggestedMaxGuideRms:0.00}\" · excursion {Calibration.SuggestedExcursionThreshold:0.00}\" · hard {Calibration.SuggestedHardExcursionThreshold:0.00}\" · stars -{Calibration.SuggestedMaxStarLossPercent:0.0}% · background +{Calibration.SuggestedBackgroundIncreasePercent:0.0}/-{Calibration.SuggestedBackgroundDecreasePercent:0.0}%"
+        ? $"RMS ≤ {Calibration.SuggestedMaxGuideRms:0.00}\" · excursion {Calibration.SuggestedExcursionThreshold:0.00}\" · hard {Calibration.SuggestedHardExcursionThreshold:0.00}\" · stars -{Calibration.SuggestedMaxStarLossPercent:0.0}% · sky review +{Calibration.SuggestedBackgroundIncreasePercent:0.0}%"
         : "";
 
     private FrameQualityResult selectedRejectedFrame;
@@ -223,6 +223,7 @@ public sealed class QualitySessionMeterDockable : DockableVM, IDisposable {
         try {
             ReviewMessage = $"Loading {Path.GetFileName(path)} into N.I.N.A. Image…";
             var data = await imageDataFactory.CreateFromFile(path, 16, false, CancellationToken.None);
+            data = FrameReviewImage.Prepare(data, imageDataFactory);
             var rendered = await imagingMediator.PrepareImage(data, new PrepareImageParameters(true, false), CancellationToken.None);
             if (rendered?.Image != null) imagingMediator.SetImage(rendered.Image);
             ReviewMessage = $"Loaded {Path.GetFileName(path)} · {frame.StatusLabel} · {frame.ReasonText}";

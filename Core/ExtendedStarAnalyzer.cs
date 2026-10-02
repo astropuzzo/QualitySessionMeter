@@ -54,9 +54,14 @@ public static class ExtendedStarAnalyzer {
         double noise=1.4826*Median(outerNoise), threshold=Math.Max(core.Limits.MaxRemotePeakPercent/100,noise*6);
         double support=remote>=threshold ? patches.Count(p=>Mean3(p,side,peakX+radius,peakY+radius)-Mean3(p,side,-peakX+radius,-peakY+radius)>threshold/2)/(double)patches.Count : 0;
         int verified=1,compromised=core.Compromised?1:0;double worst=core.Eccentricity;
-        foreach(var region in sample.OuterFields.Take(4)) {
-            var evidence=ImageEvidenceAnalyzer.Analyze(region,core.Limits with {TargetStars=30});
-            if(evidence.Available) {verified++;worst=Math.Max(worst,evidence.Eccentricity);if(evidence.Compromised)compromised++;}
+        for(int i=0;i<Math.Min(4,sample.OuterFields.Length);i++) {
+            var cached=core.Regions.FirstOrDefault(r=>r.RegionId==i+1);
+            if(cached!=null) {
+                if(cached.ShapeAvailable){verified++;worst=Math.Max(worst,cached.Eccentricity);if(cached.ShapeCompromised)compromised++;}
+            } else {
+                var evidence=ImageEvidenceAnalyzer.Analyze(sample.OuterFields[i],core.Limits with {TargetStars=30},Math.Max(20,1500-clock.Elapsed.TotalMilliseconds),false);
+                if(evidence.Available) {verified++;worst=Math.Max(worst,evidence.Eccentricity);if(evidence.Compromised)compromised++;}
+            }
             if(clock.ElapsedMilliseconds>1500)return Incomplete("time limit.");
         }
         var png=Preview(stack,side);
@@ -66,7 +71,7 @@ public static class ExtendedStarAnalyzer {
             ExtendedAttempted=true,ExtendedAvailable=true,GuideSearchCovered=covered,
             SearchRadiusArcsec=hasScale?(radius-4)*scale:double.NaN,
             RemotePeakStrength=remote,RemotePeakSupport=support,RemotePeakDistancePixels=Math.Sqrt(peakX*peakX+peakY*peakY)*sample.PixelsPerSample,
-            VerifiedRegions=verified,CompromisedRegions=compromised,WorstRegionEccentricity=worst,ExtendedPreviewPngBase64=png,
+            VerifiedRegions=verified,CompromisedRegions=compromised,RawCompromisedRegions=compromised,WorstRegionEccentricity=worst,ExtendedPreviewPngBase64=png,
             ElapsedMilliseconds=core.ElapsedMilliseconds+clock.Elapsed.TotalMilliseconds
         };
         return result with {Detail=core.Detail+$" Extended field: {verified}/5 regions; distant lobe {remote*100:0.00}% / {core.Limits.MaxRemotePeakPercent:0.00}%; support {support:P0}."};

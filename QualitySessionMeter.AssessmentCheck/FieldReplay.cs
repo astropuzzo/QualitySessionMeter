@@ -15,12 +15,17 @@ internal static class FieldReplay {
             ImageEvidenceEnabled=true,MinimumLearningFrames=4,BaselineWindow=8
         };
         var engine=new QualityEngine();var stellarAnalysis=new StellarAnalysisPipeline();var baseline=new BaselineEngine();
-        var results=new List<FrameQualityResult>();var summaries=new List<object>();
+        var referenceReview=new ReferenceReview(baseline,engine,stellarAnalysis);
+        var results=new List<FrameQualityResult>();var originals=new Dictionary<int,string>();
         var clock=System.Diagnostics.Stopwatch.StartNew();
         foreach(var row in source.RootElement.EnumerateArray()) {
             double Value(string name,double fallback=double.NaN)=>row.TryGetProperty(name,out var p)&&p.ValueKind==JsonValueKind.Number?p.GetDouble():fallback;
             string Text(string name,string fallback)=>row.TryGetProperty(name,out var p)&&p.ValueKind==JsonValueKind.String?p.GetString():fallback;
-            var key=new BaselineKey(Text("target","Cocoon Nebula"),Text("filter","QUAD"),Value("exposure",120),(int)Value("gain",100),1,1,Text("camera","ZWO ASI2600MC Pro"));
+            int frameIndex=(int)Value("frame",results.Count+1);
+            string side=Text("side","Unknown");
+            var key=new BaselineKey(Text("target","Cocoon Nebula"),Text("filter","QUAD"),Value("exposure",120),(int)Value("gain",100),
+                (int)Value("binX",1),(int)Value("binY",1),Text("camera","ZWO ASI2600MC Pro"),(int)Value("offset",-1),(int)Value("readoutModeIndex",-1),
+                (int)Value("sourceWidth",0),(int)Value("sourceHeight",0),(int)Value("step",2),side);
             if(row.TryGetProperty("thresholds",out var threshold)) {
                 string t=threshold.GetString();
                 double Limit(string pattern,double fallback){var m=System.Text.RegularExpressions.Regex.Match(t,pattern);return m.Success?double.Parse(m.Groups[1].Value,CultureInfo.InvariantCulture):fallback;}
@@ -29,33 +34,44 @@ internal static class FieldReplay {
             }
             ImageSample Read(string path,int size) {
                 var bytes=File.ReadAllBytes(path);var pixels=new float[bytes.Length/4];Buffer.BlockCopy(bytes,0,pixels,0,bytes.Length);
-                return new ImageSample(pixels,size,size){PixelsPerSample=(int)Value("step",2),ArcsecPerSample=Value("scale")};
+                return new ImageSample(pixels,size,size){PixelsPerSample=key.SampleStep,ArcsecPerSample=Value("scale"),SourceWidth=key.ImageWidth,SourceHeight=key.ImageHeight};
             }
             var sample=Read(row.GetProperty("sample").GetString(),1024) with {
-                OuterFields=row.GetProperty("outer").EnumerateArray().Select(p=>Read(p.GetString(),384)).ToArray()
+                OuterFields=row.GetProperty("outer").EnumerateArray().Select(p=>Read(p.GetString(),384)).ToArray(),
+                BackgroundGrid=row.TryGetProperty("backgroundGrid",out var grid)?JsonSerializer.Deserialize<BackgroundTileEvidence[]>(grid.GetRawText(),new JsonSerializerOptions{PropertyNameCaseInsensitive=true}):Array.Empty<BackgroundTileEvidence>()
             };
-            int id=row.GetProperty("id").GetInt32();string side=row.GetProperty("side").GetString();
+            int id=row.GetProperty("id").GetInt32();
             var time=DateTime.Parse(row.GetProperty("time").GetString(),CultureInfo.InvariantCulture,DateTimeStyles.AdjustToUniversal|DateTimeStyles.AssumeUniversal);
-            var guide=new GuideExposureMetrics{HasData=true,Samples=(int)Value("guideSamples",54),RmsArcsec=Value("rms"),MaxExcursionArcsec=Value("peak"),MaxSustainedExcursionSeconds=Value("sustained")};
+            bool guideAvailable=!row.TryGetProperty("guideAvailable",out var available)||available.ValueKind==JsonValueKind.True;
+            var guide=new GuideExposureMetrics{HasData=guideAvailable,Samples=(int)Value("guideSamples",54),RmsArcsec=Value("rms"),MaxExcursionArcsec=Value("peak"),MaxSustainedExcursionSeconds=Value("sustained",0)};
             var snap=args.Contains("--recorded-baselines") ? new BaselineSnapshot {
                 StarMedian=Value("starBaseline"),BackgroundMedian=Value("backgroundBaseline"),StarSamples=8,BackgroundSamples=8,
-                StarsReady=double.IsFinite(Value("starBaseline"))&&id>=808,BackgroundReady=double.IsFinite(Value("backgroundBaseline"))&&id>=808
+                StarsReady=double.IsFinite(Value("starBaseline")),BackgroundReady=double.IsFinite(Value("backgroundBaseline"))
             }:baseline.GetSnapshot(key,4,time);
-            var image=stellarAnalysis.Analyze(key,sample,guide,snap,(int)Value("stars"),time,side,settings);
-            var input=new FrameQualityInput{FrameIndex=(int)Value("frame"),TimestampUtc=time,OriginalPath=row.GetProperty("filename").GetString(),
-                Target=Text("target","Cocoon Nebula"),Filter=Text("filter","QUAD"),ExposureSeconds=Value("exposure",120),Gain=(int)Value("gain",100),BinX=1,BinY=1,Camera=Text("camera","ZWO ASI2600MC Pro"),StarCount=(int)Value("stars"),BackgroundMedian=Value("background"),Baseline=snap,Guide=guide,ImageEvidence=image};
-            var result=engine.Evaluate(input,settings);results.Add(result);
-            if(ExposureAssessment.CanTrainBaseline(result))baseline.AddAccepted(key,input.StarCount,input.BackgroundMedian,8,time);
-            if (ExposureAssessment.CanTrainBaseline(result)) stellarAnalysis.AddReference(key,sample,image,result.Status,time,side,8);
+            var image=stellarAnalysis.Analyze(key,sample,guide,snap,(int)Value("stars",-1),time,side,settings);
+            var input=new FrameQualityInput{FrameIndex=frameIndex,TimestampUtc=time,OriginalPath=row.GetProperty("filename").GetString(),
+                Target=key.Target,Filter=key.Filter,ExposureSeconds=key.ExposureSeconds,Gain=key.Gain,BinX=key.BinX,BinY=key.BinY,Camera=key.Camera,
+                CameraOffset=key.CameraOffset,ReadoutModeIndex=key.ReadoutModeIndex,ImageWidth=key.ImageWidth,ImageHeight=key.ImageHeight,PierSide=side,
+                StarCount=(int)Value("stars",-1),BackgroundMedian=Value("background"),Baseline=snap,Guide=guide,ImageEvidence=image};
+            var result=engine.Evaluate(input,settings);results.Add(result);originals[frameIndex]=Text("originalStatus","");
+            baseline.AddMeasurements(key,input.StarCount,input.BackgroundMedian,settings.BaselineWindow,time,
+                ExposureAssessment.CanTrainStarCount(result),ExposureAssessment.CanTrainBackground(result));
+            if(ExposureAssessment.CanTrainPhotometry(result))stellarAnalysis.AddReference(key,sample,image,
+                result.Status==FrameStatus.Learning?FrameStatus.Learning:FrameStatus.Accepted,time,side,settings.BaselineWindow);
+            if(!args.Contains("--recorded-baselines")) {
+                referenceReview.Record(key,input,result,ExposureAssessment.CanTrainBaseline(result));
+                foreach(var revision in referenceReview.Review(key,result,results,settings)) {
+                    int index=results.FindIndex(f=>f.FrameIndex==revision.Result.FrameIndex);
+                    if(index>=0)results[index]=revision.Result;
+                }
+            }
             if(image.PreviewPngBase64.Length>0)File.WriteAllBytes(Path.Combine(output,$"{id}-stars.png"),Convert.FromBase64String(image.PreviewPngBase64));
             if(image.ExtendedPreviewPngBase64.Length>0)File.WriteAllBytes(Path.Combine(output,$"{id}-extended.png"),Convert.FromBase64String(image.ExtendedPreviewPngBase64));
-            var summary=new {id,original=row.GetProperty("originalStatus").GetString(),status=result.Status.ToString(),result.GuideFalsePositive,result.StarCountFalsePositive,
-                image.Eccentricity,image.TailStrength,image.RemotePeakStrength,image.RemotePeakSupport,image.VerifiedRegions,image.WorstRegionEccentricity,image.HasExtendedRescueEvidence,
-                image.RelativeFlux,image.MatchedStars,image.ReferenceFrames,image.ElapsedMilliseconds,result.RejectReasons,result.DecisionSummary};
-            summaries.Add(summary);
-            if(summary.original!=summary.status)Console.WriteLine(JsonSerializer.Serialize(summary,new JsonSerializerOptions{NumberHandling=System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals}));
         }
         var options=new JsonSerializerOptions{WriteIndented=true};options.Converters.Add(new FiniteDoubleJsonConverter());
+        var summaries=results.Select(r=>new {id=int.Parse(Path.GetFileNameWithoutExtension(r.OriginalPath).Split('_').Last()),
+            original=originals[r.FrameIndex],status=r.Status.ToString(),r.GuideFalsePositive,r.StarCountFalsePositive,r.ImageEvidence,r.RejectReasons,r.ReviewReasons,r.DecisionSummary,
+            trainStars=ExposureAssessment.CanTrainStarCount(r),trainBackground=ExposureAssessment.CanTrainBackground(r),trainPhotometry=ExposureAssessment.CanTrainPhotometry(r)}).ToArray();
         File.WriteAllText(Path.Combine(output,"replay.json"),JsonSerializer.Serialize(results,options));
         File.WriteAllText(Path.Combine(output,"decisions.json"),JsonSerializer.Serialize(summaries,options));
         var mapFrame=typeof(QualitySessionMobileBridge).GetMethod("MobileFrame",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);

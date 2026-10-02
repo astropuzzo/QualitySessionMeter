@@ -48,7 +48,7 @@ Recommended during first real-sky testing.
 Maximum number of recent accepted frames kept in the star/background reference of each independent imaging context:
 
 ```text
-target + filter + exposure + gain + binning + camera
+target + filter + exposure + gain + offset + binning + readout mode + camera + image size + pier side
 ```
 
 A larger window is more stable but follows genuine long-term changes more slowly.
@@ -117,7 +117,7 @@ It is intentionally separate from RMS: RMS describes the exposure-wide spread, w
 
 Compares detected star count against the mature rolling clean baseline for the same imaging context.
 
-QSM does not use HFR/FWHM/eccentricity alone as hard rejection criteria in this release.
+Star count, stellar signal and shape have separate limits. FWHM contributes to the quality score; it has no independent rejection rule.
 
 ### Maximum Star Loss
 
@@ -131,23 +131,19 @@ Measured star delta: -40%
 Result: STAR_COUNT_DROP hard rule fails
 ```
 
-### Reject Background Deviation
+### Monitor Sky Background
 
 Compares image-background median with the mature same-context baseline.
 
-Brightening and darkening are evaluated independently.
+Background changes are diagnostic. A brighter background may require review and protect the reference from learning a suspected transparency change. A darker background is retained. Neither change independently rejects an exposure.
 
-### Maximum Background Increase
+### Background Review Threshold
 
-Maximum allowed positive background change.
+Positive background change that marks a frame for review. Default: 30% above its expected level.
 
-Large positive changes can accompany illuminated cloud, haze, moonlight or other sky-brightness changes. QSM's hard decision is based on the measured deviation, not on a guessed cause.
+Large positive changes can accompany illuminated cloud, haze or moonlight. Stellar measurements determine whether a signal-loss rejection limit has been crossed.
 
-### Maximum Background Decrease
-
-Maximum allowed negative background change.
-
-Again, probable-cause text is diagnostic; the hard decision uses the measured numerical deviation.
+The former background-decrease setting remains in stored profiles for compatibility and is no longer shown as a rejection limit.
 
 ## Adaptive Calibration
 
@@ -196,7 +192,7 @@ They exist to prevent automatic learning from silently creating excessively perm
 <a id="stellar-second-pass"></a>
 ## Stellar Analysis
 
-**Enable Stellar Analysis** measures the central raw field of every monitored LIGHT. Confirmed stellar damage can reject a frame even with normal guiding. Disable this option to retain guide, count and background rules without image verification.
+**Enable Stellar Analysis** measures shapes and stellar signal in the central raw field and four outer regions of every monitored LIGHT. Confirmed stellar damage can reject a frame even with normal guiding. Disabling it leaves guide and count rules active; background remains diagnostic.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
@@ -212,13 +208,13 @@ They exist to prevent automatic learning from silently creating excessively perm
 
 **Reject Stellar Signal Loss** (default On) enables direct measured loss, combined sudden loss and the session minimum. **Sudden Signal and Star Loss** defaults to 35% below the recent expected level, with star-count loss of at least `max(10%, half the configured star-count loss limit)`. The sky may brighten, darken or stay unchanged. The direct loss limit defaults to 50%. Both rules require at least 20 matched stars against two prior clean references. A robust scatter allowance must still cross the threshold before rejection.
 
-With timestamps, the star/background reference uses the median of the three most recent eligible samples, or a coherent fitted trend. Matched photometry follows a log-linear trend in past clean frames when sufficiently consistent; otherwise it uses their rolling median. Fits require R² at least 0.85, log scatter at most 0.025, and bounded rates. Extrapolation through a rejected gap stops after two usual frame intervals (at least five minutes for photometry). Unexpected loss of at least 20%, together with at least 10% fewer stars or 3% higher background, keeps the reference unchanged even when the frame is only a warning. This prevents a moderate suspicious frame from weakening the clean reference while reserving automatic rejection for larger losses.
+With timestamps, each reference follows recent eligible samples or a coherent fitted trend. Matched photometry follows a log-linear trend in past clean frames when sufficiently consistent; otherwise it uses their rolling median. Fits require R² at least 0.85, log scatter at most 0.025, and bounded rates. Extrapolation through a rejected gap stops after two usual frame intervals (at least five minutes for photometry). Unexpected signal loss of at least 10%, together with at least 10% fewer stars or 3% higher background, protects reference learning. Uneven attenuation and a failed comparison against a mature reference also require review. These review conditions do not lower the configured rejection limits.
 
 References are separated by imaging context and pier side and retained for at most six hours. Count recovery still requires references no older than two hours and successful shape evidence. Photometry can remain available when shape classification is inconclusive. Missing shape evidence cannot clear a guide rejection. Gradual cloud attenuation and altitude-related changes can resemble one another; these rules measure relative image quality, not a calibrated weather probability.
 
-The central sample is bounded to 1024 × 1024 pixels. Four outer samples are bounded to 384 × 384 each. Bayer data uses aligned 2 × 2 cell averages; measurement decisions use linear pixels. A valid core fit supplements the moment estimate where aperture truncation would underestimate elongation.
+The central sample is bounded to 1024 × 1024 pixels. Four outer samples are bounded to 384 × 384 each. Coverage denotes these five samples, not every sensor pixel. Bayer data uses aligned 2 × 2 cell averages; decisions use linear pixels. Local background and noise estimates separate sky gradients from pixel noise. Aperture measurements include uncertainty and remeasure missing reference stars when enough surviving identities establish alignment. A 25-tile whole-sensor background grid is diagnostic and does not independently classify clouds.
 
-Guide-reject candidates, confirmed core damage and star-count drops trigger extended verification. It examines the outer samples and a median profile with radius 32–64 sampled pixels (48 without a known image scale). Each analysis stage has a 1.5-second processing budget. Insufficient evidence or a timeout cannot clear an existing rejection.
+Guide-reject candidates, confirmed core damage and star-count drops trigger the extended profile, with radius 32–64 sampled pixels (48 without a known image scale). Central/outer measurements share a bounded analysis budget; reference comparison has a 1.2-second budget. An incomplete comparison cannot establish reliable field coverage or clear a count flag.
 
 Moderate guide recovery requires the eccentricity margin and clean core checks, no measured compromised outer region, and a completed extended check when attempted. The original moderate bounds are: RMS at or below its enabled maximum, peak below `max(6 arcsec, 2 × hard limit)`, and longest sustained excursion below `max(configured duration, 10% of exposure)`.
 
@@ -232,7 +228,7 @@ Recovery beyond those bounds additionally requires:
 
 These are limits on recovery, not new guide-rejection thresholds. A guide flag remains if this proof is missing.
 
-Signal verification requires at least 20 matched stars and two clean prior references no more than 120 minutes old. References are separated by target, filter, exposure, gain, binning, camera, image geometry and pier side. Only baseline-eligible accepted or learning frames enter the bounded reference window. With signal rejection enabled, a measured signal loss of at least 10% combined with a count decrease of 10% or background rise of 2% marks the frame for review. Fewer stars (−10%) together with a brighter sky (+3%) also protects the reference, even if matched flux is stable. Such frames remain usable below reject thresholds but cannot train either baseline. This prevents a slow deterioration from redefining normal conditions. References still expire, remain bounded, and are reset by context/session changes. Future frames are never used. A count flag can be cleared only with clean extended shape evidence and flux loss no greater than `min(20%, configured signal-loss limit − 5 percentage points)`. With signal rejection enabled, count rescue also requires background rise below 3%. Background rejection remains independent.
+Signal verification requires at least 20 reliable measurements against two prior clean references. References expire after six hours; count recovery requires references no older than two hours. Each region reports expected, matched and no-longer-detected stars, signal and local background/noise. Nonuniform attenuation remains visible even when the median signal is high. A count flag can be cleared only with clean extended shapes, reliable signal coverage in every sampled region, no measured spatial inconsistency and flux loss no greater than `min(20%, configured direct-loss limit − 5 percentage points)`. With signal rejection enabled, count rescue also requires background rise below 3%. Suspected transparency changes protect learning; guide-damaged frames may still provide valid background samples. A rebuilt reference also replaces its stellar anchors and recomputes stored comparisons without retaining raw images.
 
 The verdict is finalized before a file action. QSM does not rename historical files during replay. JSON, CSV and reports retain the measurements, applied limits and cleared flags. Native and browser inspectors show central and extended proof; display contrast enhances faint wings without altering measurements. Missing measurements display as unavailable. FWHM is reported in original pixels and relative to matched prior references; its change contributes to the diagnostic score, not an independent reject rule.
 

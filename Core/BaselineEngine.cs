@@ -22,6 +22,8 @@ public sealed class BaselineEngine {
                 return new BaselineSnapshot();
             }
 
+            if (time.HasValue) Expire(bucket, time.Value);
+
             var starTrend = FitSlowTrend(bucket.Stars, bucket.StarTimes, time);
             var backgroundTrend = FitSlowTrend(bucket.Background, bucket.BackgroundTimes, time);
 
@@ -45,23 +47,30 @@ public sealed class BaselineEngine {
     }
 
     public void AddAccepted(BaselineKey key, int starCount, double backgroundMedian, int window, DateTime? time = null) {
+        AddMeasurements(key, starCount, backgroundMedian, window, time ?? DateTime.MinValue, true, true);
+    }
+
+    public void AddMeasurements(BaselineKey key, int starCount, double backgroundMedian, int window, DateTime time, bool trainStars, bool trainBackground) {
+        window = Math.Clamp(window, 4, 50);
         lock (sync) {
             if (!buckets.TryGetValue(key, out var bucket)) {
                 bucket = new Bucket();
                 buckets[key] = bucket;
             }
 
-            if (starCount > 0) {
+            Expire(bucket, time);
+
+            if (trainStars && starCount > 0) {
                 bucket.Stars.Enqueue(starCount);
                 Trim(bucket.Stars, window);
-                bucket.StarTimes.Enqueue(time ?? DateTime.MinValue);
+                bucket.StarTimes.Enqueue(time);
                 while(bucket.StarTimes.Count > window)bucket.StarTimes.Dequeue();
             }
 
-            if (!double.IsNaN(backgroundMedian) && !double.IsInfinity(backgroundMedian) && backgroundMedian > 0) {
+            if (trainBackground && double.IsFinite(backgroundMedian) && backgroundMedian > 0) {
                 bucket.Background.Enqueue(backgroundMedian);
                 Trim(bucket.Background, window);
-                bucket.BackgroundTimes.Enqueue(time ?? DateTime.MinValue);
+                bucket.BackgroundTimes.Enqueue(time);
                 while(bucket.BackgroundTimes.Count > window)bucket.BackgroundTimes.Dequeue();
             }
         }
@@ -69,8 +78,15 @@ public sealed class BaselineEngine {
 
     /// <summary>Rebuilds one context from validated frames only, oldest first.</summary>
     public void Replace(BaselineKey key, IEnumerable<(int Stars, double Background, DateTime Time)> frames, int window) {
-        lock (sync) buckets.Remove(key);
-        foreach (var frame in frames) AddAccepted(key, frame.Stars, frame.Background, window, frame.Time);
+        ReplaceMeasurements(key, frames.Select(f => (f.Stars, f.Background, f.Time, true, true)), window);
+    }
+
+    public void ReplaceMeasurements(BaselineKey key, IEnumerable<(int Stars, double Background, DateTime Time, bool TrainStars, bool TrainBackground)> frames, int window) {
+        lock (sync) {
+            buckets.Remove(key);
+            foreach (var frame in frames.OrderBy(f => f.Time))
+                AddMeasurements(key, frame.Stars, frame.Background, window, frame.Time, frame.TrainStars, frame.TrainBackground);
+        }
     }
 
     public void Clear() {
@@ -79,6 +95,17 @@ public sealed class BaselineEngine {
 
     private static void Trim(Queue<double> queue, int window) {
         while (queue.Count > window) queue.Dequeue();
+    }
+
+    private static void Expire(Bucket bucket, DateTime now) {
+        if (now == DateTime.MinValue) return;
+        void Prune(Queue<double> values, Queue<DateTime> times) {
+            while (times.Count > 0 && times.Peek() != DateTime.MinValue && now - times.Peek() > TimeSpan.FromHours(6)) {
+                times.Dequeue(); values.Dequeue();
+            }
+        }
+        Prune(bucket.Stars, bucket.StarTimes);
+        Prune(bucket.Background, bucket.BackgroundTimes);
     }
 
     private static double Median(IEnumerable<double> values) {

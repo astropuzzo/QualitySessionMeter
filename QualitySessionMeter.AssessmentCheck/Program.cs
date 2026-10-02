@@ -9,6 +9,20 @@ using System.IO;
 
 if(args.FirstOrDefault()=="--field") { await FieldReplay.Run(args.Skip(1).ToArray()); return; }
 
+if (args.FirstOrDefault() is "--photometry-regressions" or "--reference-regressions" or "--guardrail-regressions" or "--runtime-regressions" or "--review-regressions") {
+    int passed = 0;
+    void Verify(bool ok, string message) { if (!ok) throw new Exception(message); passed++; Console.WriteLine("PASS " + message); }
+    try {
+        if (args[0] == "--photometry-regressions") PhotometryRegressionCheck.Run(Verify);
+        else if (args[0] == "--reference-regressions") ReferenceRegressionCheck.Run(Verify);
+        else if (args[0] == "--runtime-regressions") RuntimeGuardRegressionCheck.Run(Verify);
+        else if (args[0] == "--review-regressions") FrameReviewRegressionCheck.Run(Verify);
+        else GuardrailRegressionCheck.Run(Verify);
+        Console.WriteLine($"Completed: {passed} checks.");
+    } catch (Exception ex) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }
+    return;
+}
+
 int checks = 0;
 void Check(bool ok, string message) { checks++; if (!ok) throw new Exception(message); Console.WriteLine("PASS " + message); }
 ImageSample Field(double sx, double sy, bool tail = false) {
@@ -55,8 +69,8 @@ Check(Assess(trailed,21,3.9,12).Status==FrameStatus.Rejected, "large guide excur
 Check(Assess(null,3.03).Status==FrameStatus.Rejected, "missing shape evidence cannot rescue a guide reject");
 Check(Assess(null,21,3.9,12).Status==FrameStatus.Rejected, "extreme guide failure remains reject even without image evidence");
 Check(Assess(round,1,stars:500).RejectReasons.Contains("STAR_COUNT_DROP"), "cloud-like star loss remains reject");
-Check(Assess(round,1,background:1500).RejectReasons.Contains("BACKGROUND_HIGH"), "background failure remains reject");
-Check(Assess(round,1,background:500).RejectReasons.Contains("BACKGROUND_LOW"), "background decrease remains reject");
+Check(!Assess(round,1,background:1500).RejectReasons.Contains("BACKGROUND_HIGH") && Assess(round,1,background:1500).ReviewReasons.Contains("BACKGROUND_HIGH"), "background increase needs independent signal confirmation");
+Check(!Assess(round,1,background:500).RejectReasons.Contains("BACKGROUND_LOW"), "a darker sky alone does not reject");
 Check(spike.ConfidenceScore<=85 && spike.ConfidenceReason.Contains("not a probability"), "evidence strength is qualified");
 settings.EnableGuideRms = false; settings.EnableHardExcursion = false; settings.EnableSustainedExcursion = false;
 Check(Assess(round,21,3.9,12).Status == FrameStatus.Accepted, "disabled guide rules cannot silently reject or penalize stability");
@@ -126,11 +140,13 @@ Check(Assess(extendedRound with {CompromisedRegions=1},3.2).Status==FrameStatus.
 Check(Assess(extendedRound with {ExtendedAvailable=false},3.2).Status==FrameStatus.Rejected,"failed extended check retains the original guide flag");
 Check(Assess(extendedRound,8.3,5,17).Status==FrameStatus.Rejected && Assess(extendedRound,8.3,2,35).Status==FrameStatus.Rejected,"extreme RMS and long disturbances remain bounded even with clean stellar evidence");
 Check(Assess(elongated,1,.5).RejectReasons.Contains("STAR_SHAPE_CONFIRMED"),"stellar damage rejects independently of a guiding trigger");
-var matched = extendedRound with {RelativeFlux=.92,MatchedStars=40,ReferenceFrames=3};
+var matched = extendedRound with {RelativeFlux=.92,MatchedStars=40,ReferenceFrames=3,PhotometryCoverageReliable=true,RegionalSignalUpperMinimum=.92};
 Check(Assess(matched,1,stars:500).StarCountFalsePositive && Assess(matched,1,stars:500).Status==FrameStatus.Warning,"matched stellar signal can clear a misleading count drop");
 Check(Assess(matched with {RelativeFlux=.45},1,stars:500).RejectReasons.Contains("STELLAR_FLUX_LOSS"),"real flux loss confirms a star-count rejection");
 Check(Assess(matched with {ReferenceFrames=1},1,stars:500).Status==FrameStatus.Rejected,"one reference is insufficient to override star-count rejection");
-Check(Assess(matched,1,stars:500,background:1500).Status==FrameStatus.Rejected,"photometric rescue never clears an independent background rule");
+Check(Assess(matched,1,stars:500,background:1500) is var countSkyReview && countSkyReview.Status==FrameStatus.Warning
+    && !countSkyReview.StarCountFalsePositive && !ExposureAssessment.CanTrainBaseline(countSkyReview),
+    "count and sky changes with retained stellar signal remain reviewable without claiming recovery or learning");
 settings.VerifyStarCountWithFlux=false;
 Check(!Assess(matched,1,stars:500).StarCountFalsePositive,"disabled flux verification cannot clear a count flag");
 settings.VerifyStarCountWithFlux=true;
@@ -244,6 +260,11 @@ var uncertainSignal=Assess(matched with {RelativeFlux=.79,RelativeFluxUpperBound
 Check(uncertainSignal.Status==FrameStatus.Warning && !ExposureAssessment.CanTrainBaseline(uncertainSignal),"uncertain threshold crossing is reviewed and cannot train the reference");
 Check(Assess(matched with {RelativeFlux=.45,RelativeFluxUpperBound=.48},1).RejectReasons.Contains("STELLAR_FLUX_LOSS"),"clear signal loss remains rejected after measurement allowance");
 ReferenceReviewCheck.Run(Check);
+PhotometryRegressionCheck.Run(Check);
+ReferenceRegressionCheck.Run(Check);
+GuardrailRegressionCheck.Run(Check);
+RuntimeGuardRegressionCheck.Run(Check);
+FrameReviewRegressionCheck.Run(Check);
 await SessionStorageCheck.Run(Check);
 
 var wideClean=Field(1.4,1.4) with {ArcsecPerSample=1,OuterFields=Enumerable.Range(0,4).Select(_=>Field(1.4,1.4)).ToArray()};

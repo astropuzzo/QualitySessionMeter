@@ -80,6 +80,9 @@ public sealed class CalibrationSuggestionEngine {
         string.Equals(a.Filter, b.Filter, StringComparison.OrdinalIgnoreCase) &&
         Math.Abs(a.ExposureSeconds - b.ExposureSeconds) < 0.001 &&
         a.Gain == b.Gain && a.BinX == b.BinX && a.BinY == b.BinY &&
+        a.CameraOffset == b.CameraOffset && a.ReadoutModeIndex == b.ReadoutModeIndex &&
+        a.ImageWidth == b.ImageWidth && a.ImageHeight == b.ImageHeight &&
+        string.Equals(a.PierSide, b.PierSide, StringComparison.OrdinalIgnoreCase) &&
         string.Equals(a.Camera, b.Camera, StringComparison.OrdinalIgnoreCase);
 
     private static string ContextText(FrameQualityResult x) =>

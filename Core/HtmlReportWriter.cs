@@ -34,6 +34,7 @@ public static class HtmlReportWriter {
         sb.AppendLine("<title>QualitySessionMeter — Session report</title>");
         sb.AppendLine("<style>");
         sb.AppendLine("*{box-sizing:border-box}body{margin:0;background:#0f1115;color:#f1f3f4;font:14px 'Segoe UI',Arial,sans-serif}main{max-width:1440px;margin:auto;padding:24px}h1{margin:0;font-size:28px}h2{font-size:17px;margin:0 0 12px}h3{font-size:11px;color:#9aa0a6;text-transform:uppercase;letter-spacing:.06em;margin:0 0 7px}.muted{color:#9aa0a6}.top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px}.card{background:#171a20;border:1px solid #2a3039;border-radius:10px;padding:14px}.section{margin-top:12px}.big{font-size:28px;font-weight:650}.good{color:#81c995}.bad{color:#f28b82}.accent{color:#8ab4f8}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.legend{display:flex;gap:14px;flex-wrap:wrap;color:#bdc1c6;margin:0 0 8px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}.reject-key{display:inline-block;color:#ffd7d3;background:#542329;border:1px solid #f28b82;border-radius:5px;padding:1px 6px;margin-right:5px;font-size:11px}.rank{display:grid;grid-template-columns:50px 1fr 58px 80px;gap:8px;padding:7px 0;border-top:1px solid #2a3039}.rank:first-of-type{border-top:0}.event{display:grid;grid-template-columns:55px 170px 1fr 78px 72px;gap:8px;padding:8px 0;border-bottom:1px solid #2a3039}.pill{border:1px solid #353b45;border-radius:999px;padding:2px 8px;font-size:11px}.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}input,select,button{background:#11151b;color:#f1f3f4;border:1px solid #343b46;border-radius:6px;padding:7px 9px}button{cursor:pointer}.tablewrap{max-height:600px;overflow:auto;border:1px solid #2a3039;border-radius:8px}table{width:100%;border-collapse:collapse;font-size:12px}th{position:sticky;top:0;background:#171a20;color:#9aa0a6;text-align:left;padding:8px;border-bottom:1px solid #353b45}td{padding:7px 8px;border-bottom:1px solid #242933;white-space:nowrap}td:last-child{white-space:normal;min-width:260px;max-width:540px}tr:hover td{background:#1d222a}.cause{display:grid;grid-template-columns:minmax(150px,260px) 1fr 40px;gap:8px;align-items:center;margin:7px 0}.bar{height:8px;background:#252b34;border-radius:5px;overflow:hidden}.fill{height:100%;background:#8ab4f8}.footer{margin-top:16px;color:#737a84;font-size:12px}@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.event{grid-template-columns:55px 1fr 70px}.event .optional{display:none}}");
+        sb.AppendLine(".top{flex-wrap:wrap}.card,.two>*{min-width:0}.rank{grid-template-columns:50px minmax(0,1fr) 58px 80px}.rank>span{min-width:0;overflow-wrap:anywhere}.chartscroll,.regionwrap{overflow-x:auto;max-width:100%}.regional-evidence td:last-child{min-width:0;white-space:nowrap}@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){main{padding:12px}.cause{grid-template-columns:minmax(100px,1fr) 1fr 32px}.tools>*{max-width:100%}}");
         sb.AppendLine("</style></head><body><main>");
 
         sb.Append("<div class='top'><div><h1>QualitySessionMeter</h1><div class='muted'>Exposure assessment " + ExposureAssessment.Version + " — session report</div></div><div class='muted'>")
@@ -52,7 +53,7 @@ public static class HtmlReportWriter {
         sb.AppendLine("<section class='card section'><h2>Multichannel timeline</h2>");
         sb.AppendLine("<div class='legend'><span><i class='dot' style='background:#8ab4f8'></i>Quality</span><span><i class='dot' style='background:#c58af9'></i>Evidence</span><span><i class='dot' style='background:#81c995'></i>Guide RMS</span><span><i class='dot' style='background:#fdd663'></i>Stars Δ</span><span><i class='dot' style='background:#f28b82'></i>Background Δ</span></div>");
         sb.AppendLine($"<div class='legend'><span><b class='reject-key'>REJECTED</b>{H(RejectionVisual.Legend)}</span></div>");
-        sb.AppendLine(BuildTimeline(frames));
+        sb.AppendLine("<div class='chartscroll'>" + BuildTimeline(frames) + "</div>");
         sb.AppendLine("</section>");
 
         sb.AppendLine("<div class='two section'>");
@@ -86,7 +87,7 @@ public static class HtmlReportWriter {
               .Append("<td>").Append(f.FrameIndex).Append("</td><td>").Append(H(f.FileName)).Append("</td><td>").Append(H(f.StatusLabel)).Append("</td><td>").Append(H(f.QualityText)).Append("</td><td>").Append(H(f.ConfidenceText)).Append("</td><td>").Append(H(f.GuideRmsText)).Append("</td><td title='").Append(A(f.GuidePatternDetail)).Append("'>").Append(H(f.GuidePatternText)).Append("</td><td>").Append(H(f.TrendText)).Append("</td><td>").Append(H(f.StarDeltaText)).Append("</td><td>").Append(H(f.BackgroundDeltaText)).Append("</td><td>").Append(H(causeText)).Append(StarProof(f)).AppendLine("</td></tr>");
         }
         sb.AppendLine("</tbody></table></div></section>");
-        sb.AppendLine("<div class='footer'>Letters in brackets mark the failed channel: " + H(RejectionVisual.Legend) + ". Guide pattern and trend labels interpret measured data; they do not identify a physical cause.</div>");
+        sb.AppendLine("<div class='footer'>" + H(RejectionVisual.Legend) + ". Background changes are diagnostic. Stellar coverage refers to sampled regions.</div>");
         sb.AppendLine("<script>function filterRows(){const q=document.getElementById('q').value.toLowerCase(),s=document.getElementById('status').value;document.querySelectorAll('#frames tbody tr').forEach(r=>r.style.display=(!q||r.dataset.search.includes(q))&&(!s||r.dataset.status===s)?'':'none')}function sortRows(k){const b=document.querySelector('#frames tbody');[...b.rows].sort((a,c)=>k==='quality'?Number(c.dataset.quality)-Number(a.dataset.quality):Number(a.dataset.frame)-Number(c.dataset.frame)).forEach(r=>b.appendChild(r))}</script>");
         sb.AppendLine("</main></body></html>");
 
@@ -96,12 +97,39 @@ public static class HtmlReportWriter {
     }
 
     private static string StarProof(FrameQualityResult frame) {
+        var e=frame.ImageEvidence;
+        string metrics="";
+        if(e.Attempted) {
+            string state=e.PhotometryState switch {
+                PhotometryState.Reliable=>"Measured",PhotometryState.SpatiallyVariable=>"Uneven signal",
+                PhotometryState.ReferenceLearning=>"Reference learning",PhotometryState.InsufficientMatches=>"Comparison unavailable",_=>"Not measured"
+            };
+            metrics="<p>Stellar signal: "+H(state)+" · "+e.PhotometryRegionsMeasured+"/"+e.PhotometryRegionsExpected+" sampled regions</p>";
+            if(e.ExpectedReferenceStars>0)metrics+="<p>Reference stars: "+e.ExpectedReferenceStars+" · no longer detected: "+e.MissingReferenceStars+"</p>";
+            if(e.SpatialSignalInconsistent)metrics+="<p>Stellar signal varies between sampled regions or stars.</p>";
+            if(e.ShapeReferenceVerified)metrics+="<p>Stable peripheral elongation · "+e.StableOpticalRegions+" regions.</p>";
+            var context = new[] { frame.CameraOffset>=0?"Offset "+frame.CameraOffset:"",frame.ReadoutModeIndex>=0?"Readout "+frame.ReadoutModeIndex:"",
+                frame.ImageWidth>0&&frame.ImageHeight>0?frame.ImageWidth+" × "+frame.ImageHeight:"",frame.PierSide };
+            if(context.Any(x=>!string.IsNullOrEmpty(x)))metrics+="<p>"+H(string.Join(" · ",context.Where(x=>!string.IsNullOrEmpty(x))))+"</p>";
+            if(e.Regions.Length>0) {
+                metrics+="<div class='regionwrap'><table class='regional-evidence'><thead><tr><th>Region</th><th>Signal</th><th>Eccentricity / reference</th><th>Stars / reference</th><th>Not detected</th><th>Sky ADU</th><th>Noise ADU</th></tr></thead><tbody>";
+                foreach(var region in e.Regions.OrderBy(r=>r.RegionId))metrics+="<tr><td>"+(region.RegionId==0?"Center":"Outer "+region.RegionId)+"</td><td>"
+                    +(region.PhotometryAvailable?H(region.RelativeFlux.ToString("P0",CultureInfo.InvariantCulture)):"Unavailable")+"</td><td>"
+                    +H(Finite(region.Eccentricity)?region.Eccentricity.ToString("0.00",CultureInfo.InvariantCulture):"—")+" / "
+                    +H(Finite(region.ShapeReferenceEccentricity)?region.ShapeReferenceEccentricity.ToString("0.00",CultureInfo.InvariantCulture):"—")
+                    +(region.ShapeReferenceFrames>0?"<br><small>"+region.ShapeReferenceFrames+" prior frames</small>":"")+"</td><td>"
+                    +region.MatchedStars+" / "+region.ExpectedReferenceStars+"</td><td>"+region.MissingReferenceStars+"</td><td>"+H(Finite(region.Background)?region.Background.ToString("0",CultureInfo.InvariantCulture):"—")
+                    +"</td><td>"+H(Finite(region.Noise)?region.Noise.ToString("0.0",CultureInfo.InvariantCulture):"—")+"</td></tr>";
+                metrics+="</tbody></table></div><p>Five sampled regions; not a measurement of every pixel.</p>";
+            }
+        }
         var proof = frame.ImageEvidence.PreviewPngBase64;
-        if (string.IsNullOrEmpty(proof) || proof.Length > 50000 || !System.Text.RegularExpressions.Regex.IsMatch(proof, @"^[A-Za-z0-9+/=]+$")) return "";
+        if (string.IsNullOrEmpty(proof) || proof.Length > 50000 || !System.Text.RegularExpressions.Regex.IsMatch(proof, @"^[A-Za-z0-9+/=]+$"))
+            return string.IsNullOrEmpty(metrics)?"":"<details style='white-space:normal;max-width:620px'><summary>Stellar measurements</summary>"+metrics+"</details>";
         var extended = frame.ImageEvidence.ExtendedPreviewPngBase64;
         var wide = !string.IsNullOrEmpty(extended) && extended.Length < 100000 && System.Text.RegularExpressions.Regex.IsMatch(extended,@"^[A-Za-z0-9+/=]+$")
             ? "<p>Extended stellar profile</p><img style='width:290px;max-width:100%;image-rendering:pixelated' alt='Extended stellar profile' src='data:image/png;base64,"+extended+"'>" : "";
-        return "<details style='white-space:normal;max-width:540px'><summary>" + H(frame.SecondPassText) + " — view stars</summary><img style='width:405px;max-width:100%;image-rendering:pixelated' alt='Measured stellar evidence' src='data:image/png;base64," + proof + "'><p>" + H(frame.ImageEvidence.PreviewCaption) + "</p>"+wide+"<p>"+H(frame.ImageEvidence.Detail)+"</p></details>";
+        return "<details style='white-space:normal;max-width:620px'><summary>Stellar measurements</summary>"+metrics+"<img style='width:405px;max-width:100%;image-rendering:pixelated' alt='Measured stellar evidence' src='data:image/png;base64," + proof + "'><p>" + H(frame.ImageEvidence.PreviewCaption) + "</p>"+wide+"<p>"+H(frame.ImageEvidence.Detail)+"</p></details>";
     }
     private static string BuildTimeline(IReadOnlyList<FrameQualityResult> frames) {
         const int width = 1320, height = 414, left = 46, right = 14, top = 48, band = 105, gap = 16;

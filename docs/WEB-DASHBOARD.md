@@ -4,7 +4,7 @@ QualitySessionMeter includes an optional self-contained, read-only browser dashb
 
 The dashboard is independent from the existing OpenAstro integration bridge.
 
-## Stellar analysis (1.4.0.2)
+## Stellar analysis
 
 The stellar inspector lists checked frames from the recent snapshot, including
 recovered, rejected and inconclusive results. It shows the median profile, six
@@ -12,7 +12,7 @@ sample stars, eccentricity and recovery threshold, tail/secondary-peak measureme
 sample count, flux and recorded decision. Selection and expanded details survive
 polling. A final rejection takes precedence over a cleared guide flag.
 
-Measurements are unavailable until a guiding-rejection candidate is checked.
+Enabled stellar analysis runs on monitored LIGHTs. The inspector shows signal-comparison state, measured coverage, five regional signal/background/noise values and missing reference stars. Shape coverage is separate from signal coverage.
 The dashboard distinguishes no checks, disabled analysis and unavailable limits.
 No shape-analysis work runs in the browser. Text and controls use product labels;
 metric definitions are available separately from the primary display.

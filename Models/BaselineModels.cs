@@ -10,7 +10,13 @@ public readonly record struct BaselineKey(
     int Gain,
     int BinX,
     int BinY,
-    string Camera
+    string Camera,
+    int CameraOffset = -1,
+    int ReadoutModeIndex = -1,
+    int ImageWidth = 0,
+    int ImageHeight = 0,
+    int SampleStep = 1,
+    string PierSide = ""
 ) {
     public override string ToString() =>
         string.Join("|",
@@ -19,7 +25,11 @@ public readonly record struct BaselineKey(
             ExposureSeconds.ToString("0.###", CultureInfo.InvariantCulture),
             Gain.ToString(CultureInfo.InvariantCulture),
             $"{BinX}x{BinY}",
-            Normalize(Camera));
+            Normalize(Camera),
+            CameraOffset.ToString(CultureInfo.InvariantCulture),
+            ReadoutModeIndex.ToString(CultureInfo.InvariantCulture),
+            $"{ImageWidth}x{ImageHeight}/{SampleStep}",
+            Normalize(PierSide));
 
     private static string Normalize(string value) =>
         string.IsNullOrWhiteSpace(value) ? "(none)" : value.Trim();
@@ -33,8 +43,7 @@ public sealed class BaselineSnapshot {
     public double StarMedian { get; init; } = double.NaN;
     public double BackgroundMedian { get; init; } = double.NaN;
 
-    // V2 trend model from accepted/learning frames only. Prediction is diagnostic and provides a
-    // trend-aware residual; V1 hard rejection boundaries remain anchored to the robust median.
+    // Predictions use independently eligible measurements from this imaging context.
     public bool StarTrendUsable { get; init; }
     public bool BackgroundTrendUsable { get; init; }
     public double StarTrendExpectedNext { get; init; } = double.NaN;
