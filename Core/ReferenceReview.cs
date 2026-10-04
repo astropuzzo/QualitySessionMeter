@@ -117,7 +117,14 @@ public sealed class ReferenceReview {
         int protectedThrough = TrustedGradualEnd(earlier, settings);
         DateTime epoch = runFrames.Max(f => f.TimestampUtc).AddTicks(1);
         var revisedRun = runFrames.Select(f => Reevaluate(key, f, reference, epoch, settings, runFrames)).ToArray();
-        if ((settings.EnableStarCount && revisedRun.Count(f => ExposureAssessment.CanTrainStarCount(f.Result)) < settings.MinimumLearningFrames)
+        // A replacement is a persistent level, not an alternating signal population.
+        // Cross-comparison must agree within 25% wherever photometry is available;
+        // this only defers reference replacement and never rejects a saved image.
+        bool unstableSignal = revisedRun.Any(f => f.Result.ImageEvidence.PhotometryAvailable
+            && (f.Result.ImageEvidence.RelativeFlux < .8 || f.Result.ImageEvidence.RelativeFlux > 1.25
+                || f.Result.ImageEvidence.Regions.Any(r => r.PhotometryAvailable && (r.RelativeFlux < .8 || r.RelativeFlux > 1.25))));
+        if (unstableSignal
+            || (settings.EnableStarCount && revisedRun.Count(f => ExposureAssessment.CanTrainStarCount(f.Result)) < settings.MinimumLearningFrames)
             || (settings.EnableBackground && revisedRun.Count(f => ExposureAssessment.CanTrainBackground(f.Result)) < settings.MinimumLearningFrames)) {
             // Evaluation is tentative: no baseline or recorded evidence changes until it qualifies.
             run.Clear();
@@ -144,7 +151,11 @@ public sealed class ReferenceReview {
             // self-match from manufacturing good evidence in a sparse new population.
             var verifier = new StellarAnalysisPipeline();
             foreach (var frame in comparison.Where(f => f.FrameIndex != previous.FrameIndex)) {
-                if (!ExposureAssessment.CanTrainPhotometry(frame)) continue;
+                // These are tentative replacement candidates, not live training samples.
+                // Old-reference transparency flags must not suppress their independent
+                // cross-comparison. The revised population is vetted before Rebuild.
+                if (frame.Status is FrameStatus.Rejected or FrameStatus.Error
+                    || !frame.ImageEvidence.HasRescueMargin) continue;
                 var evidence = inputs[frame.FrameIndex].Input.ImageEvidence;
                 if (evidence == null) continue;
                 verifier.AddEvidenceReference(key, evidence, frame.Status==FrameStatus.Learning?FrameStatus.Learning:FrameStatus.Accepted,

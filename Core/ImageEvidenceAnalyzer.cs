@@ -23,7 +23,7 @@ public static class ImageEvidenceAnalyzer {
             copy[y * w + x] = step == 1 ? pixels[p] : (pixels[p] + (float)pixels[p + 1] + pixels[p + width] + pixels[p + width + 1]) / 4;
         }
         var outer = new List<ImageSample>();
-        int side = Math.Min(384, Math.Min(width, height) / step / 4);
+        int side = Math.Min(512, Math.Min(width, height) / step / 4);
         if (side >= 64) foreach (var (cx, cy) in new[] { (.22,.22),(.78,.22),(.22,.78),(.78,.78) }) {
             int ox = Math.Clamp((int)(width * cx - side * step / 2.0) / step * step, 0, width - side * step);
             int oy = Math.Clamp((int)(height * cy - side * step / 2.0) / step * step, 0, height - side * step);
@@ -105,6 +105,8 @@ public static class ImageEvidenceAnalyzer {
             double minor = (xx + yy - delta) / 2, major = (xx + yy + delta) / 2;
             double peak = star.Peak - local;
             var fit = FitCore(a,w,x,y,local,peak,starNoise);
+            if (!fit.Valid && minor >= .2 && minor < .35 && major <= 9)
+                fit = CompactStarFit.Fit(a,w,x,y,local,peak,starNoise,mx,my,xx,xy,yy);
             // Unresolved single-pixel detections are not failed stellar shape measurements.
             // Count only resolved candidates in the reliability fraction, keeping broad/poor fits as failures.
             if (minor < 0.2) continue;

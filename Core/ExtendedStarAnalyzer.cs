@@ -59,7 +59,7 @@ public static class ExtendedStarAnalyzer {
             if(cached!=null) {
                 if(cached.ShapeAvailable){verified++;worst=Math.Max(worst,cached.Eccentricity);if(cached.ShapeCompromised)compromised++;}
             } else {
-                var evidence=ImageEvidenceAnalyzer.Analyze(sample.OuterFields[i],core.Limits with {TargetStars=30},Math.Max(20,1500-clock.Elapsed.TotalMilliseconds),false);
+                var evidence=ImageEvidenceAnalyzer.Analyze(sample.OuterFields[i],core.Limits with {TargetStars=60,MinimumStars=20},Math.Max(20,1500-clock.Elapsed.TotalMilliseconds),false);
                 if(evidence.Available) {verified++;worst=Math.Max(worst,evidence.Eccentricity);if(evidence.Compromised)compromised++;}
             }
             if(clock.ElapsedMilliseconds>1500)return Incomplete("time limit.");

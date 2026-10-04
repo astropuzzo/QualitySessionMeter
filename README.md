@@ -8,11 +8,11 @@ QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combin
 
 ## Release status
 
-**1.4.3.0** — [Download and changelog](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.3.0).
+**1.4.3.1** — [Download and changelog](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.3.1).
 
 QSM is listed in the N.I.N.A. plugin catalog; its first entry, 1.4.0.2, was accepted on September 16, 2026. New versions appear in the Plugin Manager after the corresponding catalog update is accepted and published.
 
-This update follows gradual changes in stellar signal while retaining sudden-loss and star-shape rejection. It uses less aggressive signal defaults, protects the clean reference during moderate transparency changes, and preserves customized thresholds during upgrade.
+This update improves measurements of compact stars and increases the outer field samples. Moderate star-count losses supported by measured stellar signal are retained for review, and replacement references require consistent signal. Guiding and confirmed stellar-damage rejections remain active.
 
 Compatibility floor:
 
