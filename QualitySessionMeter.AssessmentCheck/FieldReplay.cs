@@ -32,12 +32,14 @@ internal static class FieldReplay {
                 settings.MaxGuideRms=Limit(@"RMS>([\d.]+)",1.6);settings.HardExcursionThreshold=Limit(@"peak>=([\d.]+)",3);
                 settings.ExcursionThreshold=Limit(@"sustained>([\d.]+)",2);settings.ExcursionMinimumDuration=Limit(@"for ([\d.]+)s",5);
             }
-            ImageSample Read(string path,int size) {
+            ImageSample Read(string path) {
                 var bytes=File.ReadAllBytes(path);var pixels=new float[bytes.Length/4];Buffer.BlockCopy(bytes,0,pixels,0,bytes.Length);
+                int size=(int)Math.Sqrt(pixels.Length);
+                if(bytes.Length%4!=0 || size*size!=pixels.Length)throw new InvalidDataException("Invalid square field: "+path);
                 return new ImageSample(pixels,size,size){PixelsPerSample=key.SampleStep,ArcsecPerSample=Value("scale"),SourceWidth=key.ImageWidth,SourceHeight=key.ImageHeight};
             }
-            var sample=Read(row.GetProperty("sample").GetString(),1024) with {
-                OuterFields=row.GetProperty("outer").EnumerateArray().Select(p=>Read(p.GetString(),384)).ToArray(),
+            var sample=Read(row.GetProperty("sample").GetString()) with {
+                OuterFields=row.GetProperty("outer").EnumerateArray().Select(p=>Read(p.GetString())).ToArray(),
                 BackgroundGrid=row.TryGetProperty("backgroundGrid",out var grid)?JsonSerializer.Deserialize<BackgroundTileEvidence[]>(grid.GetRawText(),new JsonSerializerOptions{PropertyNameCaseInsensitive=true}):Array.Empty<BackgroundTileEvidence>()
             };
             int id=row.GetProperty("id").GetInt32();

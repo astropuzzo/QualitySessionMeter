@@ -6,7 +6,7 @@ using System.Linq;
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
 public static class ExposureAssessment {
-    public const string Version = "1.4.3.0";
+    public const string Version = "1.4.3.1";
 
     public static bool CanTrainBaseline(FrameQualityResult result) => CanTrainStarCount(result) && CanTrainBackground(result);
 
@@ -78,12 +78,13 @@ public static class ExposureAssessment {
                 && image.RelativeFlux >= 1-Math.Min(20,settings.MaxMeasuredFluxLossPercent-5)/100) {
                 result.RejectReasons.Remove("STAR_COUNT_DROP");result.ReviewReasons.Add("STAR_COUNT_DROP");result.StarCountFalsePositive=true;
             }
-            else if (result.RejectReasons.Contains("STAR_COUNT_DROP") && image.HasRescueMargin
+            else if (result.RejectReasons.Contains("STAR_COUNT_DROP") && !image.Compromised
                 && guardedLoss < settings.MaxCloudSignalLossPercent
                 && double.IsFinite(image.RegionalSignalUpperMinimum)
                 && image.RegionalSignalUpperMinimum >= 1-settings.MaxCloudSignalLossPercent/100) {
-                // Partial evidence can justify retaining a moderate frame, but cannot certify
-                // that the count was a false positive or authorize reference learning.
+                // Photometry can retain a moderate frame even when shape measurement is
+                // unavailable. Independent guide/shape rejections remain active, and this
+                // branch cannot certify a false positive or authorize reference learning.
                 result.RejectReasons.Remove("STAR_COUNT_DROP");
                 result.ReviewReasons.Add("STAR_COUNT_DROP");
                 result.ReviewReasons.Add("COUNT_SIGNAL_MISMATCH");

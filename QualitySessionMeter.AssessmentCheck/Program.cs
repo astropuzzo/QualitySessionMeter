@@ -9,11 +9,12 @@ using System.IO;
 
 if(args.FirstOrDefault()=="--field") { await FieldReplay.Run(args.Skip(1).ToArray()); return; }
 
-if (args.FirstOrDefault() is "--photometry-regressions" or "--reference-regressions" or "--guardrail-regressions" or "--runtime-regressions" or "--review-regressions") {
+if (args.FirstOrDefault() is "--sampling-regressions" or "--photometry-regressions" or "--reference-regressions" or "--guardrail-regressions" or "--runtime-regressions" or "--review-regressions") {
     int passed = 0;
     void Verify(bool ok, string message) { if (!ok) throw new Exception(message); passed++; Console.WriteLine("PASS " + message); }
     try {
-        if (args[0] == "--photometry-regressions") PhotometryRegressionCheck.Run(Verify);
+        if (args[0] == "--sampling-regressions") SamplingRegressionCheck.Run(Verify);
+        else if (args[0] == "--photometry-regressions") PhotometryRegressionCheck.Run(Verify);
         else if (args[0] == "--reference-regressions") ReferenceRegressionCheck.Run(Verify);
         else if (args[0] == "--runtime-regressions") RuntimeGuardRegressionCheck.Run(Verify);
         else if (args[0] == "--review-regressions") FrameReviewRegressionCheck.Run(Verify);
@@ -260,6 +261,7 @@ var uncertainSignal=Assess(matched with {RelativeFlux=.79,RelativeFluxUpperBound
 Check(uncertainSignal.Status==FrameStatus.Warning && !ExposureAssessment.CanTrainBaseline(uncertainSignal),"uncertain threshold crossing is reviewed and cannot train the reference");
 Check(Assess(matched with {RelativeFlux=.45,RelativeFluxUpperBound=.48},1).RejectReasons.Contains("STELLAR_FLUX_LOSS"),"clear signal loss remains rejected after measurement allowance");
 ReferenceReviewCheck.Run(Check);
+SamplingRegressionCheck.Run(Check);
 PhotometryRegressionCheck.Run(Check);
 ReferenceRegressionCheck.Run(Check);
 GuardrailRegressionCheck.Run(Check);

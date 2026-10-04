@@ -258,7 +258,7 @@ internal static class PhotometryRegressionCheck {
         for(int i=0;i<4;i++)sensorPipeline.AddReference(key,sensorSample,sensorEvidence,FrameStatus.Accepted,time.AddMinutes(i*2),"East",8);
         watch.Restart();var measuredSensor=sensorPipeline.Analyze(key,sensorSample,guide,baseline,1000,time.AddMinutes(10),"East",settings);
         double matureMs=watch.Elapsed.TotalMilliseconds;
-        Console.WriteLine($"BENCH 4096x3072 mono; central1024; four384; capture={captureMs:0.0}ms initial={firstMs:0.0}ms mature={matureMs:0.0}ms regions={measuredSensor.PhotometryRegionsMeasured}/5");
+        Console.WriteLine($"BENCH 4096x3072 mono; central1024; four{sensorSample.OuterFields[0].Width}; capture={captureMs:0.0}ms initial={firstMs:0.0}ms mature={matureMs:0.0}ms regions={measuredSensor.PhotometryRegionsMeasured}/5");
         check(measuredSensor.PhotometryRegionsMeasured==5&&measuredSensor.PhotometryCoverageReliable&&matureMs<4000,
             "full sensor capture and five bounded stellar fields complete within the declared analysis budget");
     }

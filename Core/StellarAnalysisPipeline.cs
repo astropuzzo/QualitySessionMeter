@@ -18,7 +18,7 @@ public sealed class StellarAnalysisPipeline {
         var regions=new List<StellarRegionEvidence>(evidence.Regions);
         if(sample!=null)for(int i=0;i<sample.OuterFields.Length && i<4;i++) {
             var field=sample.OuterFields[i];
-            var limits=settings.GetStarShapeLimits() with {TargetStars=30,MinimumStars=20};
+            var limits=settings.GetStarShapeLimits() with {TargetStars=60,MinimumStars=20};
             ImageEvidence outer=clock.ElapsedMilliseconds<1400
                 ?ImageEvidenceAnalyzer.Analyze(field,limits,Math.Max(20,1400-clock.Elapsed.TotalMilliseconds),false):new ImageEvidence();
             var region=outer.Regions.FirstOrDefault()??new StellarRegionEvidence {Width=field.Width,Height=field.Height,PixelsPerSample=field.PixelsPerSample};

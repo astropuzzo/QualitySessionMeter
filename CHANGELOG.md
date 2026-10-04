@@ -2,6 +2,13 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.3.1] - 2026-10-04
+
+- Fix shape measurements for compact, resolved stars with a pixel-integrated profile fit. Keep unresolved sensor artifacts excluded.
+- Increase the four outer field samples to 512 × 512 pixels and measure up to 60 stars per region. Keep the minimum of 20 reliable stars and the existing analysis budgets.
+- Retain moderate star-count losses for review when measured stellar signal supports them, even if shape classification is inconclusive. Independent guiding and confirmed shape rejections remain active.
+- Fix clear-reference validation when earlier spatial-signal warnings prevented comparison between replacement candidates. Require consistent stellar signal before adopting a replacement reference.
+
 ## [1.4.3.0] - 2026-10-02
 
 - Measure stellar signal independently in the center and four outer field regions. Report uneven attenuation, missing reference stars and measured coverage.

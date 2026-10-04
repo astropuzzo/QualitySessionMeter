@@ -25,12 +25,13 @@ internal static class ReferenceRegressionCheck {
         }
         public BaselineSnapshot Snapshot => baseline.GetSnapshot(key, 4);
         public void Advance(TimeSpan elapsed) => timeShift += elapsed;
-        public void Add(int stars, double background, double flux = 1, double guideRms = .6, double axisRatio = 1.1, bool failedComparison = false) {
+        public void Add(int stars, double background, double flux = 1, double guideRms = .6, double axisRatio = 1.1, bool failedComparison = false, bool spatialMismatch = false) {
             var time = start.AddMinutes(Results.Count * 3) + timeShift;
             var evidence = settings.ImageEvidenceEnabled ? Round(flux) : new ImageEvidence();
             if (settings.ImageEvidenceEnabled) evidence = evidence with {AxisRatio = axisRatio};
             if (failedComparison) evidence = evidence with {PhotometryState=PhotometryState.InsufficientMatches,ReferenceFrames=0,MatchedStars=0,RelativeFlux=double.NaN};
             if (stellar != null) evidence = stellar.CompareReference(key, evidence, time, "East");
+            if (spatialMismatch) evidence = evidence with { SpatialSignalInconsistent = true };
             var input = new FrameQualityInput {
                 FrameIndex = Results.Count + 1, TimestampUtc = time, ExposureSeconds = 180,
                 StarCount = stars, BackgroundMedian = background, Baseline = baseline.GetSnapshot(key, 4, time), ImageEvidence = evidence,
@@ -77,6 +78,25 @@ internal static class ReferenceRegressionCheck {
         for (int i = 0; i < 9; i++) mixed.Add(1000, 1000);
         check(mixed.Results.Take(3).All(r => r.Status == FrameStatus.Rejected) && mixed.Results.Skip(3).All(r => r.IsUsable),
             "mixed cloudy/clear startup uses an observed level and is corrected when clear evidence persists");
+
+        var spatialClearing = new Session(image: true, catalog: true);
+        for (int i = 0; i < 4; i++) spatialClearing.Add(500, 1300, .5);
+        for (int i = 0; i < 4; i++) spatialClearing.Add(1000, 1000, spatialMismatch: true);
+        check(spatialClearing.Results.Take(4).All(r => r.Status == FrameStatus.Rejected)
+            && spatialClearing.Results.Skip(4).All(r => r.IsUsable && r.ImageEvidence.PhotometryAvailable
+                && !r.ImageEvidence.SpatialSignalInconsistent && ExposureAssessment.CanTrainPhotometry(r)),
+            "old-reference spatial warnings cannot suppress independent validation of a persistent clear population");
+        spatialClearing.Add(500, 1300, .5);
+        check(spatialClearing.Results[^1].Status == FrameStatus.Rejected && spatialClearing.Results[^1].ImageEvidence.PhotometryAvailable,
+            "validated spatial clearing keeps subsequent severe attenuation detectable");
+
+        var inconsistentClearing = new Session(image: true, catalog: true);
+        for (int i = 0; i < 4; i++) inconsistentClearing.Add(500, 1300, .5);
+        for (int i = 0; i < 4; i++) inconsistentClearing.Add(1000, 1000, i % 2 == 0 ? .7 : 1.4, spatialMismatch: true);
+        check(inconsistentClearing.Snapshot.StarMedian == 500
+            && inconsistentClearing.Results.Take(4).All(r => r.IsUsable)
+            && inconsistentClearing.Results.Skip(4).All(r => !r.ReferenceRevised && !ExposureAssessment.CanTrainPhotometry(r)),
+            "inconsistent tentative signal candidates cannot replace a validated reference");
 
         var interrupted = new Session();
         for (int i = 0; i < 4; i++) interrupted.Add(500, 1600);
