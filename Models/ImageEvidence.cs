@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Serialization;
 using System.Windows.Media.Imaging;
 
@@ -88,6 +89,25 @@ public sealed record ImageEvidence {
                 bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); return bitmap;
             } catch (Exception ex) when (ex is FormatException or IOException or NotSupportedException) { return null; }
     }
+    /// <summary>
+    /// Keeps the shape verdict measured at capture when only the signal comparison is repeated.
+    /// A retrospective comparison has no earlier shape references, so it cannot confirm it again.
+    /// </summary>
+    public ImageEvidence WithShapeVerdictFrom(ImageEvidence captured) {
+        if (captured == null) return this;
+        var regions = Regions.Select(region => {
+            var source = captured.Regions.FirstOrDefault(r => r.RegionId == region.RegionId);
+            return source == null ? region : region with {
+                ShapeReferenceFrames = source.ShapeReferenceFrames, ShapeReferenceEccentricity = source.ShapeReferenceEccentricity,
+                ShapeReferenceScatter = source.ShapeReferenceScatter, StableOpticalElongation = source.StableOpticalElongation
+            };
+        }).ToArray();
+        return this with {
+            Regions = regions, ShapeReferenceVerified = captured.ShapeReferenceVerified, StableOpticalRegions = captured.StableOpticalRegions,
+            CompromisedRegions = captured.CompromisedRegions, RawCompromisedRegions = captured.RawCompromisedRegions
+        };
+    }
+
     public double Quality => !Available ? double.NaN : Math.Clamp(100 - Math.Max(
         Math.Max(0, AxisRatio - 1.10) * 180, Math.Max(0, TailStrength - 0.003) * 2200), 0, 100);
 }

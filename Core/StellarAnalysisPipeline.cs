@@ -25,8 +25,7 @@ public sealed class StellarAnalysisPipeline {
             regions.Add(region with {RegionId=i+1});
         }
         evidence=evidence with {Regions=regions.ToArray(),PierSide=side,ShapeTimestampUtc=time,PhotometryRegionsExpected=sample==null?0:1+sample.OuterFields.Length};
-        bool countDrop=settings.EnableStarCount && baseline?.StarsReady==true && starCount>=0
-            && starCount<baseline.StarMedian*(1-settings.MaxStarLossPercent/100);
+        bool countDrop=ExposureAssessment.IsCountDropCandidate(starCount,baseline,settings);
         if(ExposureAssessment.IsGuideRejectCandidate(guide,settings)||evidence.Compromised||countDrop)
             evidence=ExtendedStarAnalyzer.Verify(sample,evidence,guide?.HasData==true?guide.MaxExcursionArcsec:double.NaN);
         if(settings.VerifyStarCountWithFlux || settings.RejectSignalDegradation)evidence=references.Compare(context,sample,evidence,time,side);

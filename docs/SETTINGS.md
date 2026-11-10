@@ -137,6 +137,8 @@ Compares image-background median with the mature same-context baseline.
 
 Background changes are diagnostic. A brighter background may require review and protect the reference from learning a suspected transparency change. A darker background is retained. Neither change independently rejects an exposure.
 
+With this option off, QSM raises no background review and leaves the sky level out of the Quality score. While signal rejection is enabled it still measures the change, because a brighter sky corroborates stellar signal loss.
+
 ### Background Review Threshold
 
 Positive background change that marks a frame for review. Default: 30% above its expected level.
@@ -228,7 +230,7 @@ Recovery beyond those bounds additionally requires:
 
 These are limits on recovery, not new guide-rejection thresholds. A guide flag remains if this proof is missing.
 
-Signal verification requires at least 20 reliable measurements against two prior clean references. References expire after six hours; count recovery requires references no older than two hours. Each region reports expected, matched and no-longer-detected stars, signal and local background/noise. Nonuniform attenuation remains visible even when the median signal is high. A count flag can be cleared only with clean extended shapes, reliable signal coverage in every sampled region, no measured spatial inconsistency and flux loss no greater than `min(20%, configured direct-loss limit − 5 percentage points)`. With signal rejection enabled, count rescue also requires background rise below 3%. Suspected transparency changes protect learning; guide-damaged frames may still provide valid background samples. A rebuilt reference also replaces its stellar anchors and recomputes stored comparisons without retaining raw images.
+Signal verification requires at least 20 reliable measurements against two prior clean references. References expire after six hours; count recovery requires references no older than two hours. Each region reports expected, matched and no-longer-detected stars, signal and local background/noise. Nonuniform attenuation remains visible even when the median signal is high. A count flag can be cleared only with clean extended shapes, reliable signal coverage in every sampled region, no measured spatial inconsistency and flux loss no greater than `min(20%, configured direct-loss limit − 5 percentage points)`. With signal rejection enabled, count rescue also requires background rise below 3%. Suspected transparency changes protect learning; guide-damaged frames may still provide valid background samples. A rebuilt reference also replaces its stellar anchors and recomputes stored comparisons without retaining raw images. The shape verdict measured at capture is kept. A reference fitted to a trending run holds its first and last values outside that run.
 
 Moderate signal can retain a star-count drop as ACCEPTED (REVIEW) when shape classification is inconclusive. This does not certify the count flag as a false positive, clear any independent guiding or shape rejection, or permit reference learning. Clear-reference replacement compares candidate catalogs independently of warnings from the previous reference. Available central and regional signal ratios must remain between 0.80 and 1.25 in that comparison before a replacement can be adopted; this requirement defers reference replacement and does not reject an image.
 
@@ -257,6 +259,8 @@ QSM does not delete rejected images.
 Enables advisory early-warning diagnostics derived from recent trends.
 
 Predictive warnings do not reject a frame by themselves.
+
+QSM forecasts star-count loss toward its limit, sky brightening toward the review limit and a rapid drop in Quality. Each forecast uses recent frames from the same acquisition context, so it does not continue across a meridian flip or a camera change. A darkening sky produces no warning.
 
 ### Use environmental data for hints
 

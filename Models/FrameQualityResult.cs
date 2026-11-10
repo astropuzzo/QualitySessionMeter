@@ -118,6 +118,17 @@ public sealed class FrameQualityResult {
 
     public bool IsUsable => Status is FrameStatus.Accepted or FrameStatus.Warning;
 
+    // Mirrors the reference key: deviations are comparable only inside one acquisition context.
+    public bool SharesContextWith(FrameQualityResult other) => other != null &&
+        string.Equals(Target, other.Target, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(Filter, other.Filter, StringComparison.OrdinalIgnoreCase) &&
+        Math.Abs(ExposureSeconds - other.ExposureSeconds) < 0.001 &&
+        Gain == other.Gain && BinX == other.BinX && BinY == other.BinY &&
+        CameraOffset == other.CameraOffset && ReadoutModeIndex == other.ReadoutModeIndex &&
+        ImageWidth == other.ImageWidth && ImageHeight == other.ImageHeight &&
+        string.Equals(PierSide, other.PierSide, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(Camera, other.Camera, StringComparison.OrdinalIgnoreCase);
+
     public string QualityLabel {
         get {
             if (Status == FrameStatus.Rejected) return "REJECTED";

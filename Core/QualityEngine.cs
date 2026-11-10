@@ -109,18 +109,22 @@ public sealed class QualityEngine {
         }
 
         bool backgroundReady = !settings.EnableBackground || input.Baseline?.BackgroundReady == true;
-        if (settings.EnableBackground && backgroundReady && backgroundDataAvailable && input.Baseline.BackgroundMedian > 0) {
+        // The sky level corroborates signal loss even when its own rule is off, as the star count does.
+        bool measureBackground = settings.EnableBackground || (settings.ImageEvidenceEnabled && settings.RejectSignalDegradation);
+        if (measureBackground && input.Baseline?.BackgroundReady == true && backgroundDataAvailable && input.Baseline.BackgroundMedian > 0) {
             result.BackgroundDeviationPercent =
                 ((input.BackgroundMedian - result.BackgroundBaseline) / result.BackgroundBaseline) * 100.0;
 
-            double threshold = result.BackgroundDeviationPercent >= 0
-                ? settings.MaxBackgroundIncreasePercent
-                : settings.MaxBackgroundDecreasePercent;
+            if (settings.EnableBackground) {
+                double threshold = result.BackgroundDeviationPercent >= 0
+                    ? settings.MaxBackgroundIncreasePercent
+                    : settings.MaxBackgroundDecreasePercent;
 
-            result.BackgroundQuality = ScoreUpper(Math.Abs(result.BackgroundDeviationPercent), threshold);
+                result.BackgroundQuality = ScoreUpper(Math.Abs(result.BackgroundDeviationPercent), threshold);
 
-            if (result.BackgroundDeviationPercent > settings.MaxBackgroundIncreasePercent) reasons.Add("BACKGROUND_HIGH");
-            if (result.BackgroundDeviationPercent < -settings.MaxBackgroundDecreasePercent) reasons.Add("BACKGROUND_LOW");
+                if (result.BackgroundDeviationPercent > settings.MaxBackgroundIncreasePercent) reasons.Add("BACKGROUND_HIGH");
+                if (result.BackgroundDeviationPercent < -settings.MaxBackgroundDecreasePercent) reasons.Add("BACKGROUND_LOW");
+            }
 
             if (result.BackgroundTrendUsable && result.BackgroundTrendExpected > 0) {
                 result.BackgroundTrendResidualPercent =
@@ -180,6 +184,8 @@ public sealed class QualityEngine {
             bool measured = scores.Length > 0 || result.ImageEvidence.Available || result.ImageEvidence.PhotometryAvailable
                 || (measureStars && starDataAvailable) || (settings.EnableBackground && backgroundDataAvailable);
             result.Status = !measured ? FrameStatus.Error : learning ? FrameStatus.Learning : FrameStatus.Warning;
+            // Nothing was measured, so there is no quality to report; 100 would read as a perfect frame.
+            if (!measured) result.OverallQuality = 0;
             string unavailable = QualityVocabulary.LabelsInSentence(dataErrors);
             result.DecisionSummary = result.Status switch {
                 FrameStatus.Learning => "Provisional: " + unavailable + ". References are still being established.",

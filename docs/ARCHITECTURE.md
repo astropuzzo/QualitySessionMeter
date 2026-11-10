@@ -354,6 +354,7 @@ CapturedCount++ for every completed exposure
 ValidCount++ for ACCEPTED and WARNING frames
 RejectedCount++ for REJECTED frames
 LEARNING frames are held and moved to valid or rejected when ReferenceReview settles them
+Counted frames revised by a rebuilt reference move between ValidCount and RejectedCount
 
 sequence complete when ValidCount >= RequestedValidFrames
 ```

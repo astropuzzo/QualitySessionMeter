@@ -9,7 +9,7 @@ using System.IO;
 
 if(args.FirstOrDefault()=="--field") { await FieldReplay.Run(args.Skip(1).ToArray()); return; }
 
-if (args.FirstOrDefault() is "--sampling-regressions" or "--photometry-regressions" or "--reference-regressions" or "--guardrail-regressions" or "--runtime-regressions" or "--review-regressions") {
+if (args.FirstOrDefault() is "--sampling-regressions" or "--photometry-regressions" or "--reference-regressions" or "--guardrail-regressions" or "--runtime-regressions" or "--review-regressions" or "--accuracy-regressions") {
     int passed = 0;
     void Verify(bool ok, string message) { if (!ok) throw new Exception(message); passed++; Console.WriteLine("PASS " + message); }
     try {
@@ -18,6 +18,7 @@ if (args.FirstOrDefault() is "--sampling-regressions" or "--photometry-regressio
         else if (args[0] == "--reference-regressions") ReferenceRegressionCheck.Run(Verify);
         else if (args[0] == "--runtime-regressions") RuntimeGuardRegressionCheck.Run(Verify);
         else if (args[0] == "--review-regressions") FrameReviewRegressionCheck.Run(Verify);
+        else if (args[0] == "--accuracy-regressions") AccuracyRegressionCheck.Run(Verify);
         else GuardrailRegressionCheck.Run(Verify);
         Console.WriteLine($"Completed: {passed} checks.");
     } catch (Exception ex) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }
@@ -267,6 +268,7 @@ ReferenceRegressionCheck.Run(Check);
 GuardrailRegressionCheck.Run(Check);
 RuntimeGuardRegressionCheck.Run(Check);
 FrameReviewRegressionCheck.Run(Check);
+AccuracyRegressionCheck.Run(Check);
 await SessionStorageCheck.Run(Check);
 
 var wideClean=Field(1.4,1.4) with {ArcsecPerSample=1,OuterFields=Enumerable.Range(0,4).Select(_=>Field(1.4,1.4)).ToArray()};

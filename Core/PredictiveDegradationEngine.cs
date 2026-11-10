@@ -12,7 +12,7 @@ public sealed class PredictiveDegradationEngine {
         if (current.Status is FrameStatus.Error or FrameStatus.Learning) return new PredictiveAssessment();
 
         var same = history
-            .Where(x => SameContext(x, current))
+            .Where(x => x.SharesContextWith(current))
             .Where(x => x.Status is not FrameStatus.Error and not FrameStatus.Learning)
             .TakeLast(6)
             .Concat(new[] { current })
@@ -23,20 +23,29 @@ public sealed class PredictiveDegradationEngine {
 
         var candidates = new List<PredictiveAssessment>();
 
-        var star = same.Where(x => IsFinite(x.StarDeviationPercent))
-            .Select(x => Math.Max(0, -x.StarDeviationPercent)).ToArray();
-        AddThresholdCandidate(candidates, "STARS", star, settings.MaxStarLossPercent,
-            "Star count is trending toward the configured transparency-loss reject threshold.");
+        if (settings.EnableStarCount) {
+            var star = same.Where(x => IsFinite(x.StarDeviationPercent))
+                .Select(x => Math.Max(0, -x.StarDeviationPercent)).ToArray();
+            AddThresholdCandidate(candidates, "STARS", star, settings.MaxStarLossPercent,
+                "Star count is falling toward the star-loss limit.");
+        }
 
-        var bgHigh = same.Where(x => IsFinite(x.BackgroundDeviationPercent))
-            .Select(x => Math.Max(0, x.BackgroundDeviationPercent)).ToArray();
-        AddThresholdCandidate(candidates, "BACKGROUND HIGH", bgHigh, settings.MaxBackgroundIncreasePercent,
-            "Background is rising toward the configured high-background reject threshold.");
+        if (settings.EnableBackground) {
+            var bgHigh = same.Where(x => IsFinite(x.BackgroundDeviationPercent))
+                .Select(x => Math.Max(0, x.BackgroundDeviationPercent)).ToArray();
+            AddThresholdCandidate(candidates, "BACKGROUND HIGH", bgHigh, settings.MaxBackgroundIncreasePercent,
+                settings.UseExposureAssessment
+                    ? "Sky background is rising toward the review limit."
+                    : "Sky background is rising toward the high-background limit.");
 
-        var bgLow = same.Where(x => IsFinite(x.BackgroundDeviationPercent))
-            .Select(x => Math.Max(0, -x.BackgroundDeviationPercent)).ToArray();
-        AddThresholdCandidate(candidates, "BACKGROUND LOW", bgLow, settings.MaxBackgroundDecreasePercent,
-            "Background is falling toward the configured low-background reject threshold.");
+            // A darker sky is never a defect in the exposure assessment, so it has no limit to approach.
+            if (!settings.UseExposureAssessment) {
+                var bgLow = same.Where(x => IsFinite(x.BackgroundDeviationPercent))
+                    .Select(x => Math.Max(0, -x.BackgroundDeviationPercent)).ToArray();
+                AddThresholdCandidate(candidates, "BACKGROUND LOW", bgLow, settings.MaxBackgroundDecreasePercent,
+                    "Sky background is falling toward the low-background limit.");
+            }
+        }
 
         var q = same.Select(x => x.OverallQuality).Where(IsFinite).ToArray();
         if (q.Length >= 4) {
@@ -88,13 +97,6 @@ public sealed class PredictiveDegradationEngine {
         }
         return den <= 0 ? 0 : num / den;
     }
-
-    private static bool SameContext(FrameQualityResult a, FrameQualityResult b) =>
-        string.Equals(a.Target, b.Target, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(a.Filter, b.Filter, StringComparison.OrdinalIgnoreCase) &&
-        Math.Abs(a.ExposureSeconds - b.ExposureSeconds) < 0.001 &&
-        a.Gain == b.Gain && a.BinX == b.BinX && a.BinY == b.BinY &&
-        string.Equals(a.Camera, b.Camera, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsFinite(double x) => !double.IsNaN(x) && !double.IsInfinity(x);
 }

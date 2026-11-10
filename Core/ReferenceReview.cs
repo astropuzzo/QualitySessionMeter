@@ -161,7 +161,7 @@ public sealed class ReferenceReview {
                 verifier.AddEvidenceReference(key, evidence, frame.Status==FrameStatus.Learning?FrameStatus.Learning:FrameStatus.Accepted,
                     epoch, evidence.PierSide, settings.BaselineWindow);
             }
-            image = verifier.CompareReference(key, image, epoch, image.PierSide);
+            image = verifier.CompareReference(key, image, epoch, image.PierSide).WithShapeVerdictFrom(image);
         }
         var revisedInput = input.WithBaseline(reference.ToSnapshot(input.TimestampUtc), image);
         var next = engine.Evaluate(revisedInput, settings);

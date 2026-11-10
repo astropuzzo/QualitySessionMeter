@@ -12,6 +12,7 @@ public static class ReferenceValidation {
 
     public readonly record struct Reference(double Stars, double Background, int Samples) {
         public DateTime Origin { get; init; }
+        public DateTime End { get; init; }
         public double StarAtOrigin { get; init; }
         public double BackgroundAtOrigin { get; init; }
         public double StarSlope { get; init; }
@@ -20,7 +21,10 @@ public static class ReferenceValidation {
         public bool BackgroundTrend { get; init; }
 
         public BaselineSnapshot ToSnapshot(DateTime? time = null) {
-            double minutes = time.HasValue && Origin != default ? (time.Value - Origin).TotalMinutes : 0;
+            // The fit describes the frames it was built from. Outside them it holds its end values,
+            // so a short run cannot assign an extrapolated level to frames taken hours away.
+            double span = End > Origin ? (End - Origin).TotalMinutes : 0;
+            double minutes = time.HasValue && Origin != default ? Math.Clamp((time.Value - Origin).TotalMinutes, 0, span) : 0;
             double stars = StarTrend && time.HasValue ? StarAtOrigin + StarSlope * minutes : Stars;
             double background = BackgroundTrend && time.HasValue ? BackgroundAtOrigin + BackgroundSlope * minutes : Background;
             return new BaselineSnapshot {
@@ -64,7 +68,7 @@ public static class ReferenceValidation {
         var starFit = FitGradual(selected, c => c.Stars);
         var backgroundFit = FitGradual(selected, c => c.Background);
         return new Reference(stars, background, selected.Length) {
-            Origin = selected[0].Time,
+            Origin = selected[0].Time, End = selected[^1].Time,
             StarTrend = starFit.Usable, StarAtOrigin = starFit.Intercept, StarSlope = starFit.Slope,
             BackgroundTrend = backgroundFit.Usable, BackgroundAtOrigin = backgroundFit.Intercept, BackgroundSlope = backgroundFit.Slope
         };

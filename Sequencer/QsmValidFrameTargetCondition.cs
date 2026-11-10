@@ -39,11 +39,12 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
     private int blockStartFrameIndex;
     private bool blockResultConsumed;
     private string controlToken = "";
-    // Verdicts this condition has counted, so a later reference decision can move a provisional
-    // frame to valid or rejected. Guarded by accountingSync (reclassification arrives off-thread).
+    // Verdicts this condition has counted, so a later reference decision can move any of them.
+    // Guarded by accountingSync (reclassification arrives off-thread).
     private readonly object accountingSync = new();
-    private readonly Dictionary<int, FrameStatus> countedStatus = new();
+    private readonly Dictionary<int, ValidFrameProgressTracker.Counted> countedStatus = new();
     private QualitySessionRuntime subscribedRuntime;
+    private bool blockActive;
 
     [ImportingConstructor]
     public QsmValidFrameTargetCondition() {
@@ -95,13 +96,28 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         if (runtime == null || !runtime.Settings.Enabled || IsComplete || RuntimeFault) return;
 
         Disarm();
+        var stored = runtime.Store?.Results ?? Array.Empty<FrameQualityResult>();
+        int latest = stored.LastOrDefault()?.FrameIndex ?? 0;
+        lock (accountingSync) {
+            if (LastAccountedFrameIndex > latest) {
+                LastAccountedFrameIndex = ValidFrameProgressTracker.SessionFloor(LastAccountedFrameIndex, latest);
+                countedStatus.Clear();
+            }
+            blockActive = true;
+            SubscribeToRuntime(runtime);
+            Reconcile(stored);
+        }
         controlToken = runtime.ArmSequencerControl();
-        blockStartFrameIndex = runtime.Store?.Results?.LastOrDefault()?.FrameIndex ?? LastAccountedFrameIndex;
+        blockStartFrameIndex = latest;
         blockResultConsumed = false;
     }
 
     public override void SequenceBlockTeardown() {
         Disarm();
+        lock (accountingSync) {
+            blockActive = false;
+            ReleaseRuntimeWhenSettled();
+        }
         base.SequenceBlockTeardown();
     }
 
@@ -197,45 +213,62 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
             var next = ValidFrameProgressTracker.Account(current, result);
             if (next.LastFrameIndex == current.LastFrameIndex) return;
             Publish(next);
-            if (result.Status == FrameStatus.Learning) {
-                countedStatus[result.FrameIndex] = result.Status;
-                SubscribeToReclassification();
-            }
+            countedStatus[result.FrameIndex] = new ValidFrameProgressTracker.Counted(result.Status, result.TimestampUtc);
+            // A revision can land between the classification event and this call.
+            var runtime = QualitySessionRuntimeRegistry.Current;
+            if (runtime != null) Reconcile(runtime.Store.Results);
         }
         LastStatus = result.StatusLabel;
         LastCause = result.ReasonText == "—" ? "" : result.ReasonText;
         Logger.Info($"QualitySessionMeter valid-frame progress: {ProgressText}; {BreakdownText}; last={LastStatus} {LastCause}");
     }
 
-    private void SubscribeToReclassification() {
-        var runtime = QualitySessionRuntimeRegistry.Current;
+    private void SubscribeToRuntime(QualitySessionRuntime runtime) {
         if (runtime == null || ReferenceEquals(runtime, subscribedRuntime)) return;
-        UnsubscribeFromReclassification();
+        UnsubscribeFromRuntime();
         runtime.FramesReclassified += RuntimeFramesReclassified;
+        runtime.SessionReset += RuntimeSessionReset;
         subscribedRuntime = runtime;
     }
 
-    private void UnsubscribeFromReclassification() {
-        if (subscribedRuntime != null) subscribedRuntime.FramesReclassified -= RuntimeFramesReclassified;
+    private void UnsubscribeFromRuntime() {
+        if (subscribedRuntime != null) {
+            subscribedRuntime.FramesReclassified -= RuntimeFramesReclassified;
+            subscribedRuntime.SessionReset -= RuntimeSessionReset;
+        }
         subscribedRuntime = null;
+    }
+
+    // A finished block keeps listening only while provisional frames still await their verdict.
+    private void ReleaseRuntimeWhenSettled() {
+        if (!blockActive && !countedStatus.Values.Any(c => c.Status == FrameStatus.Learning)) UnsubscribeFromRuntime();
+    }
+
+    // Caller holds accountingSync.
+    private bool Reconcile(IEnumerable<FrameQualityResult> results) {
+        var current = CurrentSnapshot;
+        var next = ValidFrameProgressTracker.Reconcile(current, countedStatus, results);
+        if (next == current) return false;
+        Publish(next);
+        return true;
     }
 
     private void RuntimeFramesReclassified(object sender, IReadOnlyList<FrameReclassification> changes) {
         lock (accountingSync) {
-            var snapshot = CurrentSnapshot;
-            bool changed = false;
-            foreach (var change in changes) {
-                if (!countedStatus.TryGetValue(change.Result.FrameIndex, out var counted)) continue;
-                snapshot = ValidFrameProgressTracker.Reclassify(snapshot, counted, change.Result.Status);
-                if (change.Result.Status == FrameStatus.Learning) countedStatus[change.Result.FrameIndex] = change.Result.Status;
-                else countedStatus.Remove(change.Result.FrameIndex);
-                changed = true;
-            }
+            bool changed = Reconcile(changes.Select(c => c.Result));
+            ReleaseRuntimeWhenSettled();
             if (!changed) return;
-            Publish(snapshot);
-            if (countedStatus.Count == 0) UnsubscribeFromReclassification();
         }
         Logger.Info($"QualitySessionMeter valid-frame progress after reference validation: {ProgressText}; {BreakdownText}");
+    }
+
+    // Counted totals stay; only the index floor belongs to the session that just ended.
+    private void RuntimeSessionReset(object sender, EventArgs e) {
+        lock (accountingSync) {
+            countedStatus.Clear();
+            LastAccountedFrameIndex = 0;
+            ReleaseRuntimeWhenSettled();
+        }
     }
 
     private void Disarm() {
@@ -261,7 +294,8 @@ public sealed class QsmValidFrameTargetCondition : SequenceCondition, IValidatab
         blockResultConsumed = false;
         lock (accountingSync) {
             countedStatus.Clear();
-            UnsubscribeFromReclassification();
+            blockActive = false;
+            UnsubscribeFromRuntime();
         }
         Status = SequenceEntityStatus.CREATED;
         RaisePropertyChanged(nameof(BreakdownText));

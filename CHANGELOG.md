@@ -2,6 +2,20 @@
 
 All notable QualitySessionMeter changes are summarized here. Detailed pre-store development history is also available from the repository's GitHub Releases and merged pull requests.
 
+## [1.4.3.2] - 2026-11-10
+
+- Fix the Valid Frame Target count when a rebuilt reference revises frames that were already accepted or rejected. The count followed only provisional frames, so a loop could end with fewer valid frames than requested.
+- Fix a Valid Frame Target loop that stopped with a classification timeout after a N.I.N.A. restart or a session reset. Saved progress still pointed at frame numbers from the earlier session.
+- Stop a trending replacement reference from being extrapolated beyond the frames it was built from. Earlier frames could be rejected, or returned to provisional, against a level the run never measured.
+- Keep the star-shape verdict measured at capture when a reference revision repeats the signal comparison. A guiding flag cleared for stable corner elongation could come back as a rejection.
+- Measure the sky-background change while its own rule is off, so a brighter sky still corroborates signal loss.
+- Score evidence strength for signal-loss and star-shape rejections from their own distance to the limit. A marginal rejection no longer shows the same strength as a severe one.
+- Stop lowering evidence strength for a darker sky, which no rule penalizes.
+- Remove the predictive warning for a darkening sky. Describe a brightening sky as approaching the review limit, and skip the star-count forecast when that rule is disabled.
+- Keep predictive trends inside one acquisition context, including pier side, camera offset, readout mode and image size.
+- Request the extended star check with the same expected star count as the count rule while a gradual trend is in use.
+- Report Quality 0 instead of 100 for a frame on which nothing could be measured.
+
 ## [1.4.3.1] - 2026-10-04
 
 - Fix shape measurements for compact, resolved stars with a pixel-integrated profile fit. Keep unresolved sensor artifacts excluded.
