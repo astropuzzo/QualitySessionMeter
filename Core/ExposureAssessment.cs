@@ -6,7 +6,7 @@ using System.Linq;
 namespace NINA.Plugin.QualitySessionMeter.Core;
 
 public static class ExposureAssessment {
-    public const string Version = "1.4.3.1";
+    public const string Version = "1.4.3.2";
 
     public static bool CanTrainBaseline(FrameQualityResult result) => CanTrainStarCount(result) && CanTrainBackground(result);
 
@@ -30,6 +30,23 @@ public static class ExposureAssessment {
         || (settings.EnableHardExcursion && guide.MaxExcursionArcsec >= settings.HardExcursionThreshold)
         || (settings.EnableSustainedExcursion && guide.MaxExcursionArcsec > settings.ExcursionThreshold && guide.MaxSustainedExcursionSeconds >= settings.ExcursionMinimumDuration));
 
+    // The trend forecast replaces the rolling median as the expected count, exactly as in the rule itself.
+    public static bool IsCountDropCandidate(int starCount, BaselineSnapshot baseline, QualitySettings settings) {
+        if (!settings.EnableStarCount || baseline?.StarsReady != true || starCount < 0 || !(baseline.StarMedian > 0)) return false;
+        double expected = settings.UseExposureAssessment && baseline.StarTrendUsable && baseline.StarTrendExpectedNext > 0
+            ? baseline.StarTrendExpectedNext : baseline.StarMedian;
+        return (expected - starCount) / expected * 100 > settings.MaxStarLossPercent;
+    }
+
+    private static double GuardedFlux(ImageEvidence image) =>
+        double.IsFinite(image.RelativeFluxUpperBound) ? Math.Max(image.RelativeFlux, image.RelativeFluxUpperBound) : image.RelativeFlux;
+
+    /// <summary>Signal loss that survives the measurement allowance, in percent of the expected signal.</summary>
+    public static double GuardedSignalLossPercent(ImageEvidence image) {
+        double flux = GuardedFlux(image);
+        return double.IsFinite(flux) ? Math.Max(0, (1 - flux) * 100) : 0;
+    }
+
     public static void Apply(FrameQualityInput input, FrameQualityResult result, QualitySettings settings) {
         var image = (input.ImageEvidence ?? new ImageEvidence()) with {MinimumSessionSignalPercent=settings.MinimumSessionSignalPercent};
         result.ImageEvidence = image;
@@ -43,13 +60,13 @@ public static class ExposureAssessment {
         bool skyRiseFromTrend = result.BackgroundTrendUsable && result.BackgroundTrendR2 >= .85
             && result.BackgroundTrendPercentPerFrame < 0 && double.IsFinite(result.BackgroundTrendResidualPercent)
             && result.BackgroundTrendResidualPercent >= 3;
-        double guardedFlux = double.IsFinite(image.RelativeFluxUpperBound) ? Math.Max(image.RelativeFlux,image.RelativeFluxUpperBound) : image.RelativeFlux;
+        double guardedFlux = GuardedFlux(image);
         bool countChange = double.IsFinite(result.StarDeviationPercent) && result.StarDeviationPercent <= -10;
-        double guardedLoss = double.IsFinite(guardedFlux) ? Math.Max(0, (1 - guardedFlux) * 100) : 0;
+        double guardedLoss = GuardedSignalLossPercent(image);
         // A raw background percentage is a sky diagnostic. A darker sky is not damage;
         // an abrupt rise only becomes a rejection when independent stellar measures agree.
         result.RejectReasons.Remove("BACKGROUND_LOW");
-        if (result.BackgroundDeviationPercent < 0) result.BackgroundQuality = 100;
+        if (result.BackgroundDeviationPercent < 0 && result.BackgroundQuality.HasValue) result.BackgroundQuality = 100;
         if (result.RejectReasons.Contains("BACKGROUND_HIGH")) {
             result.RejectReasons.Remove("BACKGROUND_HIGH");
             result.ReviewReasons.Add("BACKGROUND_HIGH");

@@ -14,7 +14,7 @@ public sealed class CalibrationSuggestionEngine {
         if (last == null) return new CalibrationSuggestion();
 
         var stable = frames
-            .Where(x => SameContext(x, last))
+            .Where(x => x.SharesContextWith(last))
             .Where(x => x.Status == FrameStatus.Accepted)
             .Where(x => x.OverallQuality >= 80)
             .Where(x => double.IsNaN(x.ConfidenceScore) || x.ConfidenceScore >= 70)
@@ -74,16 +74,6 @@ public sealed class CalibrationSuggestionEngine {
         if (double.IsNaN(p95)) return floor;
         return Clamp(Math.Max(floor, p95 * 3.0 + 3.0), floor, cap);
     }
-
-    private static bool SameContext(FrameQualityResult a, FrameQualityResult b) =>
-        string.Equals(a.Target, b.Target, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(a.Filter, b.Filter, StringComparison.OrdinalIgnoreCase) &&
-        Math.Abs(a.ExposureSeconds - b.ExposureSeconds) < 0.001 &&
-        a.Gain == b.Gain && a.BinX == b.BinX && a.BinY == b.BinY &&
-        a.CameraOffset == b.CameraOffset && a.ReadoutModeIndex == b.ReadoutModeIndex &&
-        a.ImageWidth == b.ImageWidth && a.ImageHeight == b.ImageHeight &&
-        string.Equals(a.PierSide, b.PierSide, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(a.Camera, b.Camera, StringComparison.OrdinalIgnoreCase);
 
     private static string ContextText(FrameQualityResult x) =>
         $"{x.Target} · {x.Filter} · {x.ExposureSeconds:0.###}s · gain {x.Gain} · {x.BinX}x{x.BinY} · {x.Camera}";

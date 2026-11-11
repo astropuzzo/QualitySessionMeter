@@ -8,7 +8,7 @@ QualitySessionMeter (QSM) evaluates LIGHT frames as they are acquired. It combin
 
 ## Release status
 
-**1.4.3.1** — [Download and changelog](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.3.1).
+**1.4.3.2** — [Download and changelog](https://github.com/astropuzzo/QualitySessionMeter/releases/tag/1.4.3.2).
 
 QSM is listed in the N.I.N.A. plugin catalog; its first entry, 1.4.0.2, was accepted on September 16, 2026. New versions appear in the Plugin Manager after the corresponding catalog update is accepted and published.
 
@@ -85,7 +85,7 @@ The former controlled-block-only monitoring mode has been removed.
 
 ## Advanced Sequencer
 
-**QSM Valid Frame Target** repeats its container until the requested number of accepted frames (ACCEPTED or ACCEPTED (REVIEW)) is reached. Provisional frames count when their reference is validated.
+**QSM Valid Frame Target** repeats its container until the requested number of accepted frames (ACCEPTED or ACCEPTED (REVIEW)) is reached. Provisional frames count when their reference is validated. When a rebuilt reference revises a frame that was already counted, the count follows the new verdict.
 
 Smart Recovery was removed in 1.4. QSM does not pause acquisition to wait for better conditions. Old saved recovery items deserialize as immediate no-ops, preserving sequence compatibility.
 

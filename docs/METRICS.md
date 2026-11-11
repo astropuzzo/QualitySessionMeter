@@ -134,6 +134,8 @@ Rejected frames show **REJECTED**, frames accepted for review **REVIEW**, provis
 
 The existing completeness, baseline maturity, threshold separation and channel agreement diagnostics are retained. In 1.4 the displayed score is capped at 85 with usable stellar evidence and 65 without it. These caps deliberately avoid false certainty; they are not empirically calibrated probabilities. `85 / 100` does not mean an 85% probability of a bad photograph. A low score is not itself a reject rule.
 
+Threshold separation covers guiding, star count, sky brightening, measured stellar signal and star shape. A rejected frame is scored by the rule that failed, so a value just past its limit scores lower than one far beyond it. A darker sky does not lower the score. A frame on which nothing could be measured is not assessed and reports Quality 0.
+
 ## Session summary values
 
 The Web Dashboard and N.I.N.A. dock use these definitions:

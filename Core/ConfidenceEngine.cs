@@ -35,6 +35,8 @@ public sealed class ConfidenceEngine {
         AddGuideStabilityEvidence(input, result, settings, allBoundaryStrengths, failedBoundaryStrengths);
         AddStarEvidence(input, result, settings, allBoundaryStrengths, failedBoundaryStrengths);
         AddBackgroundEvidence(result, settings, allBoundaryStrengths, failedBoundaryStrengths);
+        AddSignalEvidence(result, settings, allBoundaryStrengths, failedBoundaryStrengths);
+        AddShapeEvidence(result, settings, allBoundaryStrengths, failedBoundaryStrengths);
 
         double thresholdSeparation;
         if (result.Status == FrameStatus.Rejected && failedBoundaryStrengths.Count > 0) {
@@ -198,6 +200,8 @@ public sealed class ConfidenceEngine {
         List<double> failed) {
 
         if (!settings.EnableBackground || double.IsNaN(result.BackgroundDeviationPercent)) return;
+        // A darker sky has no decision boundary in the exposure assessment.
+        if (settings.UseExposureAssessment && result.BackgroundDeviationPercent < 0) return;
 
         double threshold = result.BackgroundDeviationPercent >= 0
             ? settings.MaxBackgroundIncreasePercent
@@ -210,6 +214,69 @@ public sealed class ConfidenceEngine {
             failed.Add(strength);
         }
     }
+
+    private static void AddSignalEvidence(
+        FrameQualityResult result,
+        QualitySettings settings,
+        List<double> all,
+        List<double> failed) {
+
+        var image = result.ImageEvidence;
+        if (!settings.UseExposureAssessment || !settings.ImageEvidenceEnabled || image?.PhotometryAvailable != true) return;
+
+        double loss = ExposureAssessment.GuardedSignalLossPercent(image);
+        double sudden = BoundarySeparation(loss, settings.MaxMeasuredFluxLossPercent);
+        if (settings.RejectSignalDegradation) all.Add(sudden);
+        if (result.RejectReasons.Contains("STELLAR_FLUX_LOSS", StringComparer.Ordinal)) failed.Add(sudden);
+
+        if (result.RejectReasons.Contains("SKY_SIGNAL_LOSS", StringComparer.Ordinal)) {
+            // The regional rule fires on the worst measured region, which can be far below the centre.
+            double regional = double.IsFinite(image.RegionalSignalUpperMinimum)
+                ? Math.Max(0, (1 - image.RegionalSignalUpperMinimum) * 100) : 0;
+            failed.Add(BoundarySeparation(Math.Max(loss, regional), settings.MaxCloudSignalLossPercent));
+        }
+
+        if (settings.RejectSignalDegradation && double.IsFinite(image.SessionFluxUpperBound)) {
+            double session = BoundarySeparation(100 - image.SessionFluxUpperBound * 100, 100 - settings.MinimumSessionSignalPercent);
+            all.Add(session);
+            if (result.RejectReasons.Contains("LOW_SESSION_SIGNAL", StringComparer.Ordinal)) failed.Add(session);
+        }
+    }
+
+    private static void AddShapeEvidence(
+        FrameQualityResult result,
+        QualitySettings settings,
+        List<double> all,
+        List<double> failed) {
+
+        var image = result.ImageEvidence;
+        if (!settings.UseExposureAssessment || !settings.ImageEvidenceEnabled || image?.Available != true) return;
+
+        var limits = image.Limits;
+        // Eccentricity saturates near 1, so the margin is taken on the axis ratio it derives from.
+        double limitRatio = 1 / Math.Sqrt(Math.Max(1e-6, 1 - limits.MaxEccentricity * limits.MaxEccentricity));
+        double elongation = Measured(image.AxisRatio - 1, limitRatio - 1);
+        double tail = Measured(image.TailStrength * 100, limits.MaxTailPercent);
+        double peak = Measured(image.DoublePeakStrength * 100, limits.MaxDoublePeakPercent);
+
+        if (image.Compromised) {
+            var exceeded = new List<double>();
+            if (image.Eccentricity >= limits.MaxEccentricity && image.ElongatedFraction >= limits.DeformedFraction) exceeded.Add(elongation);
+            if (image.TailStrength >= limits.MaxTailPercent / 100) exceeded.Add(tail);
+            if (image.DoublePeakStrength >= limits.MaxDoublePeakPercent / 100) exceeded.Add(peak);
+            if (image.RemotePeakConfirmed) exceeded.Add(Measured(image.RemotePeakStrength * 100, limits.MaxRemotePeakPercent));
+            double strength = exceeded.Count > 0 ? exceeded.Max() : 50;
+            all.Add(strength);
+            if (result.RejectReasons.Contains("STAR_SHAPE_CONFIRMED", StringComparer.Ordinal)) failed.Add(strength);
+            return;
+        }
+
+        // Elongation past the limit in too few stars sits on the boundary, not beyond it.
+        all.Add(Math.Min(image.Eccentricity < limits.MaxEccentricity ? elongation : 50, Math.Min(tail, peak)));
+    }
+
+    private static double Measured(double value, double threshold) =>
+        double.IsFinite(value) ? BoundarySeparation(value, threshold) : 100;
 
     /// <summary>
     /// Returns 50 at a configured threshold and approaches 100 as evidence moves clearly away from
@@ -232,7 +299,9 @@ public sealed class ConfidenceEngine {
         bool stars = result.RejectReasons.Contains("STAR_COUNT_DROP", StringComparer.Ordinal);
         bool background = result.RejectReasons.Contains("BACKGROUND_HIGH", StringComparer.Ordinal) ||
                           result.RejectReasons.Contains("BACKGROUND_LOW", StringComparer.Ordinal);
-        return (guide ? 1 : 0) + (stars ? 1 : 0) + (background ? 1 : 0);
+        bool signal = result.RejectReasons.Any(x => x is "STELLAR_FLUX_LOSS" or "SKY_SIGNAL_LOSS" or "LOW_SESSION_SIGNAL");
+        bool shape = result.RejectReasons.Contains("STAR_SHAPE_CONFIRMED", StringComparer.Ordinal);
+        return (guide ? 1 : 0) + (stars ? 1 : 0) + (background ? 1 : 0) + (signal ? 1 : 0) + (shape ? 1 : 0);
     }
 
     private static double ComputeAgreement(FrameStatus status, int abnormalChannels) {
